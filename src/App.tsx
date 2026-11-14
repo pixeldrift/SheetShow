@@ -451,6 +451,13 @@ function App() {
               <input ref={imageRef} type="file" accept=".png,.jpg,.jpeg,.svg,.pdf,image/png,image/jpeg,image/svg+xml,application/pdf" hidden onChange={addImage}/>
             </div>
             <div className="toolbar-divider"/>
+            <div className="tool-group viewport-actions">
+              <button className="tool-button" title="Delete selected" disabled={!selected} onClick={deleteSelected}><Trash2 size={15}/></button>
+              <button className="tool-button" title="Cut" disabled={!selected} onClick={cutSelected}><Scissors size={15}/></button>
+              <button className="tool-button" title="Copy" disabled={!selected} onClick={copySelected}><Copy size={15}/></button>
+              <button className="tool-button" title="Paste" disabled={!clipboardItem} onClick={pasteItem}><ClipboardPaste size={15}/></button>
+            </div>
+            <div className="toolbar-divider view-divider"/>
             <div className="tool-group">
               <button className={showGrid ? "tool-button active" : "tool-button"} title="Toggle grid" onClick={() => setShowGrid(!showGrid)}><Grid2X2 size={15}/></button>
               <button className={showRulers ? "tool-button active" : "tool-button"} title="Toggle rulers" onClick={() => setShowRulers(!showRulers)}><Ruler size={15}/></button>
@@ -483,7 +490,6 @@ function App() {
             </div>
             <div className="drag-hint"><MousePointer2 size={13}/> Drag a field onto your design, or select text and click a field to link it.</div>
           </div>
-                    <div className="left-footer"><div className="avatar">S</div><div><strong>Local project</strong><span>Saved in this session</span></div><Lock size={13}/></div>
         </aside>
             <div className="editor-content">
           <div className="canvas-area" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onTouchStart={onCanvasTouchStart} onTouchMove={onCanvasTouchMove} onTouchEnd={onCanvasTouchEnd} onClick={(event) => { if ((event.target as HTMLElement).classList.contains("canvas-area") || (event.target as HTMLElement).classList.contains("paper-shadow") || (event.target as HTMLElement).classList.contains("layout-paper")) setSelectedId(null); }}>
@@ -534,8 +540,16 @@ function App() {
                         return <div className={showGrid ? "layout-cell grid-visible" : "layout-cell"} key={slot}>{idx < records.length ? renderTemplate(records[idx], true) : <div className="empty-slot">Empty</div>}<span className="slot-number">{repeatMode === "same" ? `#${recordIndex + 1}` : `#${idx + 1}`}</span></div>;
                       })}
                     </div>
+                    {guides.map((guide) => <div key={guide.id} className={`snap-guide ${guide.axis}`} style={guide.axis === "x" ? { left: guide.position * 96 } : { top: guide.position * 96 }} onPointerDown={(e) => { e.stopPropagation(); const rect = e.currentTarget.parentElement!.getBoundingClientRect(); guideDragRef.current = { id: guide.id, axis: guide.axis, rect }; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (guideDragRef.current?.id === guide.id) moveGuide(e as unknown as PointerEvent<HTMLDivElement>); }} onPointerUp={endGuide} onDoubleClick={() => setGuides((current) => current.filter((g) => g.id !== guide.id))} title="Drag to reposition · double-click to remove"/> )}
                   </div>
                 </div>
+                {rulerSettingsOpen && <div className="ruler-settings-popover" role="dialog" aria-label="Page size and margins">
+                  <div className="popover-title"><strong>Page setup</strong><button onClick={() => setRulerSettingsOpen(false)} aria-label="Close"><X size={15}/></button></div>
+                  <label>PAGE SIZE · INCHES</label>
+                  <div className="popover-fields"><div><span>Width</span><input type="number" min="0.1" step="0.01" value={pageWidth} onChange={(e) => setPageWidth(Math.max(0.1, Number(e.target.value)))}/></div><div><span>Height</span><input type="number" min="0.1" step="0.01" value={pageHeight} onChange={(e) => setPageHeight(Math.max(0.1, Number(e.target.value)))}/></div></div>
+                  <label>MARGINS · INCHES</label>
+                  <div className="popover-fields"><div><span>Left / Right</span><input type="number" min="0" step="0.01" value={marginX} onChange={(e) => setMarginX(Math.max(0, Number(e.target.value)))}/></div><div><span>Top / Bottom</span><input type="number" min="0" step="0.01" value={marginY} onChange={(e) => setMarginY(Math.max(0, Number(e.target.value)))}/></div></div>
+                </div>}
                 <div className="layout-note"><Sparkles size={14}/> {repeatMode === "same" ? `Every item repeats record ${recordIndex + 1}.` : `Items advance through your data, ${totalSlots} records per sheet.`}</div>
               </div>
             )}
