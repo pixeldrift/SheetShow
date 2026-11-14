@@ -98,7 +98,7 @@ function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMobileLayers, setShowMobileLayers] = useState(false);
   const [dataDrawerOpen, setDataDrawerOpen] = useState(true);
-  const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia("(min-width: 851px)").matches);
+  const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia("(min-width: 621px)").matches);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
   const [presetSearch, setPresetSearch] = useState("");
@@ -470,7 +470,10 @@ function App() {
               <input ref={imageRef} type="file" accept=".png,.jpg,.jpeg,.svg,.pdf,image/png,image/jpeg,image/svg+xml,application/pdf" hidden onChange={addImage}/>
             </div>
             <div className="toolbar-divider"/>
-            
+            <div className="drawer-toggles" aria-label="Sidebar panels">
+              <button className={dataDrawerOpen ? "tool-button active" : "tool-button"} title={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-label={dataDrawerOpen ? "Hide data fields" : "Show data fields"} onClick={() => setDataDrawerOpen((open) => !open)}>{dataDrawerOpen ? <PanelLeftClose size={16}/> : <PanelLeft size={16}/>}</button>
+              <button className={inspectorOpen ? "tool-button active" : "tool-button"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} onClick={() => setInspectorOpen((open) => !open)}>{inspectorOpen ? <PanelRightClose size={16}/> : <PanelRight size={16}/>}</button>
+            </div>
             <div className="toolbar-divider view-divider"/>
             <div className="tool-group">
               <button className={showGrid ? "tool-button active" : "tool-button"} title="Toggle grid" onClick={() => setShowGrid(!showGrid)}><Grid2X2 size={15}/></button>
@@ -521,8 +524,7 @@ function App() {
             <button className="tool-button" title="Copy" disabled={!selected} onClick={copySelected}><Copy size={16}/></button>
             <button className="tool-button glue-button" title="Paste" disabled={!clipboardItem} onClick={pasteItem}><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3h8v3l-1.5 2v2H9.5V8L8 6z"/><path d="M9.5 10h5v2.2l2.2 2.2V21H7.3v-6.6l2.2-2.2z"/><path d="M10 16h4M12 12.2v2"/></svg></button>
           </div>
-            <button className={dataDrawerOpen ? "canvas-drawer-toggle left active" : "canvas-drawer-toggle left"} title={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-label={dataDrawerOpen ? "Hide data fields" : "Show data fields"} onClick={() => setDataDrawerOpen((open) => !open)}>{dataDrawerOpen ? <PanelLeftClose size={16}/> : <PanelLeft size={16}/>}</button>
-            <button className={inspectorOpen ? "canvas-drawer-toggle right active" : "canvas-drawer-toggle right"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} onClick={() => setInspectorOpen((open) => !open)}>{inspectorOpen ? <PanelRightClose size={16}/> : <PanelRight size={16}/>}</button>
+
             {workspace === "template" && (
               <div className="canvas-wrap" style={{ transform: `translate(${viewPan.x}px, ${viewPan.y}px)` }}>
                 <div className="canvas-caption"><span>INDIVIDUAL TEMPLATE</span><span>{templateWidth.toFixed(2)} × {templateHeight.toFixed(2)} in</span></div>
