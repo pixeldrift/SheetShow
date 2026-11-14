@@ -149,7 +149,7 @@ function App() {
         canvas.height = Math.ceil(viewport.height);
         const context = canvas.getContext("2d");
         if (!context) throw new Error("Could not create an image for this PDF.");
-        await page.render({ canvas, canvasContext: context, viewport }).promise;
+        await page.render({ canvasContext: context, viewport }).promise;
         src = canvas.toDataURL("image/png");
         aspectRatio = viewport.width / viewport.height;
         await pdf.destroy();
@@ -307,7 +307,7 @@ function App() {
             <div className="drag-hint"><MousePointer2 size={13}/> Drag a field onto your design, or select text and click a field to link it.</div>
           </div>
           <div className="panel-section layers-section">
-            <div className="section-title"><Layers size={14}/> LAYERS <span className="count-pill">{items.length}</span><button className="text-action" onClick={addText}>+ Add</button></div>
+            <div className="section-title"><Layers size={14}/> LAYERS <span className="count-pill">{items.length}</span><button className="text-action" onClick={() => addText()}>+ Add</button></div>
             <div className="layer-list">
               {[...items].reverse().map((item) => (
                 <div key={item.id} className={selectedId === item.id ? "layer-row selected" : "layer-row"} onClick={() => { setSelectedId(item.id); setWorkspace("template"); }}>
