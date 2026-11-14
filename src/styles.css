@@ -383,3 +383,29 @@ button:disabled{opacity:.35;cursor:not-allowed}
 .popover-fields span{font-size:9px;color:#8b958b}
 .popover-fields input{height:30px;min-width:0;border:1px solid #e6e8e1;padding:0 7px;font-size:10px;color:#536157;background:white;border-radius:0}
 .dimension-chip{display:none!important}
+
+
+/* Inspector visibility and viewport editing controls */
+@media(max-width:850px){
+ .content-frame.with-inspector>.right-panel{display:flex!important;position:absolute;top:0;right:0;bottom:0;width:min(82vw,300px);height:100%;z-index:20;background:#fff;box-shadow:0 4px 22px #1c2b2030}
+ .content-frame:not(.with-inspector)>.right-panel{display:none!important}
+}
+@media(min-width:851px){
+ .content-frame.with-inspector{grid-template-columns:258px minmax(0,1fr) 286px}
+ .content-frame.with-inspector:not(.with-data){grid-template-columns:minmax(0,1fr) 286px}
+ .content-frame.with-inspector>.right-panel{display:flex!important;position:relative;inset:auto;width:auto;height:100%;z-index:2}
+ .content-frame:not(.with-inspector)>.right-panel{display:none!important}
+}
+.viewport-actions{gap:1px}
+.view-divider{margin:0 3px}
+.canvas-area{touch-action:none}
+.layout-ruler-stage{position:relative;flex:none;padding:20px 0 0 22px}
+.layout-ruler-stage .layout-paper-wrap{position:relative;transform-origin:top left!important}
+.layout-paper{position:relative;overflow:visible}
+.layout-ruler-stage .snap-guide{pointer-events:auto}
+@media(max-width:620px){
+ .viewport-actions{gap:0}
+ .viewport-actions .tool-button{width:24px}
+ .view-divider{margin:0 1px}
+ .content-frame.with-inspector>.right-panel{width:min(86vw,320px)}
+}
