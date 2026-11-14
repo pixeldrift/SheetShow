@@ -373,7 +373,7 @@ function App() {
             {workspace === "template" && <div className="dimension-chip"><span>{templateWidth.toFixed(2)}″</span><i>×</i><span>{templateHeight.toFixed(2)}″</span></div>}
             <div className="zoom-control"><button className="tool-button" title="Zoom out" onClick={() => setZoom(Math.max(0.25, Number((zoom - 0.1).toFixed(2))))}><ZoomOut size={15}/></button><input aria-label="Zoom level" className="zoom-slider" type="range" min="0.25" max="2" step="0.01" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}/><button className="zoom-percent" onClick={toggleZoomPreset} title="Toggle 100% / fit to screen">{Math.round(zoom * 100)}%</button><button className="tool-button" title="Zoom in" onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))}><ZoomIn size={15}/></button></div>
           </div>
-          <div className="content-frame${dataDrawerOpen ? " with-data" : ""}${inspectorOpen ? " with-inspector" : ""}">
+          <div className={`content-frame ${dataDrawerOpen ? "with-data" : ""} ${inspectorOpen ? "with-inspector" : ""}`}>
         <aside className="left-panel">
           <div className="panel-heading"><div><span className="eyebrow">YOUR PROJECT</span><h2>Studio</h2></div><button className="icon-button small"><ChevronDown size={15}/></button></div>
           <div className="panel-section">
