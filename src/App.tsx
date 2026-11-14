@@ -10,6 +10,8 @@ import { instanceIssues, itemLabel, recordLabel, type Issue } from "./lib/audit"
 import { checkImageUrls } from "./lib/webImages";
 import { layoutText } from "./lib/text";
 import { TextAuditDialog } from "./components/TextAuditDialog";
+import { usePrinterCalibration } from "./hooks/usePrinterCalibration";
+import { TemplateGalleryDialog } from "./components/TemplateGalleryDialog";
 import { useHistory } from "./hooks/useHistory";
 import { useFontLibrary } from "./hooks/useFontLibrary";
 import { aabb, alignItems, boundsOf, centerOf, distributeItems, rotateAbout, type AlignMode, type Transform } from "./lib/align";
@@ -91,7 +93,9 @@ function App() {
   const [showRulers, setShowRulers] = useState(true);
   const [snap, setSnap] = useState(false);
   const [preview, setPreview] = useState(false);
-  const [printing, setPrinting] = useState(false);
+  const [printing, setPrinting] = useState<null | "sheets" | "calibration">(null);
+  const printer = usePrinterCalibration();
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [instanceMode, setInstanceMode] = useState(false);
   const [instanceSel, setInstanceSel] = useState<InstanceSelection | null>(null);
   const [editingText, setEditingText] = useState<InstanceSelection | null>(null);
@@ -507,6 +511,12 @@ function App() {
     await library.clear();
     await applyProject({ version: 1, name: DEFAULT_NAME, fileName: "bird-records.csv", records: starterRecords, items: starterItems, template: { width: 3.5, height: 2 }, sheet: defaultSheet, fonts: [] });
   };
+  /** Starts a new project from a gallery template. The image library is kept. */
+  const useTemplate = async (project: Project) => {
+    if (!window.confirm(`Start from “${project.name}”? This replaces your current project (its design, data and page layout).`)) return;
+    setGalleryOpen(false); setShowData(false); setWorkspace("template"); setPreview(false);
+    await applyProject(project);
+  };
   const openProject = async (file: File) => {
     try { const { project, images } = await readProjectAny(file); await applyProject(project, images); }
     catch (error) { window.alert(error instanceof Error ? error.message : "That project file could not be opened."); }
@@ -640,11 +650,13 @@ function App() {
     ].filter(Boolean) as string[];
     setStatus(null);
     if (problems.length && !window.confirm(`Before printing:\n\n• ${problems.join("\n• ")}\n\nAffected pictures will print blank (or show the placeholder) and long text will spill or be cut off.\n\nPrint anyway?\n(Cancel, then use “Review matches”, “Check text fit” or “Save web pictures to the library”.)`)) return;
-    setPrinting(true);
+    setPrinting("sheets");
   };
+  /** Test page for printer calibration (crosshairs 1" from each edge, outlines of every label). */
+  const printCalibration = () => { if (printing) return; setPrinting("calibration"); };
   useEffect(() => {
     if (!printing) return;
-    const done = () => setPrinting(false);
+    const done = () => setPrinting(null);
     window.addEventListener("afterprint", done);
     const timer = window.setTimeout(() => window.print(), 150);
     return () => { window.removeEventListener("afterprint", done); window.clearTimeout(timer); };
@@ -686,12 +698,12 @@ function App() {
   const meta = { recordNumber: recordIndex + 1, pageNumber: currentPage + 1, recordCount: activeRecords.length, pageCount };
   const caption = workspace === "template"
     ? { title: variants.length > 1 ? `INDIVIDUAL TEMPLATE · ${variants.find((v) => v.id === variantId)?.name.toUpperCase()}` : "INDIVIDUAL TEMPLATE", detail: `${template.width.toFixed(2)} × ${template.height.toFixed(2)} in` }
-    : { title: "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet` };
+    : { title: "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet${printer.x || printer.y ? ` · printer offset ${printer.x >= 0 ? "+" : ""}${printer.x.toFixed(3)}, ${printer.y >= 0 ? "+" : ""}${printer.y.toFixed(3)} in` : ""}` };
 
   return (
     <ImageContext.Provider value={{ resolver: library.resolver, urlFor: library.urlFor }}>
     <div className="app-shell">
-      <Topbar workspace={showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(tab); } }} onPrint={printNow} name={docName} onName={setDocName} saveState={saveState} onNew={newProject} onOpen={openProject} onSave={saveToFile} />
+      <Topbar workspace={showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(tab); } }} onPrint={printNow} name={docName} onName={setDocName} saveState={saveState} onNew={newProject} onGallery={() => setGalleryOpen(true)} onOpen={openProject} onSave={saveToFile} />
 
       {showData && (
         <main className="workspace">
@@ -748,7 +760,7 @@ function App() {
                     sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
                     slotRecord={(slot) => (sheet.repeatMode === "same" ? recordIndex : currentPage * slots + slot)}
                     pageNumber={currentPage + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
-                    edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
+                    offset={printer} edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
                     onSelect={(sel) => { setInstanceSel(sel); setEditingText(null); if (sel) setInspectorOpen(true); }}
                     onStartEdit={(sel) => { const item = instanceFor(activeRecords[indexOfRecord(sel.recordId)], indexOfRecord(sel.recordId), 0).items.find((i) => i.id === sel.itemId); if (item?.type === "text") { setInstanceSel(sel); setEditingText(sel); } else if (item?.type === "image") { setInstanceSel(sel); setLibraryDialog({ kind: "pick", itemId: sel.itemId, target: "asset" }); } }}
                     onCommitText={commitInstanceText} onCancelEdit={() => setEditingText(null)}
@@ -810,6 +822,7 @@ function App() {
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onMoveLayer={moveLayer}
               templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate({ width, height })} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
+              printer={printer} onCalibrationSheet={printCalibration}
               fields={fields} editedList={editedList} onJumpInstance={jumpToInstance} onResetInstanceById={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
               onAudit={(itemId) => setAuditDialog({ itemId })} auditCount={sheetIssueCount}
               variants={{
@@ -837,6 +850,7 @@ function App() {
         <MatchReviewDialog item={items.find((i) => i.id === reviewItemId)!} records={activeRecords} library={library} onOverrides={(changes) => setOverrides(reviewItemId, changes)} onClose={() => setReviewItemId(null)} />
       )}
 
+      {galleryOpen && <TemplateGalleryDialog onUse={useTemplate} onClose={() => setGalleryOpen(false)} />}
       {auditDialog && <TextAuditDialog issues={issues} itemId={auditDialog.itemId} onFix={(issue) => fixOnPage(issue.recordId, issue.itemId)} onClose={() => setAuditDialog(null)} />}
 
       {status && (
@@ -857,7 +871,7 @@ function App() {
       {fieldDrag && <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>}
 
       {printing && (
-        <PrintSheets sheet={sheet} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} instanceFor={instanceFor} />
+        <PrintSheets kind={printing} offset={printer} sheet={sheet} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} instanceFor={instanceFor} />
       )}
     </div>
     </ImageContext.Provider>

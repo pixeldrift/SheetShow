@@ -13,6 +13,8 @@ import { NumberField, Pair, Section } from "./Fields";
 import { FontPicker } from "./FontPicker";
 import { EffectsSection, PictureSection, ShapeStyleSection, type ImageTools } from "./ItemStyleSections";
 import { VariantsSection } from "./VariantSections";
+import { PrinterCalibrationSection } from "./PrinterCalibrationSection";
+import type { PrinterCalibration } from "../hooks/usePrinterCalibration";
 
 type Props = {
   workspace: "template" | "layout";
@@ -33,6 +35,8 @@ type Props = {
   onJumpInstance: (recordId: string) => void;
   onResetInstanceById: (recordId: string) => void;
   onAudit: (itemId?: string | null) => void;
+  printer: PrinterCalibration;
+  onCalibrationSheet: () => void;
   /** Text-fit problems on the sheet being shown. */
   auditCount: number;
   /** For the selected text: whether it fits, across the records being printed. */
@@ -173,7 +177,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
             ) : (
               <textarea className="property-input textarea" rows={3} value={item.text ?? ""} onChange={(e) => patch({ text: e.target.value })} placeholder="Enter text…" />
             )}
-            {!item.field && <p className="hint">Press Enter for a new line. Pick a field in the data drawer to link this text to your data.</p>}
+            {!item.field && <p className="hint">Press Enter for a new line. Pick a field in the data drawer to link this text, or merge fields into your own wording: <code>{"{city}, {state} {zip}"}</code> or <code>{"${price}"}</code>.</p>}
             <label className="check-row"><input type="checkbox" checked={item.wrap !== false} onChange={(e) => patch({ wrap: e.target.checked })} /> Wrap text to the box width</label>
           </Section>
           <Section title="TYPOGRAPHY">
@@ -284,7 +288,7 @@ function TemplateSetup({ templateWidth, templateHeight, onTemplateSize, onPreset
   );
 }
 
-function PageSetup({ sheet, onSheet, pageCount, overflow, fields, onAudit, auditCount, editedList, onJumpInstance, onResetInstanceById }: Props) {
+function PageSetup({ sheet, onSheet, pageCount, overflow, fields, onAudit, auditCount, editedList, onJumpInstance, onResetInstanceById, printer, onCalibrationSheet }: Props) {
   const size = sheet.pageWidth === 8.5 && sheet.pageHeight === 11 ? "letter" : sheet.pageWidth === 8.27 && sheet.pageHeight === 11.69 ? "a4" : "custom";
   return (
     <>
@@ -349,6 +353,7 @@ function PageSetup({ sheet, onSheet, pageCount, overflow, fields, onAudit, audit
           </div>
         )}
       </Section>
+      <PrinterCalibrationSection printer={printer} onTestSheet={onCalibrationSheet} />
       <Section title="PRINT OPTIONS">
         <label className="check-row"><input type="checkbox" checked={sheet.cropMarks} onChange={(e) => onSheet({ cropMarks: e.target.checked })} /> Crop marks in the page margins</label>
         <p className="hint">Shown in print preview and on printed sheets. They need roughly ¼″ of margin to appear.</p>

@@ -1,4 +1,5 @@
 import type { DesignItem, LabelPreset, RecordMeta, RecordRow } from "../types";
+import { mergeText } from "./merge";
 
 export const PX_PER_IN = 96;
 export const uid = () => Math.random().toString(36).slice(2, 9);
@@ -61,7 +62,7 @@ export const fieldDisplayName = (field: string) =>
   specialFields.find((entry) => entry.key === field)?.label ?? prettyField(field);
 
 export function valueFor(item: DesignItem, record: RecordRow, meta: RecordMeta): string {
-  if (!item.field) return item.text ?? "";
+  if (!item.field) return mergeText(item.text ?? "", record);
   switch (item.field) {
     case "__record_number": return String(meta.recordNumber);
     case "__page_number": return String(meta.pageNumber);

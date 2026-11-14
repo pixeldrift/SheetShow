@@ -1,14 +1,14 @@
 import { useRef, useState } from "react";
-import { CircleHelp, Download, FilePlus, FileText, FolderOpen, Printer, Table2 } from "lucide-react";
+import { CircleHelp, Download, FilePlus, FileText, FolderOpen, LayoutTemplate, Printer, Table2 } from "lucide-react";
 import type { Workspace } from "../types";
 
 type Props = {
   workspace: Workspace | "data"; onWorkspace: (w: Workspace | "data") => void; onPrint: () => void;
   name: string; onName: (name: string) => void; saveState: "saved" | "error";
-  onNew: () => void; onOpen: (file: File) => void; onSave: () => void;
+  onNew: () => void; onGallery: () => void; onOpen: (file: File) => void; onSave: () => void;
 };
 
-export function Topbar({ workspace, onWorkspace, onPrint, name, onName, saveState, onNew, onOpen, onSave }: Props) {
+export function Topbar({ workspace, onWorkspace, onPrint, name, onName, saveState, onNew, onGallery, onOpen, onSave }: Props) {
   const [menu, setMenu] = useState(false);
   const openRef = useRef<HTMLInputElement>(null);
   return (
@@ -26,6 +26,7 @@ export function Topbar({ workspace, onWorkspace, onPrint, name, onName, saveStat
             <>
               <div className="menu-scrim" onClick={() => setMenu(false)} />
               <div className="menu" role="menu">
+                <button role="menuitem" onClick={() => { setMenu(false); onGallery(); }}><LayoutTemplate size={15} /> New from template…</button>
                 <button role="menuitem" onClick={() => { setMenu(false); if (window.confirm("Start a new project? Unsaved changes in this browser will be replaced.")) onNew(); }}><FilePlus size={15} /> New project</button>
                 <button role="menuitem" onClick={() => { setMenu(false); openRef.current?.click(); }}><FolderOpen size={15} /> Open from file…</button>
                 <button role="menuitem" onClick={() => { setMenu(false); onSave(); }}><Download size={15} /> Save to file</button>

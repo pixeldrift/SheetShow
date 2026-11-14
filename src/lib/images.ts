@@ -1,24 +1,11 @@
 import type { Asset, DesignItem, RecordRow } from "../types";
 import { nameSimilarity } from "./mapping";
 import { ID } from "./records";
+import { TOKEN, TRANSFORMS, applyChain } from "./merge";
 
 /* ── Patterns: "{band}.jpg || {species|slug}/{name|lower}.png" ──────────────────────── */
 
-const TRANSFORMS: Record<string, (value: string, arg?: string) => string> = {
-  lower: (v) => v.toLowerCase(),
-  upper: (v) => v.toUpperCase(),
-  trim: (v) => v.trim(),
-  slug: (v) => v.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
-  snake: (v) => v.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""),
-  nospace: (v) => v.replace(/\s+/g, ""),
-  first: (v) => v.trim().split(/\s+/)[0] ?? "",
-  last: (v) => v.trim().split(/\s+/).pop() ?? "",
-  urlencode: (v) => encodeURIComponent(v),
-  pad: (v, arg) => v.padStart(Number(arg) || 0, "0"),
-};
 export const TRANSFORM_NAMES = Object.keys(TRANSFORMS);
-
-const TOKEN = /\{([^{}|]+)((?:\|[^{}|]+)*)\}/g;
 
 /** Fields a pattern refers to, in order of appearance. */
 export const patternFields = (pattern: string) => [...pattern.matchAll(TOKEN)].map((m) => m[1].trim());
@@ -31,13 +18,9 @@ export function expandPattern(pattern: string, record: RecordRow): string[] {
   return pattern.split("||").map((part) => part.trim()).filter(Boolean).flatMap((part) => {
     let complete = true;
     const out = part.replace(TOKEN, (_m, field: string, chain: string) => {
-      let value = (record[field.trim()] ?? "").trim();
+      const value = (record[field.trim()] ?? "").trim();
       if (!value) complete = false;
-      for (const step of chain.split("|").filter(Boolean)) {
-        const [name, arg] = step.trim().split(":");
-        value = TRANSFORMS[name]?.(value, arg) ?? value;
-      }
-      return value;
+      return applyChain(value, chain);
     });
     return complete ? [out] : [];
   });

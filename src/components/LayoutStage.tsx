@@ -30,6 +30,8 @@ type Props = {
   /** Edit mode: pick items inside a slot, double-click to edit, drop pictures onto picture boxes. */
   edit?: boolean;
   zoom?: number;
+  /** Printer calibration: shifts every slot (and the crop marks) by this many inches. */
+  offset?: { x: number; y: number };
   selected?: InstanceSelection | null;
   editing?: InstanceSelection | null;
   onSelect?: (selection: InstanceSelection | null) => void;
@@ -45,6 +47,7 @@ type Props = {
 export function LayoutStage(p: Props) {
   const { sheet, templateWidth, templateHeight, records, preview } = p;
   const slots = sheet.columns * sheet.rows;
+  const ox = p.offset?.x ?? 0, oy = p.offset?.y ?? 0;
   const marks = sheet.cropMarks && preview ? cropMarks(sheet, templateWidth, templateHeight) : [];
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [dropOver, setDropOver] = useState<string | null>(null);
@@ -78,7 +81,7 @@ export function LayoutStage(p: Props) {
             key={slot}
             className={classes.join(" ")}
             data-no-pan={p.edit ? "" : undefined}
-            style={{ left: (sheet.marginX + col * (templateWidth + sheet.gapX)) * PX_PER_IN, top: (sheet.marginY + row * (templateHeight + sheet.gapY)) * PX_PER_IN, width: templateWidth * PX_PER_IN, height: templateHeight * PX_PER_IN }}
+            style={{ left: (sheet.marginX + ox + col * (templateWidth + sheet.gapX)) * PX_PER_IN, top: (sheet.marginY + oy + row * (templateHeight + sheet.gapY)) * PX_PER_IN, width: templateWidth * PX_PER_IN, height: templateHeight * PX_PER_IN }}
             onClick={p.edit && id ? (e) => { const itemId = itemAt(e.target); p.onSelect?.(itemId ? { recordId: id, itemId } : null); } : undefined}
             onDoubleClick={p.edit && id ? (e) => { const itemId = itemAt(e.target); if (itemId) p.onStartEdit?.({ recordId: id, itemId }); } : undefined}
             onDragOver={p.edit && id ? (e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDropOver(id); } } : undefined}
@@ -127,7 +130,7 @@ export function LayoutStage(p: Props) {
       })}
       {marks.length > 0 && (
         <svg className="crop-marks" width={sheet.pageWidth * PX_PER_IN} height={sheet.pageHeight * PX_PER_IN} viewBox={`0 0 ${sheet.pageWidth} ${sheet.pageHeight}`}>
-          {marks.map((m, i) => <line key={i} x1={m[0]} y1={m[1]} x2={m[2]} y2={m[3]} />)}
+          {marks.map((m, i) => <line key={i} x1={m[0] + ox} y1={m[1] + oy} x2={m[2] + ox} y2={m[3] + oy} />)}
         </svg>
       )}
     </div>

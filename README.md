@@ -24,6 +24,9 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Alternating templates (“odd/even”, every n-th, or by a field’s value) combined into one output, with output sorting by any field
 - Edit individual records on the printed sheets: change a name, drop in a different photo or restyle one item. Hand-edited records are flagged and can be switched back to the template
 - Web pictures are checked before printing and can be saved into the library
+- Printer calibration: nudge the whole page in thousandths of an inch, save named printer settings on this device, and print a calibration sheet
+- Template gallery (File menu → New from template…) with live thumbnails; drop your own `.json` projects into `src/templates/` to add more
+- Merge fields inside text, e.g. `{city}, {state} {zip}` or `${price}`
 - Picture library with drag-and-drop, folder and zip import; data-driven pictures matched from a column or filename pattern
 - Import a new CSV/TSV and auto-match its columns to the template's linked fields
 - Autosave in the browser, plus save/open project files
@@ -87,8 +90,10 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
 - [x] Alternating templates and rule-based assignment; sort output by a field
 - [x] Per-record overrides on the page layout, with flags and revert
 - [ ] Scannable codes (QR, Code 128) generated from data fields
-- [ ] Printer calibration offset and smart guides
-- [ ] Persistent reusable template library
+- [x] Printer calibration offset with saved printer settings and a calibration sheet
+- [x] Template gallery with built-in examples
+- [ ] Smart guides (snap to other items' edges)
+- [ ] “My templates”: save your own designs into the gallery from inside the app
 - [ ] Print-ready PDF export with embedded fonts
 - [ ] Hierarchical data adapters and **BirdBox integration**
   - Codes and special fields that deep-link to a specific BirdBox record, or trigger an action

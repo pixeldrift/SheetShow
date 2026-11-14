@@ -502,3 +502,31 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;bac
 .edit-hint{font-size:11px;color:#8f968d;padding:0 8px;white-space:nowrap}
 .web-block{margin-top:12px;padding:10px;border-radius:8px;background:#f6f8f3;border:1px solid #e4eadd}
 @media(max-width:620px){.edit-hint{display:none}.mode-button span{display:none}}
+
+/* ── Printer calibration ───────────────────────────────────────────────── */
+.nudge-pad{display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,38px);gap:4px;justify-content:center;margin:6px 0 12px}
+.nudge{border:1px solid #e3e5de;border-radius:8px;background:#fff;color:#6c796f;display:grid;place-items:center}
+.nudge:hover:not(:disabled){background:#f8f3ed;color:#b76f46;border-color:#e4b99e}
+.nudge:active:not(:disabled){background:var(--accent-soft)}
+.nudge.center{background:#f6f6f2;color:#9aa198}
+.step-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:#778279}
+.step-row>span{margin-right:2px}
+.step-chip{height:26px;padding:0 9px;border:1px solid #e3e5de;border-radius:999px;background:#fff;color:#6c796f;font-size:11px;font-weight:600}
+.step-chip.active{background:var(--accent-soft);border-color:#efd6c5;color:#b86e46}
+.calib{display:block}
+
+/* ── Template gallery ──────────────────────────────────────────────────── */
+.gallery-dialog{width:min(980px,100%);max-height:min(780px,calc(100dvh - 32px))}
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px;padding-bottom:6px}
+.gallery-card{display:flex;flex-direction:column;border:1px solid #e5e6df;border-radius:12px;overflow:hidden;background:#fff;transition:box-shadow .12s,border-color .12s}
+.gallery-card:hover{border-color:#e4b99e;box-shadow:0 6px 22px #28382d1a}
+.gallery-thumb{display:flex;gap:10px;align-items:center;justify-content:center;padding:18px 14px;background:#f1f0ec;min-height:170px}
+.gallery-shot{margin:0;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.gallery-shot figcaption{font-size:10px;font-weight:700;color:#7d8a80;letter-spacing:.3px}
+.gallery-paper{width:100%;background:#fff;box-shadow:0 4px 14px #28382d26,0 1px 2px #28382d1a;line-height:0}
+.gallery-paper svg{width:100%;height:auto;display:block}
+.gallery-info{display:flex;flex-direction:column;gap:6px;padding:14px;flex:1}
+.gallery-info h3{font:700 14px Manrope,sans-serif;color:#3f5047}
+.gallery-info p{font-size:12px;line-height:1.5;color:#78847a;flex:1}
+.gallery-info small{font-size:10px;color:#9aa198}
+.gallery-info .button{margin-top:6px;justify-content:center}
