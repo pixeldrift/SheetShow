@@ -151,6 +151,14 @@ function App() {
     const field = event.dataTransfer.getData("text/plain");
     const svg = svgRef.current;
     if (!field || !svg) return;
+    const target = (event.target as Element).closest("[data-item-id]");
+    const targetId = target?.getAttribute("data-item-id");
+    const targetItem = items.find((item) => item.id === targetId);
+    if (targetItem?.type === "text") {
+      updateItem(targetItem.id, { field, text: field.replaceAll("_", " ") });
+      setSelectedId(targetItem.id);
+      return;
+    }
     const point = svg.createSVGPoint();
     point.x = event.clientX;
     point.y = event.clientY;
@@ -188,7 +196,7 @@ function App() {
       {items.filter((item) => item.visible !== false).map((item) => {
         const isSelected = !mini && selectedId === item.id;
         return (
-          <g key={item.id} transform={`translate(${item.x * 96} ${item.y * 96})`} onPointerDown={(event) => !mini && startMove(event, item)} onClick={(event) => { if (!mini) { event.stopPropagation(); setSelectedId(item.id); } }} className={!mini ? "canvas-object" : ""} style={{ cursor: mini ? "default" : "move" }}>
+          <g key={item.id} data-item-id={item.id} transform={`translate(${item.x * 96} ${item.y * 96})`} onPointerDown={(event) => !mini && startMove(event, item)} onClick={(event) => { if (!mini) { event.stopPropagation(); setSelectedId(item.id); } }} className={!mini ? "canvas-object" : ""} style={{ cursor: mini ? "default" : "move" }}>
             {item.type === "rect" && <rect width={item.w * 96} height={item.h * 96} rx="2" fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1"/>}
             {item.type === "image" && item.src && <image href={item.src} width={item.w * 96} height={item.h * 96} preserveAspectRatio="xMidYMid slice"/>}
             {item.type === "text" && <text x={item.align === "center" ? item.w * 48 : item.align === "right" ? item.w * 96 : 0} y={(item.fontSize ?? 12) * 1.15 * 96 / 72} fontFamily={item.fontFamily ?? "Inter, Arial, sans-serif"} fontSize={(item.fontSize ?? 12) * 96 / 72} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={item.align === "center" ? "middle" : item.align === "right" ? "end" : "start"}>{valueFor(item, record)}</text>}
@@ -291,7 +299,7 @@ function App() {
                       {showGrid && <defs><pattern id="gridPattern" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#e9eee9" strokeWidth="0.7"/></pattern></defs>}
                       {showGrid && <rect width="100%" height="100%" fill="url(#gridPattern)"/>}
                       {items.filter((item) => item.visible !== false).map((item) => (
-                        <g key={item.id} transform={`translate(${item.x * 96} ${item.y * 96})`} onPointerDown={(event) => startMove(event, item)} onClick={(event) => { event.stopPropagation(); setSelectedId(item.id); }} className="canvas-object">
+                        <g key={item.id} data-item-id={item.id} transform={`translate(${item.x * 96} ${item.y * 96})`} onPointerDown={(event) => startMove(event, item)} onClick={(event) => { event.stopPropagation(); setSelectedId(item.id); }} className="canvas-object">
                           {item.type === "rect" && <rect width={item.w * 96} height={item.h * 96} rx="2" fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1"/>}
                           {item.type === "image" && item.src && <image href={item.src} width={item.w * 96} height={item.h * 96} preserveAspectRatio="xMidYMid slice"/>}
                           {item.type === "text" && <text x={item.align === "center" ? item.w * 48 : item.align === "right" ? item.w * 96 : 0} y={(item.fontSize ?? 12) * 1.15 * 96 / 72} fontFamily={item.fontFamily ?? "Inter, Arial, sans-serif"} fontSize={(item.fontSize ?? 12) * 96 / 72} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={item.align === "center" ? "middle" : item.align === "right" ? "end" : "start"}>{valueFor(item, currentRecord)}</text>}
