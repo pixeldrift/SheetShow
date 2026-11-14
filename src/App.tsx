@@ -1,10 +1,11 @@
 import { ChangeEvent, DragEvent, PointerEvent, useMemo, useRef, useState } from "react";
 import {
   AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, BadgeCheck, ChevronDown,
-  ChevronLeft, ChevronRight, CircleHelp, Copy, Database, FileImage, FilePlus2,
-  FileText, Grid2X2, ImagePlus, Layers, Link2, ListFilter, Lock, Minus, MousePointer2,
-  Plus, Printer, Search, Settings2, Shapes, SlidersHorizontal, Sparkles, Square,
-  Trash2, Type, Upload, WandSparkles, ZoomIn, ZoomOut
+  ChevronLeft, ChevronRight, CircleHelp, Copy, Crop, Database, Eye, FileImage,
+  FileSearch, FileStack, FileText, Grid2X2, ImagePlus, Layers, Link2, ListFilter,
+  Lock, LockKeyhole, Magnet, Minus, MousePointer2, Plus, Printer, Ruler, Search,
+  Settings2, Shapes, SlidersHorizontal, Sparkles, Square, Trash2, Type, Upload,
+  WandSparkles, ZoomIn, ZoomOut
 } from "lucide-react";
 import Papa from "papaparse";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
@@ -32,6 +33,7 @@ type DesignItem = {
   src?: string;
   assetName?: string;
   visible?: boolean;
+  locked?: boolean;
 };
 
 const starterRecords: RecordRow[] = [
@@ -63,8 +65,10 @@ function App() {
   const [items, setItems] = useState<DesignItem[]>(starterItems);
   const [selectedId, setSelectedId] = useState<string | null>("text-2");
   const [recordIndex, setRecordIndex] = useState(0);
-  const [workspace, setWorkspace] = useState<"template" | "layout" | "preview">("template");
+  const [workspace, setWorkspace] = useState<"template" | "layout">("template");
   const [zoom, setZoom] = useState(1);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [snapToGrid, setSnapToGrid] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [showRulers, setShowRulers] = useState(true);
   const [pageWidth, setPageWidth] = useState(8.5);
@@ -75,6 +79,8 @@ function App() {
   const [rows, setRows] = useState(4);
   const [gapX, setGapX] = useState(0.18);
   const [gapY, setGapY] = useState(0.18);
+  const [marginX, setMarginX] = useState(0.25);
+  const [marginY, setMarginY] = useState(0.25);
   const [repeatMode, setRepeatMode] = useState<"same" | "next">("next");
   const [search, setSearch] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -217,7 +223,8 @@ function App() {
   };
 
   const startMove = (event: PointerEvent<SVGGElement>, item: DesignItem) => {
-    if (workspace !== "template") return;
+    if (workspace !== "template" || showPrintPreview || item.locked) return;
+    event.preventDefault();
     event.stopPropagation();
     setSelectedId(item.id);
     dragRef.current = { id: item.id, startX: event.clientX, startY: event.clientY, itemX: item.x, itemY: item.y };
@@ -231,18 +238,27 @@ function App() {
     const scaleY = (templateHeight * 96 * zoom) / rect.height;
     const deltaX = (event.clientX - dragRef.current.startX) * scaleX / 96;
     const deltaY = (event.clientY - dragRef.current.startY) * scaleY / 96;
-    updateItem(dragRef.current.id, { x: Math.max(0, inches(dragRef.current.itemX + deltaX)), y: Math.max(0, inches(dragRef.current.itemY + deltaY)) });
+    const step = snapToGrid ? 0.05 : 0.001;
+    const nextX = Math.round((dragRef.current.itemX + deltaX) / step) * step;
+    const nextY = Math.round((dragRef.current.itemY + deltaY) / step) * step;
+    updateItem(dragRef.current.id, { x: Math.max(0, Number(nextX.toFixed(3))), y: Math.max(0, Number(nextY.toFixed(3))) });
   };
 
   const addPageSlot = (slot: number) => repeatMode === "same" ? recordIndex : Math.min(records.length - 1, currentPage * totalSlots + slot);
+  const fitZoom = () => Math.max(0.25, Math.min(2, Math.min((window.innerWidth - 360) / (templateWidth * 96), (window.innerHeight - 250) / (templateHeight * 96))));
+  const toggleZoomPreset = () => setZoom((current) => Math.abs(current - 1) < 0.02 ? fitZoom() : 1);
   const printNow = () => {
-    if (workspace !== "preview") {
-      setWorkspace("preview");
-      window.setTimeout(() => window.print(), 250);
-    } else {
-      window.print();
-    }
+    if (!showPrintPreview) setShowPrintPreview(true);
+    window.setTimeout(() => window.print(), 180);
   };
+  const moveLayer = (id: string, direction: -1 | 1) => setItems((previous) => {
+    const index = previous.findIndex((item) => item.id === id);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= previous.length) return previous;
+    const reordered = [...previous];
+    [reordered[index], reordered[nextIndex]] = [reordered[nextIndex], reordered[index]];
+    return reordered;
+  });
 
   const renderTemplate = (record: RecordRow, mini = false) => (
     <svg viewBox={`0 0 ${templateWidth * 96} ${templateHeight * 96}`} className={mini ? "mini-template" : "template-svg"} xmlns="http://www.w3.org/2000/svg">
@@ -272,15 +288,14 @@ function App() {
         <div className="topbar-center">
           <div className="document-title"><FileText size={15}/><span>Untitled bird card</span><span className="saved-dot"/></div>
           <div className="workspace-tabs">
-            <button className={workspace === "template" ? "active" : ""} onClick={() => setWorkspace("template")}><MousePointer2 size={14}/> Template</button>
-            <button className={workspace === "layout" ? "active" : ""} onClick={() => setWorkspace("layout")}><Grid2X2 size={14}/> Page layout</button>
-            <button className={workspace === "preview" ? "active" : ""} onClick={() => setWorkspace("preview")}><WandSparkles size={14}/> Print preview</button>
+            <button className={workspace === "template" ? "active" : ""} onClick={() => { setWorkspace("template"); setShowPrintPreview(false); }} title="Individual template"><Crop size={16}/> <span>Template</span></button>
+            <button className={workspace === "layout" ? "active" : ""} onClick={() => { setWorkspace("layout"); setShowPrintPreview(false); }} title="Page layout"><FileStack size={16}/> <span>Page layout</span></button>
           </div>
         </div>
         <div className="top-actions">
           <button className="icon-button" title="Help"><CircleHelp size={17}/></button>
           <button className="button button-light" onClick={printNow}><Printer size={15}/> Print</button>
-          <button className="button button-primary" onClick={printNow}><Sparkles size={15}/> Make it</button>
+          <button className="button button-primary" onClick={printNow}><Printer size={15}/> Make it</button>
         </div>
       </header>
 
@@ -309,12 +324,15 @@ function App() {
           <div className="panel-section layers-section">
             <div className="section-title"><Layers size={14}/> LAYERS <span className="count-pill">{items.length}</span><button className="text-action" onClick={() => addText()}>+ Add</button></div>
             <div className="layer-list">
-              {[...items].reverse().map((item) => (
-                <div key={item.id} className={selectedId === item.id ? "layer-row selected" : "layer-row"} onClick={() => { setSelectedId(item.id); setWorkspace("template"); }}>
+              {[...items].reverse().map((item, displayIndex) => (
+                <div key={item.id} className={selectedId === item.id ? "layer-row selected" : "layer-row"} onClick={() => { setSelectedId(item.id); setWorkspace("template"); setShowPrintPreview(false); }}>
                   <span className="layer-kind">{item.type === "text" ? <Type size={13}/> : item.type === "image" ? <FileImage size={13}/> : <Square size={13}/>}</span>
                   <span className="layer-label">{item.field ? item.field.replaceAll("_", " ") : item.text || (item.type === "rect" ? "Shape" : item.assetName || "Image")}</span>
                   {item.field && <Link2 size={11} className="linked-icon"/>}
-                  <button className="layer-visibility" onClick={(e) => { e.stopPropagation(); updateItem(item.id, { visible: item.visible === false }); }}><span>{item.visible === false ? "○" : "●"}</span></button>
+                  <button className="layer-visibility" title={item.visible === false ? "Show layer" : "Hide layer"} onClick={(e) => { e.stopPropagation(); updateItem(item.id, { visible: item.visible === false }); }}><Eye size={12} opacity={item.visible === false ? 0.35 : 1}/></button>
+                  <button className="layer-visibility" title={item.locked ? "Unlock layer" : "Lock layer"} onClick={(e) => { e.stopPropagation(); updateItem(item.id, { locked: !item.locked }); }}><LockKeyhole size={12} opacity={item.locked ? 1 : 0.35}/></button>
+                  <button className="layer-visibility" title="Move layer up" disabled={displayIndex === 0} onClick={(e) => { e.stopPropagation(); moveLayer(item.id, 1); }}><ArrowUp size={12}/></button>
+                  <button className="layer-visibility" title="Move layer down" disabled={displayIndex === items.length - 1} onClick={(e) => { e.stopPropagation(); moveLayer(item.id, -1); }}><ArrowDown size={12}/></button>
                 </div>
               ))}
             </div>
@@ -334,17 +352,20 @@ function App() {
             <div className="toolbar-divider"/>
             <div className="tool-group">
               <button className={showGrid ? "tool-button active" : "tool-button"} title="Toggle grid" onClick={() => setShowGrid(!showGrid)}><Grid2X2 size={15}/></button>
-              <button className={showRulers ? "tool-button active" : "tool-button"} title="Toggle rulers" onClick={() => setShowRulers(!showRulers)}><SlidersHorizontal size={15}/></button>
+              <button className={showRulers ? "tool-button active" : "tool-button"} title="Toggle rulers" onClick={() => setShowRulers(!showRulers)}><Ruler size={15}/></button>
+              <button className={snapToGrid ? "tool-button active" : "tool-button"} title="Snap to 0.05 inch increments" onClick={() => setSnapToGrid(!snapToGrid)}><Magnet size={15}/></button>
+              <button className={showPrintPreview ? "tool-button active" : "tool-button"} title="Toggle print preview" onClick={() => setShowPrintPreview(!showPrintPreview)}><FileSearch size={16}/></button>
+              <button className="tool-button mobile-data-button" title="Change data source" onClick={() => fileRef.current?.click()}><Database size={15}/></button>
             </div>
             <div className="toolbar-spacer"/>
             {workspace === "template" && <div className="dimension-chip"><span>{templateWidth.toFixed(2)}″</span><i>×</i><span>{templateHeight.toFixed(2)}″</span></div>}
-            <div className="zoom-control"><button className="tool-button" onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}><ZoomOut size={15}/></button><span>{Math.round(zoom * 100)}%</span><button className="tool-button" onClick={() => setZoom(Math.min(1.5, zoom + 0.1))}><ZoomIn size={15}/></button></div>
+            <div className="zoom-control"><button className="tool-button" title="Zoom out" onClick={() => setZoom(Math.max(0.25, Number((zoom - 0.1).toFixed(2))))}><ZoomOut size={15}/></button><input aria-label="Zoom level" className="zoom-slider" type="range" min="0.25" max="2" step="0.01" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}/><button className="zoom-percent" onClick={toggleZoomPreset} title="Toggle 100% / fit to screen">{Math.round(zoom * 100)}%</button><button className="tool-button" title="Zoom in" onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))}><ZoomIn size={15}/></button></div>
           </div>
 
           <div className="canvas-area">
             {workspace === "template" && (
               <div className="canvas-wrap">
-                <div className="canvas-caption"><span>INDIVIDUAL TEMPLATE</span><span>3.5 × 2 in · Landscape</span></div>
+                <div className="canvas-caption"><span>INDIVIDUAL TEMPLATE</span><span>{templateWidth.toFixed(2)} × {templateHeight.toFixed(2)} in · {showPrintPreview ? "Preview" : "Editing"}</span></div>
                 <div className="ruler-stage">
                   {showRulers && <div className="ruler-corner"/>}
                   {showRulers && <div className="top-ruler" style={{width: templateWidth * 96 * zoom}}>{Array.from({length: Math.floor(templateWidth * 4) + 1}, (_, i) => <span key={i} style={{left: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
@@ -358,13 +379,13 @@ function App() {
                           {item.type === "rect" && <rect width={item.w * 96} height={item.h * 96} rx="2" fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1"/>}
                           {item.type === "image" && item.src && <image href={item.src} width={item.w * 96} height={item.h * 96} preserveAspectRatio="xMidYMid slice"/>}
                           {item.type === "text" && <text x={item.align === "center" ? item.w * 48 : item.align === "right" ? item.w * 96 : 0} y={(item.fontSize ?? 12) * 1.15 * 96 / 72} fontFamily={item.fontFamily ?? "Inter, Arial, sans-serif"} fontSize={(item.fontSize ?? 12) * 96 / 72} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={item.align === "center" ? "middle" : item.align === "right" ? "end" : "start"}>{valueFor(item, currentRecord)}</text>}
-                          {selectedId === item.id && <rect x="-4" y="-4" width={item.w * 96 + 8} height={item.h * 96 + 8} fill="none" stroke="#d77d4e" strokeWidth="1.4" strokeDasharray="4 3" pointerEvents="none"/>}
+                          {selectedId === item.id && !showPrintPreview && <rect x="-4" y="-4" width={item.w * 96 + 8} height={item.h * 96 + 8} fill="none" stroke="#d77d4e" strokeWidth="1.4" strokeDasharray="4 3" pointerEvents="none"/>}
                         </g>
                       ))}
                     </svg>
                   </div>
                 </div>
-                <div className="canvas-footnote"><span><span className="orange-dot"/> {selected ? "Object selected · drag to reposition" : "Select an object to edit"}</span><span>Measurements in inches</span></div>
+                <div className="canvas-footnote"><span><span className="orange-dot"/> {showPrintPreview ? "Print preview · editing paused" : selected ? "Object selected · drag to reposition" : "Select an object to edit"}</span><span>Measurements in inches</span></div>
               </div>
             )}
 
@@ -372,7 +393,7 @@ function App() {
               <div className="layout-editor">
                 <div className="canvas-caption"><span>PAGE LAYOUT</span><span>{pageWidth} × {pageHeight} in · {totalSlots} items per sheet</span></div>
                 <div className="layout-paper-wrap">
-                  <div className="layout-paper" style={{aspectRatio: `${pageWidth} / ${pageHeight}`}}>
+                  <div className={showPrintPreview ? "layout-paper preview-active" : "layout-paper"} style={{aspectRatio: `${pageWidth} / ${pageHeight}`}}>
                     <div className="layout-grid" style={{gridTemplateColumns: `repeat(${columns}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, gap: `${gapY * 7}px ${gapX * 7}px`}}>
                       {Array.from({length: totalSlots}, (_, slot) => {
                         const idx = addPageSlot(slot);
@@ -385,19 +406,7 @@ function App() {
               </div>
             )}
 
-            {workspace === "preview" && (
-              <div className="print-preview">
-                <div className="canvas-caption"><span>PRINT PREVIEW</span><span>Sheet {currentPage + 1} of {pageCount}</span></div>
-                <div className="preview-paper" style={{aspectRatio: `${pageWidth} / ${pageHeight}`}}>
-                  <div className="preview-grid" style={{gridTemplateColumns: `repeat(${columns}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, gap: `${gapY * 7}px ${gapX * 7}px`}}>
-                    {Array.from({length: totalSlots}, (_, slot) => {
-                      const idx = addPageSlot(slot);
-                      return idx < records.length ? <div className="preview-cell" key={slot}>{renderTemplate(records[idx], true)}</div> : null;
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
+
           </div>
 
           <div className="record-bar">
@@ -422,14 +431,16 @@ function App() {
               </>}
               {selected.type === "rect" && <div className="property-section"><label>APPEARANCE</label><div className="color-row"><span>Fill color</span><input type="color" value={selected.fill ?? "#e9eee9"} onChange={(e) => updateItem(selected.id, { fill: e.target.value })}/></div><div className="color-row"><span>Border color</span><input type="color" value={selected.stroke === "none" ? "#ffffff" : selected.stroke ?? "#cbd5cc"} onChange={(e) => updateItem(selected.id, { stroke: e.target.value })}/></div></div>}
               <div className="property-section"><label>POSITION & SIZE <span className="unit-label">INCHES</span></label><div className="position-grid">{([["X", "x"], ["Y", "y"], ["W", "w"], ["H", "h"]] as const).map(([label, key]) => <div key={key}><span>{label}</span><input type="number" step="0.01" value={selected[key].toFixed(2)} onChange={(e) => updateItem(selected.id, { [key]: Math.max(0.01, Number(e.target.value)) })}/></div>)}</div></div>
-              <div className="property-actions"><button onClick={() => { const copy = { ...selected, id: uid(), x: selected.x + 0.12, y: selected.y + 0.12 }; setItems((prev) => [...prev, copy]); setSelectedId(copy.id); }}><Copy size={14}/> Duplicate</button><button className="delete-action" onClick={() => { setItems((prev) => prev.filter((item) => item.id !== selected.id)); setSelectedId(null); }}><Trash2 size={14}/> Delete</button></div>
+              <div className="property-actions"><button onClick={() => { const copy = { ...selected, id: uid(), x: selected.x + 0.12, y: selected.y + 0.12 }; setItems((prev) => [...prev, copy]); setSelectedId(copy.id); }}><Copy size={14}/> Duplicate</button><button onClick={() => updateItem(selected.id, { locked: !selected.locked })}>{selected.locked ? <Unlock size={14}/> : <LockKeyhole size={14}/>} {selected.locked ? "Unlock" : "Lock"}</button><button className="delete-action" onClick={() => { setItems((prev) => prev.filter((item) => item.id !== selected.id)); setSelectedId(null); }}><Trash2 size={14}/> Delete</button></div>
             </div>
           ) : (
             <div className="properties-content">
               <div className="document-summary"><div className="summary-icon"><FileText size={20}/></div><h3>Document setup</h3><p>Set the size of your item and arrange how it prints on a sheet.</p></div>
               <div className="property-section"><label>INDIVIDUAL TEMPLATE SIZE</label><div className="property-two"><div><span>Width</span><div className="number-input"><input type="number" step="0.125" value={templateWidth} onChange={(e) => setTemplateWidth(Math.max(0.5, Number(e.target.value)))}/><small>in</small></div></div><div><span>Height</span><div className="number-input"><input type="number" step="0.125" value={templateHeight} onChange={(e) => setTemplateHeight(Math.max(0.5, Number(e.target.value)))}/><small>in</small></div></div></div></div>
+              <div className="property-section"><label>LABEL PRESET</label><select className="full-select" value={templateWidth === 2.625 && templateHeight === 1 ? "avery5160" : "custom"} onChange={(e) => { if (e.target.value === "avery5160") { setTemplateWidth(2.625); setTemplateHeight(1); setColumns(3); setRows(10); setGapX(0.125); setGapY(0); } }}><option value="custom">Custom template</option><option value="avery5160">Avery 5160 · Address label</option></select></div>
               <div className="property-section"><label>PAGE SIZE</label><select className="full-select" value={pageWidth === 8.5 && pageHeight === 11 ? "letter" : pageWidth === 8.27 && pageHeight === 11.69 ? "a4" : "custom"} onChange={(e) => { if (e.target.value === "letter") { setPageWidth(8.5); setPageHeight(11); } else if (e.target.value === "a4") { setPageWidth(8.27); setPageHeight(11.69); } }}><option value="letter">US Letter · 8.5 × 11 in</option><option value="a4">A4 · 8.27 × 11.69 in</option><option value="custom">Custom · {pageWidth} × {pageHeight} in</option></select></div>
               <div className="property-section"><label>ITEMS PER PAGE</label><div className="property-two"><div><span>Columns</span><div className="number-input"><input type="number" min="1" max="8" value={columns} onChange={(e) => setColumns(Math.max(1, Math.min(8, Number(e.target.value))))}/></div></div><div><span>Rows</span><div className="number-input"><input type="number" min="1" max="12" value={rows} onChange={(e) => setRows(Math.max(1, Math.min(12, Number(e.target.value))))}/></div></div></div></div>
+              <div className="property-section"><label>PAGE MARGINS · INCHES</label><div className="property-two"><div><span>Left / Right</span><div className="number-input"><input type="number" min="0" step="0.05" value={marginX} onChange={(e) => setMarginX(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div><div><span>Top / Bottom</span><div className="number-input"><input type="number" min="0" step="0.05" value={marginY} onChange={(e) => setMarginY(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div></div></div>
               <div className="property-section"><label>ITEM SPACING</label><div className="property-two"><div><span>Horizontal</span><div className="number-input"><input type="number" min="0" step="0.05" value={gapX} onChange={(e) => setGapX(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div><div><span>Vertical</span><div className="number-input"><input type="number" min="0" step="0.05" value={gapY} onChange={(e) => setGapY(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div></div></div>
               <div className="property-section"><label>DATA ASSIGNMENT</label><div className="mode-options"><button className={repeatMode === "same" ? "mode-option active" : "mode-option"} onClick={() => setRepeatMode("same")}><span className="mode-icon"><Copy size={15}/></span><span><strong>Repeat same record</strong><small>Fill the sheet with one record</small></span><span className="mode-radio"/></button><button className={repeatMode === "next" ? "mode-option active" : "mode-option"} onClick={() => setRepeatMode("next")}><span className="mode-icon"><ListFilter size={15}/></span><span><strong>Next record each time</strong><small>Advance through your data</small></span><span className="mode-radio"/></button></div></div>
               <div className="output-summary"><div><span>Items per sheet</span><strong>{totalSlots}</strong></div><div><span>Estimated sheets</span><strong>{pageCount}</strong></div></div>
