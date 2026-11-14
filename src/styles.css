@@ -228,3 +228,5 @@ button:disabled{opacity:.35;cursor:not-allowed}
  .mobile-data-button{display:grid}
 }
 @media(min-width:621px){.mobile-data-button{display:none}}
+
+@media(max-width:620px){.right-tabs{gap:4px;padding:0 6px}.right-tabs button{padding:0 6px;font-size:9px}.mobile-layer-list .layer-row{min-height:32px}}

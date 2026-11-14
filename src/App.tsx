@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, CircleHelp, Copy, Crop, Database, Eye, FileImage,
   FileSearch, FileStack, FileText, Grid2X2, ImagePlus, Layers, Link2, ListFilter,
   Lock, LockKeyhole, Magnet, Minus, MousePointer2, Plus, Printer, Ruler, Search,
-  Settings2, Shapes, SlidersHorizontal, Sparkles, Square, Trash2, Type, Upload,
+  Settings2, Shapes, SlidersHorizontal, Sparkles, Square, Trash2, Type, Unlock, Upload,
   WandSparkles, ZoomIn, ZoomOut
 } from "lucide-react";
 import Papa from "papaparse";
@@ -63,7 +63,8 @@ function App() {
   const [records, setRecords] = useState<RecordRow[]>(starterRecords);
   const [fileName, setFileName] = useState("bird-records.csv");
   const [items, setItems] = useState<DesignItem[]>(starterItems);
-  const [selectedId, setSelectedId] = useState<string | null>("text-2");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showMobileLayers, setShowMobileLayers] = useState(false);
   const [recordIndex, setRecordIndex] = useState(0);
   const [workspace, setWorkspace] = useState<"template" | "layout">("template");
   const [zoom, setZoom] = useState(1);
@@ -393,7 +394,7 @@ function App() {
               <div className="layout-editor">
                 <div className="canvas-caption"><span>PAGE LAYOUT</span><span>{pageWidth} × {pageHeight} in · {totalSlots} items per sheet</span></div>
                 <div className="layout-paper-wrap">
-                  <div className={showPrintPreview ? "layout-paper preview-active" : "layout-paper"} style={{aspectRatio: `${pageWidth} / ${pageHeight}`}}>
+                  <div className={showPrintPreview ? "layout-paper preview-active" : "layout-paper"} style={{aspectRatio: `${pageWidth} / ${pageHeight}`, padding: `${marginY}in ${marginX}in`}}>
                     <div className="layout-grid" style={{gridTemplateColumns: `repeat(${columns}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, gap: `${gapY * 7}px ${gapX * 7}px`}}>
                       {Array.from({length: totalSlots}, (_, slot) => {
                         const idx = addPageSlot(slot);
@@ -421,8 +422,22 @@ function App() {
         </section>
 
         <aside className="right-panel">
-          <div className="right-tabs"><button className={!selected ? "active" : ""} onClick={() => setSelectedId(null)}><Settings2 size={14}/> Document</button><button className={selected ? "active" : ""} onClick={() => selected && setSelectedId(selected.id)}><SlidersHorizontal size={14}/> Properties</button></div>
-          {selected ? (
+          <div className="right-tabs"><button className={!selected && !showMobileLayers ? "active" : ""} onClick={() => { setShowMobileLayers(false); setSelectedId(null); }}><Settings2 size={14}/> Document</button><button className={selected && !showMobileLayers ? "active" : ""} onClick={() => { setShowMobileLayers(false); if (!selected) setSelectedId(items[0]?.id ?? null); }}><SlidersHorizontal size={14}/> Properties</button><button className={showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(true)}><Layers size={14}/> Layers</button></div>
+          {showMobileLayers ? (
+            <div className="properties-content mobile-layer-list">
+              <div className="section-title"><Layers size={14}/> STACK ORDER <span className="count-pill">{items.length}</span></div>
+              {[...items].reverse().map((item) => (
+                <div key={item.id} className={selectedId === item.id ? "layer-row selected" : "layer-row"} onClick={() => { setSelectedId(item.id); setShowMobileLayers(false); setWorkspace("template"); setShowPrintPreview(false); }}>
+                  <span className="layer-kind">{item.type === "text" ? <Type size={13}/> : item.type === "image" ? <FileImage size={13}/> : <Square size={13}/>}</span>
+                  <span className="layer-label">{item.field ?? item.text ?? item.assetName ?? "Shape"}</span>
+                  <button className="layer-visibility" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); updateItem(item.id, { visible: item.visible === false }); }}><Eye size={12}/></button>
+                  <button className="layer-visibility" title={item.locked ? "Unlock" : "Lock"} onClick={(e) => { e.stopPropagation(); updateItem(item.id, { locked: !item.locked }); }}><LockKeyhole size={12}/></button>
+                  <button className="layer-visibility" title="Move up" onClick={(e) => { e.stopPropagation(); moveLayer(item.id, 1); }}><ArrowUp size={12}/></button>
+                  <button className="layer-visibility" title="Move down" onClick={(e) => { e.stopPropagation(); moveLayer(item.id, -1); }}><ArrowDown size={12}/></button>
+                </div>
+              ))}
+            </div>
+          ) : selected ? (
             <div className="properties-content">
               <div className="property-heading"><div className="property-icon">{selected.type === "text" ? <Type size={17}/> : selected.type === "image" ? <FileImage size={17}/> : <Square size={17}/>}</div><div><strong>{selected.type === "text" ? "Text object" : selected.type === "image" ? "Image object" : "Shape object"}</strong><span>{selected.field ? `Linked to ${selected.field}` : "Static content"}</span></div></div>
               {selected.type === "text" && <>
