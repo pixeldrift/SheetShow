@@ -315,9 +315,12 @@ function App() {
     setViewPan({ x: panRef.current.panX + event.clientX - panRef.current.startX, y: panRef.current.panY + event.clientY - panRef.current.startY });
   };
   const endPan = () => { panRef.current = null; };
-  const touchDistance = (touches: TouchList) => {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
+  const touchDistance = (touches: { item: (index: number) => { clientX: number; clientY: number } | null }) => {
+    const first = touches.item(0);
+    const second = touches.item(1);
+    if (!first || !second) return 0;
+    const dx = first.clientX - second.clientX;
+    const dy = first.clientY - second.clientY;
     return Math.hypot(dx, dy);
   };
   const onCanvasTouchStart = (event: TouchEvent<HTMLDivElement>) => {
