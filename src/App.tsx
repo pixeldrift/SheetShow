@@ -77,7 +77,18 @@ const averyPresets: LabelPreset[] = [
   { code: "22806", name: "Shipping labels · 10 per sheet", width: 4, height: 2, columns: 2, rows: 5, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
 ];
 const uid = () => Math.random().toString(36).slice(2, 9);
-const specialFields = [\n  { key: "__record_number", label: "Record number" },\n  { key: "__page_number", label: "Page number" },\n  { key: "__record_count", label: "Record count" },\n  { key: "__page_count", label: "Page count" },\n];\nconst fieldDisplayName = (field: string) => specialFields.find((entry) => entry.key === field)?.label ?? field.replaceAll("_", " ");\nconst valueFor = (item: DesignItem, record: RecordRow, meta: { recordNumber: number; pageNumber: number; recordCount: number; pageCount: number }) => {\n  if (!item.field) return item.text ?? "";\n  const special: Record<string, number> = { __record_number: meta.recordNumber, __page_number: meta.pageNumber, __record_count: meta.recordCount, __page_count: meta.pageCount };\n  return item.field in special ? String(special[item.field]) : (record[item.field] ?? "—");\n};
+const specialFields = [
+  { key: "__record_number", label: "Record number" },
+  { key: "__page_number", label: "Page number" },
+  { key: "__record_count", label: "Record count" },
+  { key: "__page_count", label: "Page count" },
+];
+const fieldDisplayName = (field: string) => specialFields.find((entry) => entry.key === field)?.label ?? field.replaceAll("_", " ");
+const valueFor = (item: DesignItem, record: RecordRow, meta: { recordNumber: number; pageNumber: number; recordCount: number; pageCount: number }) => {
+  if (!item.field) return item.text ?? "";
+  const special: Record<string, number> = { __record_number: meta.recordNumber, __page_number: meta.pageNumber, __record_count: meta.recordCount, __page_count: meta.pageCount };
+  return item.field in special ? String(special[item.field]) : (record[item.field] ?? "—");
+};
 const inches = (n: number) => Number(n.toFixed(2));
 
 function App() {
@@ -465,7 +476,8 @@ function App() {
               <button className="tool-button" title="Copy" disabled={!selected} onClick={copySelected}><Copy size={15}/></button>
               <button className="tool-button" title="Paste" disabled={!clipboardItem} onClick={pasteItem}><ClipboardPaste size={15}/></button>
             </div>
-            <button className="tool-button" title="Delete selected" disabled={!selected} onClick={deleteSelected}><Trash2 size={15}/></button>\n            <div className="toolbar-divider view-divider"/>
+            <button className="tool-button" title="Delete selected" disabled={!selected} onClick={deleteSelected}><Trash2 size={15}/></button>
+            <div className="toolbar-divider view-divider"/>
             <div className="tool-group">
               <button className={showGrid ? "tool-button active" : "tool-button"} title="Toggle grid" onClick={() => setShowGrid(!showGrid)}><Grid2X2 size={15}/></button>
               <button className={showRulers ? "tool-button active" : "tool-button"} title="Toggle rulers" onClick={() => setShowRulers(!showRulers)}><Ruler size={15}/></button>
@@ -495,7 +507,16 @@ function App() {
                 </button>
               ))}
             </div>
-            <div className="drag-hint"><MousePointer2 size={13}/> Drag a field onto your design, or select text and click a field to link it.</div>\n            <div className="field-divider"/>\n            <div className="field-group-label special-field-heading">SPECIAL FIELDS <span>{specialFields.length}</span></div>\n            <div className="field-list special-field-list">\n              {specialFields.map((field) => (\n                <button key={field.key} className="field-row special-field-row" draggable onDragStart={(event) => onDragStart(event, field.key)} onClick={() => bindSelected(field.key)} title="Click to add or bind this automatic field">\n                  <span className="field-grip">⠿</span><span className="field-type"><Sparkles size={12}/></span><span className="field-name">{field.label}</span><span className="field-add"><Plus size={13}/></span>\n                </button>\n              ))}\n            </div>
+            <div className="drag-hint"><MousePointer2 size={13}/> Drag a field onto your design, or select text and click a field to link it.</div>
+            <div className="field-divider"/>
+            <div className="field-group-label special-field-heading">SPECIAL FIELDS <span>{specialFields.length}</span></div>
+            <div className="field-list special-field-list">
+              {specialFields.map((field) => (
+                <button key={field.key} className="field-row special-field-row" draggable onDragStart={(event) => onDragStart(event, field.key)} onClick={() => bindSelected(field.key)} title="Click to add or bind this automatic field">
+                  <span className="field-grip">⠿</span><span className="field-type"><Sparkles size={12}/></span><span className="field-name">{field.label}</span><span className="field-add"><Plus size={13}/></span>
+                </button>
+              ))}
+            </div>
           </div>
         </aside>
             <div className="editor-content">
