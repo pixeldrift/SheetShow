@@ -78,7 +78,10 @@ export function resolveConditions(item: DesignItem, record: RecordRow, meta?: Re
   if (!fired.length) return item;
   let out: DesignItem = { ...item };
   for (const rule of fired) {
-    if (rule.effects.set) out = { ...out, ...rule.effects.set };
+    if (rule.effects.set) {
+      out = { ...out, ...rule.effects.set };
+      if (rule.effects.set.radius !== undefined) { out.radiusUnit = "pct"; delete out.radii; } // a rule's radius is always a percentage
+    }
     if (rule.effects.visible !== undefined) out.visible = rule.effects.visible;
   }
   if (ghost && out.visible === false && item.visible !== false) { out.visible = true; out._ruleHidden = true; }

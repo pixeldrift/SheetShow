@@ -26,6 +26,8 @@ export type DesignItem = {
   overflow?: "spill" | "truncate";
   /** Floor (pt) for the shrinking modes. */
   minFontSize?: number;
+  /** Space (inches) between the text and the edge of its box; useful when the text has a background or frame. */
+  padding?: number;
   /** Outline around the letters, in points, drawn outside the fill so text stays readable on busy backgrounds. */
   textStroke?: { color: string; width: number };
   imageFit?: "cover" | "contain";
@@ -37,8 +39,11 @@ export type DesignItem = {
   fallbackAssetId?: string;
   /** Manual per-record choices for a data-driven picture, keyed by record id. */
   overrides?: Record<string, string>;
-  /** Corner radius as a percentage of the shorter side (50 = fully round). */
+  /** Corner radius: a percentage of the shorter side (50 = fully round) or CSS pixels, per `radiusUnit` (default %). */
   radius?: number;
+  radiusUnit?: "pct" | "px";
+  /** Individual corners (top-left, top-right, bottom-right, bottom-left) in the same unit; overrides `radius`. */
+  radii?: [number, number, number, number];
   /** Frame / border thickness in points. */
   strokeWidth?: number;
   opacity?: number;

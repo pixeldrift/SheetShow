@@ -1,9 +1,10 @@
-import { useMemo } from "react";
-import { Circle, Droplets, Sparkles, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronRight, Circle, Droplets, Sparkles, X } from "lucide-react";
 import type { DesignItem, RecordRow, Shadow } from "../types";
 import type { ImageLibrary } from "../hooks/useImageLibrary";
 import { TRANSFORM_NAMES, defaultImageSource, needsReview, patternFields } from "../lib/images";
 import { prettyField } from "../lib/data";
+import { convertRadius } from "../lib/shape";
 import { NumberField, Pair, Section } from "./Fields";
 
 type Patch = (patch: Partial<DesignItem>, key?: string) => void;
@@ -106,31 +107,80 @@ export function PictureSection({ item, patch, tools }: { item: DesignItem; patch
   );
 }
 
-/** Fill, corner radius and frame — shared by shapes and pictures. */
+/** Background, corner radius and frame: shared by shapes, pictures and text boxes. */
 export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Patch }) {
+  const [corners, setCorners] = useState(!!item.radii);
   const hasStroke = !!item.stroke && item.stroke !== "none";
-  const radius = item.radius ?? 0;
-  const makeCircle = () => { const side = Math.min(item.w, item.h); patch({ radius: 50, w: side, h: side }); };
+  const unit = item.radiusUnit ?? "pct";
+  const sidePx = Math.min(item.w, item.h) * 96;
+  const max = unit === "pct" ? 50 : Math.max(1, Math.floor(sidePx / 2));
+  const radii = item.radii ?? ([item.radius ?? 0, item.radius ?? 0, item.radius ?? 0, item.radius ?? 0] as const);
+  const mixed = !!item.radii && !item.radii.every((r) => r === item.radii![0]);
+  const label = item.type === "image" ? "CORNERS & FRAME" : item.type === "text" ? "BOX & FRAME" : "APPEARANCE";
+  const setUnit = (next: "pct" | "px") => {
+    if (next === unit) return;
+    patch({
+      radiusUnit: next,
+      radius: convertRadius(item.radius ?? 0, unit, next, sidePx),
+      ...(item.radii ? { radii: item.radii.map((r) => convertRadius(r, unit, next, sidePx)) as [number, number, number, number] } : {}),
+    });
+  };
+  const setCorner = (index: number, value: number) => { const next = [...radii] as [number, number, number, number]; next[index] = value; patch({ radii: next }); };
+  const makeCircle = () => { const side = Math.min(item.w, item.h); patch({ radius: 50, radiusUnit: "pct", radii: undefined, w: side, h: side }); };
+  const cornerNames = ["Top left", "Top right", "Bottom right", "Bottom left"];
+
   return (
-    <Section title={item.type === "image" ? "CORNERS & FRAME" : "APPEARANCE"}>
-      {item.type === "rect" && <div className="color-row first"><span>Fill color</span><input type="color" value={item.fill ?? "#e9eee9"} onChange={(e) => patch({ fill: e.target.value })} /></div>}
-      <div className="slider-row">
+    <Section title={label}>
+      {(item.type === "rect" || item.type === "text") && (
+        <div className="color-row first">
+          <span>{item.type === "text" ? "Background" : "Fill color"}</span>
+          <span className="inline-controls">
+            {item.type === "text" && item.fill && <button className="mini-button" title="Remove background" aria-label="Remove background" onClick={() => patch({ fill: undefined })}><X size={13} /></button>}
+            <input type="color" aria-label="Fill color" value={item.fill ?? (item.type === "text" ? "#ffffff" : "#e9eee9")} onChange={(e) => patch({ fill: e.target.value })} />
+          </span>
+        </div>
+      )}
+
+      {item.type === "text" && <div className="spaced-block"><Pair label="Padding"><NumberField value={item.padding ?? 0} min={0} max={2} step={0.01} places={2} unit="in" onChange={(n) => patch({ padding: n })} /></Pair></div>}
+
+      <div className="radius-head">
         <span>Corner radius</span>
-        <input type="range" min="0" max="50" step="1" value={radius} aria-label="Corner radius" onChange={(e) => patch({ radius: Number(e.target.value) })} />
-        <output>{radius}%</output>
+        <div className="seg-mini" role="group" aria-label="Radius unit">
+          <button className={unit === "pct" ? "active" : ""} aria-pressed={unit === "pct"} onClick={() => setUnit("pct")}>%</button>
+          <button className={unit === "px" ? "active" : ""} aria-pressed={unit === "px"} onClick={() => setUnit("px")}>px</button>
+        </div>
       </div>
-      <div className="icon-row spaced-block">
-        <button className="wide-icon" onClick={makeCircle} title="Make it round: sets the shape square and the corners fully round"><Circle size={15} /> Circle</button>
-        <button className="wide-icon" onClick={() => patch({ radius: 0 })}>Square corners</button>
+      <div className="radius-row">
+        <input type="range" min="0" max={max} step={unit === "pct" ? 1 : 0.5} value={mixed ? 0 : Math.min(max, radii[0])} aria-label="Corner radius" onChange={(e) => patch({ radius: Number(e.target.value), radii: undefined })} />
+        <NumberField value={mixed ? 0 : radii[0]} min={0} max={max} step={unit === "pct" ? 1 : 0.5} places={1} unit={unit === "pct" ? "%" : "px"} onChange={(n) => patch({ radius: n, radii: undefined })} />
       </div>
-      <div className="color-row">
-        <span>Frame color</span>
-        <span className="inline-controls">
-          {hasStroke && <button className="mini-button" title="Remove frame" aria-label="Remove frame" onClick={() => patch({ stroke: "none" })}><X size={13} /></button>}
-          <input type="color" value={hasStroke ? item.stroke! : "#ffffff"} onChange={(e) => patch({ stroke: e.target.value, strokeWidth: item.strokeWidth ?? 1.5 })} />
-        </span>
+      {mixed && <p className="hint first">Corners differ. Move the slider to make them all the same.</p>}
+      <button className="twirl" aria-expanded={corners} onClick={() => setCorners((o) => !o)}><ChevronRight size={12} style={{ transform: corners ? "rotate(90deg)" : undefined }} /> Individual corners</button>
+      {corners && (
+        <div className="corner-grid">
+          {[0, 1, 3, 2].map((index) => (
+            <Pair key={index} label={cornerNames[index]}><NumberField value={radii[index]} min={0} max={max} step={unit === "pct" ? 1 : 0.5} places={1} unit={unit === "pct" ? "%" : "px"} onChange={(n) => setCorner(index, n)} /></Pair>
+          ))}
+        </div>
+      )}
+      {item.type !== "text" && (
+        <div className="icon-row spaced-block">
+          <button className="wide-icon" onClick={makeCircle} title="Make it round: sets the shape square and the corners fully round"><Circle size={15} /> Circle</button>
+          <button className="wide-icon" onClick={() => patch({ radius: 0, radii: undefined })}>Square corners</button>
+        </div>
+      )}
+
+      {/* Frame colour and thickness share one line. */}
+      <div className="frame-row">
+        <span>Frame</span>
+        <input type="color" aria-label="Frame color" value={hasStroke ? item.stroke! : "#ffffff"} onChange={(e) => patch({ stroke: e.target.value, strokeWidth: item.strokeWidth ?? 1.5 })} />
+        {hasStroke ? (
+          <>
+            <NumberField value={item.strokeWidth ?? (item.type === "rect" ? 0.75 : 1)} min={0.25} max={40} step={0.25} places={2} unit="pt" onChange={(n) => patch({ strokeWidth: n })} />
+            <button className="mini-button" title="Remove frame" aria-label="Remove frame" onClick={() => patch({ stroke: "none" })}><X size={13} /></button>
+          </>
+        ) : <span className="frame-none">none</span>}
       </div>
-      {hasStroke && <div className="spaced-block"><Pair label="Frame thickness"><NumberField value={item.strokeWidth ?? (item.type === "rect" ? 0.75 : 1)} min={0.25} max={40} step={0.25} places={2} unit="pt" onChange={(n) => patch({ strokeWidth: n })} /></Pair></div>}
     </Section>
   );
 }

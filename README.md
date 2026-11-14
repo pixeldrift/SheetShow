@@ -1,7 +1,5 @@
 # SheetShow
 
-**Where data takes the stage.**
-
 SheetShow is a browser-based variable-data design and print tool. Create an individual item, connect its content to spreadsheet fields, arrange copies on a physical page, and preview the result across records.
 
 ## Current foundation
@@ -22,13 +20,17 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Data table: edit cells in place, paste from a spreadsheet, add/rename/sort columns, and choose which records print (checkboxes, range select, “only these”)
 - Text that stays readable and fits: outline, shrink-to-fit (box or one line) with a minimum size, truncate with “…”, and a text-fit audit
 - Alternating templates (“odd/even”, every n-th, or by a field’s value) combined into one output, with output sorting by any field
-- Edit individual records on the printed sheets: change a name, drop in a different photo or restyle one item. Hand-edited records are flagged and can be switched back to the template
+- Override mode on the printed sheets: change a name, drop in a different photo or restyle one item for a single record. Overridden records are flagged and can be switched back to the template
 - Web pictures are checked before printing and can be saved into the library
 - Printer calibration: nudge the whole page in thousandths of an inch, save named printer settings on this device, and print a calibration sheet
 - Template gallery (File menu → New from template…) with live thumbnails; drop your own `.json` projects into `src/templates/` to add more
 - Groups: select several objects and group them (Ctrl/⌘+G). A group moves, turns, resizes (text included), aligns and copies as one; Alt-click or double-click picks a single member; collapsible rows in Layers
 - Conditional objects: show, hide or restyle any object by rule (e.g. a ribbon only for VIPs, a symbol by meal choice), with AND / OR / NOT conditions
 - Merge fields inside text, e.g. `{city}, {state} {zip}` or `${price}`
+- Scrubbable number fields (drag a label), stepper arrows, corner radius by % or px with per-corner values, text boxes and photo placeholders
+- One undo history for everything, an alignment bar on the canvas, a records drawer with a live linked-data preview, and a field-names view
+- Importing data asks whether to replace, add to, or merge (with duplicate removal and column matching)
+- Help dialog (user guide in `src/help/help.md`)
 - Picture library with drag-and-drop, folder and zip import; data-driven pictures matched from a column or filename pattern
 - Import a new CSV/TSV and auto-match its columns to the template's linked fields
 - Autosave in the browser, plus save/open project files
@@ -99,11 +101,17 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
   - [x] Change colour, fill, frame, opacity, bold/italic, font size, corner radius or replace the text based on a field
   - [x] Conditions: is / is not / contains / doesn't contain / starts with / ends with / is one of / is empty / is not empty / greater, less (numbers, dates), combined with all (AND), any (OR) or none (NOT)
   - [x] Several rules per object, “first match wins” or “all matches apply”, and “Otherwise”; live “applies to N of M records” counts
-  - [x] A hand edit on one record beats a rule; renaming or re-mapping a column keeps rules connected
+  - [x] An override on one record beats a rule; renaming or re-mapping a column keeps rules connected
   - [ ] Rules that swap a picture, or compare one field to another
   - [ ] Conditions on a whole layer or group (when groups exist)
 - [x] Group and ungroup objects (single-level groups; resize scales text proportionally)
   - [ ] Nested groups, and conditional rules that apply to a whole group
+- [ ] **Responsive layout with pinning** — objects that react to each other
+  - Pin an object to another (or to the template edge) with a gap, so when text grows or wraps the object below it moves down with it, and a short name pulls its neighbours in
+  - Stretch, hug-contents and fill behaviours for boxes, similar to auto-layout / constraints in design tools
+  - Pins respect groups and work together with text auto-fit and conditions
+- [ ] **More shapes**: lines, polygons, ellipses and arrows, with stroke styles (dashed, dotted) and fills
+- [ ] **Icon library**: pick from a library of icons and set their color; icons can be driven by data like any other object
 - [ ] Smart guides (snap to other items' edges)
 - [ ] “My templates”: save your own designs into the gallery from inside the app
 - [ ] Print-ready PDF export with embedded fonts

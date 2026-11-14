@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { BadgeCheck, ChevronDown, ChevronLeft, Database, FileText, Hash, MousePointer2, Plus, Search, Type } from "lucide-react";
+import { BadgeCheck, Braces, ChevronDown, ChevronLeft, Database, FileText, Hash, MousePointer2, Plus, Search, Type } from "lucide-react";
 import { specialFields, prettyField } from "../lib/data";
 
 type Props = {
@@ -36,7 +36,7 @@ export function DataPanel({ fileName, fields, recordCount, totalRecords, hasText
   return (
     <aside className={dragging ? "panel left-panel dragging" : "panel left-panel"} aria-label="Data fields">
       <div className="panel-heading">
-        <h2>Data fields</h2>
+        <h2><Braces size={15} className="heading-icon" /> Fields</h2>
         <button className="icon-button" title="Collapse data fields" aria-label="Collapse data fields" onClick={onClose}><ChevronLeft size={17} /></button>
       </div>
       {/* Everything below the heading scrolls. */}
