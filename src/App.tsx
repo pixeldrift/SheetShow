@@ -1,686 +1,915 @@
-import { ChangeEvent, DragEvent, PointerEvent, TouchEvent, useMemo, useRef, useState } from "react";
-import {
-  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, BadgeCheck, ChevronDown, ClipboardPaste,
-  ChevronLeft, ChevronRight, CircleHelp, Copy, Crop, Database, Eye, FileImage,
-  FileSearch, FileStack, FileText, Grid2X2, ImagePlus, Layers, Link2, ListFilter,
-  Lock, LockKeyhole, Magnet, Minus, MousePointer2, Scissors, PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, Plus, Printer, Ruler, Search,
-  Settings2, Shapes, SlidersHorizontal, Sparkles, Square, Trash2, Type, Unlock, Upload,
-  WandSparkles, X, ZoomIn, ZoomOut
-} from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, Redo2, Undo2 } from "lucide-react";
 import Papa from "papaparse";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import type { DesignItem, Guide, InstanceOverride, ItemPatch, LabelPreset, Project, RecordRow, Sheet, Variant, VariantRule, View, Workspace } from "./types";
+import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid, valueFor } from "./lib/data";
+import { applyOverride, hasEdits, pickVariant, toItemPatch } from "./lib/instances";
+import { applyConditions } from "./lib/conditions";
+import { cloneItems, expandToGroups, groupItems, moveLayer as moveLayerIn, nextGroupName, renameGroup as renameGroupIn, ungroupItems, unitsOf } from "./lib/groups";
+import { instanceIssues, itemLabel, recordLabel, type Issue } from "./lib/audit";
+import { checkImageUrls } from "./lib/webImages";
+import { layoutText } from "./lib/text";
+import { TextAuditDialog } from "./components/TextAuditDialog";
+import { usePrinterCalibration } from "./hooks/usePrinterCalibration";
+import { TemplateGalleryDialog } from "./components/TemplateGalleryDialog";
+import { useHistory } from "./hooks/useHistory";
+import { useFontLibrary } from "./hooks/useFontLibrary";
+import { aabb, alignItems, boundsOf, centerOf, distributeItems, rotateAbout, type AlignMode, type Transform } from "./lib/align";
+import { applyMapping, boundFields } from "./lib/mapping";
+import { MappingDialog } from "./components/MappingDialog";
+import { bundleProject, downloadBlob, loadProject, projectFileName, readProjectAny, saveProject } from "./lib/storage";
+import { useImageLibrary } from "./hooks/useImageLibrary";
+import { ImageContext } from "./components/ImageContext";
+import { ImageLibraryDialog } from "./components/ImageLibraryDialog";
+import { MatchReviewDialog } from "./components/MatchReviewDialog";
+import { defaultImageSource, isWebUrl } from "./lib/images";
+import type { Asset } from "./types";
+import { Topbar } from "./components/Topbar";
+import { Toolbar } from "./components/Toolbar";
+import { EditBar } from "./components/EditBar";
+import { DataPanel } from "./components/DataPanel";
+import { Inspector } from "./components/Inspector";
+import { RecordBar } from "./components/RecordBar";
+import { MAX_ZOOM, MIN_ZOOM, Viewport } from "./components/Viewport";
+import { TemplateStage } from "./components/TemplateStage";
+import { LayoutStage, type InstanceInfo, type InstanceSelection } from "./components/LayoutStage";
+import { itemFrame } from "./components/ItemShape";
+import { DataTable } from "./components/DataTable";
+import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
+import { PrintSheets } from "./components/PrintSheets";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-type RecordRow = Record<string, string>;
-type DesignItem = {
-  id: string;
-  type: "text" | "rect" | "image";
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  text?: string;
-  field?: string;
-  fontSize?: number;
-  fontFamily?: string;
-  color?: string;
-  weight?: number;
-  align?: "left" | "center" | "right";
-  fill?: string;
-  stroke?: string;
-  src?: string;
-  assetName?: string;
-  visible?: boolean;
-  locked?: boolean;
-};
-
-const starterRecords: RecordRow[] = [
-  { name: "Pip", species: "Green-cheeked conure", band: "GC-1048", location: "Garden Room · Cage 03", diet: "Pellets, greens, fruit", hatch_date: "2022-04-18" },
-  { name: "Juniper", species: "Blue-and-gold macaw", band: "BG-0217", location: "Aviary · Flight 01", diet: "Pellets, nuts, vegetables", hatch_date: "2018-09-02" },
-  { name: "Mochi", species: "Cockatiel", band: "CK-3309", location: "Garden Room · Cage 08", diet: "Pellets, seed, greens", hatch_date: "2021-11-26" },
-  { name: "Fig", species: "African grey", band: "AG-0084", location: "Sunroom · Perch 02", diet: "Pellets, vegetables", hatch_date: "2016-02-11" },
-  { name: "Basil", species: "Indian ringneck", band: "IR-1742", location: "Garden Room · Cage 05", diet: "Pellets, fruit, greens", hatch_date: "2020-07-07" },
-  { name: "Clover", species: "Lovebird", band: "LB-4421", location: "Nursery · Cage 02", diet: "Small pellets, seed, greens", hatch_date: "2023-03-14" },
-];
-
-const starterItems: DesignItem[] = [
-  { id: "shape-1", type: "rect", x: 0.18, y: 0.18, w: 3.14, h: 1.64, fill: "#fbfaf7", stroke: "#e7e2d8", visible: true },
-  { id: "shape-2", type: "rect", x: 0.18, y: 0.18, w: 0.09, h: 1.64, fill: "#e28b55", stroke: "none", visible: true },
-  { id: "text-1", type: "text", x: 0.42, y: 0.55, w: 2.75, h: 0.28, text: "BIRD PROFILE", fontSize: 8, color: "#b16b3f", weight: 700, visible: true },
-  { id: "text-2", type: "text", x: 0.42, y: 0.91, w: 2.75, h: 0.38, text: "Bird name", field: "name", fontSize: 22, color: "#26352f", weight: 700, visible: true },
-  { id: "text-3", type: "text", x: 0.42, y: 1.23, w: 2.75, h: 0.22, text: "Species", field: "species", fontSize: 10, color: "#66736d", visible: true },
-  { id: "text-4", type: "text", x: 0.42, y: 1.55, w: 1.3, h: 0.18, text: "BAND · ", fontSize: 7, color: "#9a9d91", weight: 700, visible: true },
-  { id: "text-5", type: "text", x: 1.0, y: 1.55, w: 2.0, h: 0.18, text: "Band number", field: "band", fontSize: 8, color: "#47564f", visible: true },
-];
-
-type LabelPreset = { code: string; name: string; width: number; height: number; columns: number; rows: number; gapX: number; gapY: number; marginX: number; marginY: number };
-const averyPresets: LabelPreset[] = [
-  { code: "5160", name: "Address labels · 30 per sheet", width: 2.625, height: 1, columns: 3, rows: 10, gapX: 0.125, gapY: 0, marginX: 0.1875, marginY: 0.5 },
-  { code: "5161", name: "Address labels · 20 per sheet", width: 4, height: 1, columns: 2, rows: 10, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
-  { code: "5162", name: "Address labels · 14 per sheet", width: 4, height: 1.333, columns: 2, rows: 7, gapX: 0.1875, gapY: 0.167, marginX: 0.15625, marginY: 0.5 },
-  { code: "5163", name: "Shipping labels · 10 per sheet", width: 4, height: 2, columns: 2, rows: 5, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
-  { code: "5164", name: "Shipping labels · 6 per sheet", width: 4, height: 3.333, columns: 2, rows: 3, gapX: 0.1875, gapY: 0.167, marginX: 0.15625, marginY: 0.5 },
-  { code: "5167", name: "Return address · 80 per sheet", width: 1.75, height: 0.5, columns: 4, rows: 20, gapX: 0.125, gapY: 0, marginX: 0.25, marginY: 0.5 },
-  { code: "5260", name: "Easy Peel address · 30 per sheet", width: 2.625, height: 1, columns: 3, rows: 10, gapX: 0.125, gapY: 0, marginX: 0.1875, marginY: 0.5 },
-  { code: "8160", name: "Inkjet address · 30 per sheet", width: 2.625, height: 1, columns: 3, rows: 10, gapX: 0.125, gapY: 0, marginX: 0.1875, marginY: 0.5 },
-  { code: "8161", name: "Inkjet address · 20 per sheet", width: 4, height: 1, columns: 2, rows: 10, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
-  { code: "8162", name: "Inkjet address · 14 per sheet", width: 4, height: 1.333, columns: 2, rows: 7, gapX: 0.1875, gapY: 0.167, marginX: 0.15625, marginY: 0.5 },
-  { code: "8163", name: "Inkjet shipping · 10 per sheet", width: 4, height: 2, columns: 2, rows: 5, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
-  { code: "8164", name: "Inkjet shipping · 6 per sheet", width: 4, height: 3.333, columns: 2, rows: 3, gapX: 0.1875, gapY: 0.167, marginX: 0.15625, marginY: 0.5 },
-  { code: "5195", name: "File folder labels · 60 per sheet", width: 0.667, height: 3.438, columns: 3, rows: 20, gapX: 0.125, gapY: 0.0, marginX: 0.25, marginY: 0.25 },
-  { code: "5390", name: "Name badges · 8 per sheet", width: 3.375, height: 2.333, columns: 2, rows: 4, gapX: 0.25, gapY: 0.25, marginX: 0.625, marginY: 0.5 },
-  { code: "5392", name: "Name badges · 8 per sheet", width: 3.5, height: 2.25, columns: 2, rows: 4, gapX: 0.25, gapY: 0.25, marginX: 0.5, marginY: 0.75 },
-  { code: "8371", name: "Business cards · 10 per sheet", width: 3.5, height: 2, columns: 2, rows: 5, gapX: 0.25, gapY: 0, marginX: 0.5, marginY: 0.5 },
-  { code: "8871", name: "Business cards · 10 per sheet", width: 3.5, height: 2, columns: 2, rows: 5, gapX: 0.25, gapY: 0, marginX: 0.5, marginY: 0.5 },
-  { code: "22806", name: "Shipping labels · 10 per sheet", width: 4, height: 2, columns: 2, rows: 5, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
-];
-const uid = () => Math.random().toString(36).slice(2, 9);
-const specialFields = [
-  { key: "__record_number", label: "Record number" },
-  { key: "__page_number", label: "Page number" },
-  { key: "__record_count", label: "Record count" },
-  { key: "__page_count", label: "Page count" },
-];
-const fieldDisplayName = (field: string) => specialFields.find((entry) => entry.key === field)?.label ?? field.replaceAll("_", " ");
-const valueFor = (item: DesignItem, record: RecordRow, meta: { recordNumber: number; pageNumber: number; recordCount: number; pageCount: number }) => {
-  if (!item.field) return item.text ?? "";
-  const special: Record<string, number> = { __record_number: meta.recordNumber, __page_number: meta.pageNumber, __record_count: meta.recordCount, __page_count: meta.pageCount };
-  return item.field in special ? String(special[item.field]) : (record[item.field] ?? "—");
-};
-const inches = (n: number) => Number(n.toFixed(2));
+const WIDE_QUERY = "(min-width: 851px)";
+const freshView = (): View => ({ zoom: 1, pan: { x: 0, y: 0 }, fitted: false });
+const defaultSheet: Sheet = { pageWidth: 8.5, pageHeight: 11, columns: 2, rows: 4, gapX: 0.18, gapY: 0.18, marginX: 0.25, marginY: 0.25, repeatMode: "next", cropMarks: false };
+const DEFAULT_NAME = "Untitled bird card";
 
 function App() {
-  const [records, setRecords] = useState<RecordRow[]>(starterRecords);
-  const [fileName, setFileName] = useState("bird-records.csv");
-  const [items, setItems] = useState<DesignItem[]>(starterItems);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showMobileLayers, setShowMobileLayers] = useState(false);
-  const [dataDrawerOpen, setDataDrawerOpen] = useState(true);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
-  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const gesturePointersRef = useRef(new Map<number, { x: number; y: number }>());
-  const gestureRef = useRef<{ mode: "pan" | "pinch"; pointerId: number; startX: number; startY: number; panX: number; panY: number; startDistance: number; startZoom: number } | null>(null);
-  const [presetSearch, setPresetSearch] = useState("");
-  const [recordIndex, setRecordIndex] = useState(0);
-  const [workspace, setWorkspace] = useState<"template" | "layout">("template");
-  const [zoom, setZoom] = useState(1);
-  const [showPrintPreview, setShowPrintPreview] = useState(false);
-  const [snapToGrid, setSnapToGrid] = useState(false);
+  // ── Document (restored from this browser's last session when available) ──
+  const [initial] = useState(() => loadProject());
+  const recordHistory = useHistory<RecordRow[]>(withIds(initial?.records ?? starterRecords));
+  const records = recordHistory.value;
+  const setRecords = (next: RecordRow[]) => recordHistory.set(() => next);
+  const editRecords = (update: (rows: RecordRow[]) => RecordRow[], coalesce?: string) => recordHistory.set(update, { coalesce });
+  const [fileName, setFileName] = useState(initial?.fileName ?? "bird-records.csv");
+  const [docName, setDocName] = useState(initial?.name ?? DEFAULT_NAME);
+  // Several templates can be combined into one output; `itemsDoc` holds each template's items under one undo history.
+  const [startVariants] = useState(() => (initial?.variants?.length ? initial.variants : [{ id: "a", name: "Template A", items: initial?.items ?? starterItems }]));
+  const [variants, setVariants] = useState<Variant[]>(() => startVariants.map(({ id, name }) => ({ id, name })));
+  const [rules, setRules] = useState<VariantRule[]>(initial?.rules ?? []);
+  const itemsDoc = useHistory<Record<string, DesignItem[]>>(Object.fromEntries(startVariants.map((v) => [v.id, v.items])));
+  const [activeVariant, setActiveVariant] = useState(startVariants[0].id);
+  const variantId = itemsDoc.value[activeVariant] ? activeVariant : variants[0].id; // the template being edited
+  const items = itemsDoc.value[variantId] ?? [];
+  /** Edits the template being shown, so the rest of the editor keeps working with one plain list of items. */
+  const history = {
+    set: (update: (list: DesignItem[]) => DesignItem[], options?: { coalesce?: string }) =>
+      itemsDoc.set((map) => { const current = map[variantId] ?? []; const next = update(current); return next === current ? map : { ...map, [variantId]: next }; }, options),
+    undo: itemsDoc.undo, redo: itemsDoc.redo, breakGroup: itemsDoc.breakGroup, canUndo: itemsDoc.canUndo, canRedo: itemsDoc.canRedo,
+  };
+  // Hand edits to individual records' copies of the template (keyed by record id), with their own undo history.
+  const overrideDoc = useHistory<Record<string, InstanceOverride>>(initial?.overrides ?? {});
+  const instanceOverrides = overrideDoc.value;
+  const [template, setTemplate] = useState(initial?.template ?? { width: 3.5, height: 2 });
+  const [sheet, setSheet] = useState<Sheet>(initial?.sheet ?? defaultSheet);
+  const [rawRecordIndex, setRecordIndex] = useState(0);
+  const fontLibrary = useFontLibrary(initial?.fonts ?? []);
+
+  // ── UI state ────────────────────────────────────────────────────────────
+  const [workspace, setWorkspace] = useState<Workspace>("template");
+  const [showData, setShowData] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [multiMode, setMultiMode] = useState(false);
+  const [clipboard, setClipboard] = useState<DesignItem[]>([]);
+  const [saveState, setSaveState] = useState<"saved" | "error">("saved");
+  const [fieldDrag, setFieldDrag] = useState<{ field: string; x: number; y: number } | null>(null);
+  const justDragged = useRef(false);
+  // A freshly imported file waiting for the person to confirm how its columns map onto the template.
+  const [pendingImport, setPendingImport] = useState<{ records: RecordRow[]; fileName: string } | null>(null);
+  const [dataOpen, setDataOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
+  const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
   const [showGrid, setShowGrid] = useState(false);
   const [showRulers, setShowRulers] = useState(true);
-  const [rulerSettingsOpen, setRulerSettingsOpen] = useState(false);
-  const [guides, setGuides] = useState<{ id: string; axis: "x" | "y"; position: number }[]>([]);
-  const guideDragRef = useRef<{ id: string; axis: "x" | "y"; rect: DOMRect } | null>(null);
-  const [clipboardItem, setClipboardItem] = useState<DesignItem | null>(null);
-  const [pageWidth, setPageWidth] = useState(8.5);
-  const [pageHeight, setPageHeight] = useState(11);
-  const [templateWidth, setTemplateWidth] = useState(3.5);
-  const [templateHeight, setTemplateHeight] = useState(2);
-  const [columns, setColumns] = useState(2);
-  const [rows, setRows] = useState(4);
-  const [gapX, setGapX] = useState(0.18);
-  const [gapY, setGapY] = useState(0.18);
-  const [marginX, setMarginX] = useState(0.25);
-  const [marginY, setMarginY] = useState(0.25);
-  const [repeatMode, setRepeatMode] = useState<"same" | "next">("next");
-  const [search, setSearch] = useState("");
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const imageRef = useRef<HTMLInputElement>(null);
+  const [snap, setSnap] = useState(false);
+  const [preview, setPreview] = useState(false);
+  const [printing, setPrinting] = useState<null | "sheets" | "calibration">(null);
+  const printer = usePrinterCalibration();
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [instanceMode, setInstanceMode] = useState(false);
+  const [instanceSel, setInstanceSel] = useState<InstanceSelection | null>(null);
+  const [editingText, setEditingText] = useState<InstanceSelection | null>(null);
+  const [auditDialog, setAuditDialog] = useState<null | { itemId?: string | null }>(null);
+  const [status, setStatus] = useState<null | { text: string; kind: "info" | "ok" | "warn"; busy?: boolean; detail?: string[] }>(null);
+
+  // Each workspace remembers its own zoom, pan and guides.
+  const [views, setViews] = useState<Record<Workspace, View>>({ template: freshView(), layout: freshView() });
+  const [guides, setGuides] = useState<Record<Workspace, Guide[]>>({ template: [], layout: [] });
+  const view = views[workspace];
+
+  const viewportRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const dragRef = useRef<{ id: string; startX: number; startY: number; itemX: number; itemY: number } | null>(null);
+  const library = useImageLibrary();
+  // Which image dialog is open: inserting from the toolbar, choosing for an item, or reviewing a data-driven picture's matches.
+  const [libraryDialog, setLibraryDialog] = useState<null | { kind: "insert" } | { kind: "pick"; itemId: string; target: "asset" | "fallback" }>(null);
+  const [reviewItemId, setReviewItemId] = useState<string | null>(null);
 
-  const fields = useMemo(() => Object.keys(records[0] ?? {}), [records]);
-  const currentRecord = records[recordIndex] ?? {};
-  const selected = items.find((item) => item.id === selectedId) ?? null;
-  const filteredFields = fields.filter((field) => field.toLowerCase().includes(search.toLowerCase()));
-  const matchingPresets = useMemo(() => {
-    const width = templateWidth || 0;
-    const height = templateHeight || 0;
-    const query = presetSearch.trim().toLowerCase();
-    const scored = averyPresets.map((preset) => {
-      const sizeError = Math.abs(preset.width - width) + Math.abs(preset.height - height);
-      const textMatch = !query || `${preset.code} ${preset.name} ${preset.width}x${preset.height}`.toLowerCase().includes(query);
-      return { preset, sizeError, textMatch };
-    }).filter(({ sizeError, textMatch }) => textMatch && (query ? true : sizeError <= 1.25))
-      .sort((x, y) => x.sizeError - y.sizeError);
-    return scored.slice(0, 7).map(({ preset }) => preset);
-  }, [templateWidth, templateHeight, presetSearch]);
-  const totalSlots = columns * rows;
-  const pageCount = repeatMode === "same" ? 1 : Math.max(1, Math.ceil(records.length / totalSlots));
-  const currentPage = repeatMode === "same" ? 0 : Math.floor(recordIndex / totalSlots);
+  // ── Derived ─────────────────────────────────────────────────────────────
+  const recordIndex = Math.min(rawRecordIndex, Math.max(0, records.filter(isIncluded).length - 1));
+  const fields = useMemo(() => columnsOf(records), [records]);
+  // Only records switched on in the Data table are previewed, laid out, counted and printed.
+  const activeRecords = useMemo(() => {
+    const included = records.filter(isIncluded);
+    return sheet.sortField ? sortRows(included, sheet.sortField, sheet.sortDir ?? 1) : included;
+  }, [records, sheet.sortField, sheet.sortDir]);
+  const currentRecord = activeRecords[recordIndex] ?? {};
+  const selectedItems = useMemo(() => items.filter((item) => selectedIds.includes(item.id)), [items, selectedIds]);
+  const selected = selectedItems.length === 1 ? selectedItems[0] : null;
+  const slots = sheet.columns * sheet.rows;
+  const pageCount = sheet.repeatMode === "same" ? 1 : Math.max(1, Math.ceil(activeRecords.length / slots));
+  const currentPage = sheet.repeatMode === "same" ? 0 : Math.floor(recordIndex / slots);
+  const overflow =
+    sheet.marginX + sheet.columns * template.width + (sheet.columns - 1) * sheet.gapX > sheet.pageWidth + 0.005 ||
+    sheet.marginY + sheet.rows * template.height + (sheet.rows - 1) * sheet.gapY > sheet.pageHeight + 0.005;
+  const pagedNav = workspace === "layout" && sheet.repeatMode === "next";
 
-  const updateItem = (id: string, patch: Partial<DesignItem>) =>
-    setItems((previous) => previous.map((item) => item.id === id ? { ...item, ...patch } : item));
+  // ── Alternating templates + per-record edits ────────────────────────────
+  /** The items one record renders: its template (chosen by the rules) with that record's hand edits applied. */
+  const instanceFor = (record: RecordRow, index: number, slot: number): InstanceInfo => {
+    const id = pickVariant(rules, variants, record, index, slot, sheet.variantBasis ?? "record");
+    const base = itemsDoc.value[id] ?? itemsDoc.value[variants[0].id] ?? [];
+    const override = instanceOverrides[record[ID]];
+    // Order: the template, then conditional rules for this record, then this record's hand edits (which win).
+    return { variantId: id, items: applyOverride(applyConditions(base, record, metaFor(index)), override), override };
+  };
+  const metaFor = (index: number) => ({ recordNumber: index + 1, pageNumber: sheet.repeatMode === "same" ? 1 : Math.floor(index / slots) + 1, recordCount: activeRecords.length, pageCount });
+  const indexOfRecord = (recordId: string) => activeRecords.findIndex((r) => r[ID] === recordId);
 
-  const addText = (field?: string, x = 0.5, y = 0.5) => {
-    const item: DesignItem = {
-      id: uid(), type: "text", x, y, w: 2.5, h: 0.28,
-      text: field ? fieldDisplayName(field) : "Your text",
-      field, fontSize: 12, color: "#34443d", weight: 500, visible: true,
-    };
-    setItems((previous) => [...previous, item]);
-    setSelectedId(item.id);
+  const updateInstance = (recordId: string, change: (current: InstanceOverride) => InstanceOverride | null, coalesce?: string) =>
+    overrideDoc.set((map) => {
+      const next = change(map[recordId] ?? { items: {} });
+      if (!next || !Object.keys(next.items).length) { const { [recordId]: _gone, ...rest } = map; return rest; }
+      return { ...map, [recordId]: next };
+    }, { coalesce });
+  /** Edits one item on one record's copy. Editing while "off" switches the edits back on. */
+  const setInstanceItem = (recordId: string, itemId: string, patch: ItemPatch, coalesce?: string) =>
+    updateInstance(recordId, ({ off: _off, items: current }) => ({ items: { ...current, [itemId]: { ...(current[itemId] ?? {}), ...patch } } }), coalesce);
+  const revertInstanceItem = (recordId: string, itemId: string) =>
+    updateInstance(recordId, (o) => { const { [itemId]: _gone, ...rest } = o.items; return { ...o, items: rest }; });
+  const toggleInstanceOff = (recordId: string) => updateInstance(recordId, (o) => (o.off ? { items: o.items } : { ...o, off: true }));
+  const resetInstance = (recordId: string) => updateInstance(recordId, () => null);
+
+  const instRecord = instanceSel ? activeRecords.find((r) => r[ID] === instanceSel.recordId) : undefined;
+  const instIndex = instRecord ? activeRecords.indexOf(instRecord) : -1;
+  const instItems = instRecord ? instanceFor(instRecord, instIndex, instIndex % slots).items : [];
+  const instItem = instanceSel ? instItems.find((i) => i.id === instanceSel.itemId) : undefined;
+  const instOverride = instRecord ? instanceOverrides[instRecord[ID]] : undefined;
+  const inLayoutEdit = workspace === "layout" && !!instItem && !showData;
+
+  // ── Text-fit audit ──────────────────────────────────────────────────────
+  const computeIssues = (indices: number[]): Issue[] => {
+    const out: Issue[] = [];
+    for (const index of indices) {
+      const record = activeRecords[index];
+      if (!record) continue;
+      for (const { item, kind, atMin } of instanceIssues(instanceFor(record, index, index % slots).items, record, metaFor(index)))
+        out.push({ recordId: record[ID], recordIndex: index, recordLabel: recordLabel(record), itemId: item.id, itemLabel: itemLabel(item), kind, atMin });
+    }
+    return out;
+  };
+  const allIndices = () => (sheet.repeatMode === "same" ? [recordIndex] : activeRecords.map((_, i) => i));
+  const issues = useMemo(() => (auditDialog ? computeIssues(allIndices()) : []), [auditDialog, items, itemsDoc.value, instanceOverrides, activeRecords, rules, variants, sheet]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sheetIssueCount = workspace === "layout" && !preview
+    ? computeIssues(sheet.repeatMode === "same" ? [recordIndex] : Array.from({ length: slots }, (_, k) => currentPage * slots + k)).length : 0;
+  /** For the selected text in the template: does it fit for the records that use this template? */
+  const fitNote = (() => {
+    if (!selected || selected.type !== "text" || workspace !== "template") return null;
+    let bad = 0, total = 0;
+    for (let i = 0; i < Math.min(activeRecords.length, 1500); i++) {
+      if (pickVariant(rules, variants, activeRecords[i], i, i % slots, sheet.variantBasis ?? "record") !== variantId) continue;
+      total++;
+      if (layoutText(selected, valueFor(selected, activeRecords[i], metaFor(i)), selected.w * PX_PER_IN, selected.h * PX_PER_IN).issue) bad++;
+    }
+    return total ? { bad: bad > 0, text: bad ? `${bad} of ${total} record${total === 1 ? "" : "s"} ${bad === 1 ? "doesn’t" : "don’t"} fit this box.` : `All ${total} record${total === 1 ? "" : "s"} fit.` } : null;
+  })();
+
+  // ── View: per-workspace zoom / pan / fit ───────────────────────────────
+  const patchView = useCallback((patch: Partial<View>) => setViews((v) => ({ ...v, [workspace]: { ...v[workspace], ...patch } })), [workspace]);
+  const widthOf = (w: Workspace) => (w === "template" ? template.width : sheet.pageWidth);
+  const heightOf = (w: Workspace) => (w === "template" ? template.height : sheet.pageHeight);
+
+  const fitZoom = (w: Workspace) => {
+    const el = viewportRef.current;
+    const availW = Math.max(120, (el?.clientWidth ?? 800) - 110);
+    const availH = Math.max(120, (el?.clientHeight ?? 600) - 150);
+    return Number(clamp(Math.min(availW / (widthOf(w) * PX_PER_IN), availH / (heightOf(w) * PX_PER_IN)), MIN_ZOOM, MAX_ZOOM).toFixed(2));
+  };
+
+  // First visit to a workspace (or after its size changed from a preset): fit and centre it.
+  useLayoutEffect(() => {
+    if (!view.fitted && viewportRef.current) patchView({ zoom: fitZoom(workspace), pan: { x: 0, y: 0 }, fitted: true });
+  }, [workspace, view.fitted]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setZoom = (zoom: number) => patchView({ zoom: clamp(zoom, MIN_ZOOM, MAX_ZOOM) });
+  const toggleZoomPreset = () => {
+    const fit = fitZoom(workspace);
+    patchView({ zoom: Math.abs(view.zoom - fit) < 0.02 ? 1 : fit, pan: { x: 0, y: 0 } });
+  };
+
+  const switchWorkspace = (next: Workspace) => {
+    setWorkspace(next);
+    setSelectedIds([]);
+    setInstanceSel(null);
+    setEditingText(null);
+    setPreview(false);
+  };
+
+  // ── Alternating template management ─────────────────────────────────────
+  const addVariant = () => {
+    const id = uid();
+    const name = `Template ${String.fromCharCode(65 + variants.length)}`;
+    itemsDoc.set((map) => ({ ...map, [id]: (map[variantId] ?? []).map((item) => ({ ...item })) })); // same item ids, so hand edits carry over
+    setVariants((list) => [...list, { id, name }]);
+    setActiveVariant(id);
+    setSelectedIds([]);
+  };
+  const deleteVariant = (id: string) => {
+    if (variants.length < 2 || !window.confirm("Delete this template? Records that used it will fall back to the first template.")) return;
+    itemsDoc.set((map) => { const { [id]: _gone, ...rest } = map; return rest; });
+    setVariants((list) => list.filter((v) => v.id !== id));
+    setRules((list) => list.filter((r) => r.variantId !== id));
+    if (variantId === id) setActiveVariant(variants.find((v) => v.id !== id)!.id);
+    setSelectedIds([]);
+  };
+
+  // ── Items ───────────────────────────────────────────────────────────────
+  const updateItem = useCallback((id: string, patch: Partial<DesignItem>, coalesce?: string) =>
+    history.set((list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item)), { coalesce }), [history.set]);
+
+  const addItem = (item: DesignItem) => {
+    history.set((list) => [...list, item]);
+    setSelectedIds([item.id]);
+    setWorkspace("template");
+    setPreview(false);
+  };
+  const addItems = (added: DesignItem[]) => {
+    history.set((list) => [...list, ...added]);
+    setSelectedIds(added.map((item) => item.id));
+  };
+
+  const addText = (field?: string, x = 0.5, y = 0.5) =>
+    addItem({ id: uid(), type: "text", x, y, w: 2.5, h: 0.28, text: field ? fieldDisplayName(field) : "Your text", field, fontSize: 12, color: "#34443d", weight: 500, visible: true });
+
+  const addShape = () => addItem({ id: uid(), type: "rect", x: 0.35, y: 0.35, w: 1.1, h: 0.65, fill: "#e9eee9", stroke: "#cbd5cc", visible: true });
+
+  const deleteSelected = () => {
+    if (!selectedIds.length) return;
+    history.set((list) => list.filter((item) => !selectedIds.includes(item.id)));
+    setSelectedIds([]);
+  };
+  const copySelected = () => { if (selectedItems.length) setClipboard(selectedItems.map((item) => ({ ...item }))); };
+  const cutSelected = () => { copySelected(); deleteSelected(); };
+  const cloneOffset = (list: DesignItem[]) => cloneItems(list, 0.12, 0.12); // each copied group becomes its own new group
+  const pasteItems = () => {
+    if (!clipboard.length) return;
+    const pasted = cloneOffset(clipboard);
+    setClipboard(pasted); // successive pastes cascade
+    addItems(pasted);
     setWorkspace("template");
   };
+  const duplicateSelected = () => { if (selectedItems.length) addItems(cloneOffset(selectedItems)); };
 
-  const importFile = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    Papa.parse<RecordRow>(file, {
-      header: true, skipEmptyLines: true, dynamicTyping: false,
-      complete: (result) => {
-        const cleaned = result.data.filter((row) => Object.values(row).some((v) => String(v ?? "").trim()));
-        if (cleaned.length) {
-          setRecords(cleaned);
-          setRecordIndex(0);
-          setFileName(file.name);
-        }
-      },
+  const moveMany = (updates: { id: string; x: number; y: number }[]) => history.set((list) => {
+    const byId = new Map(updates.map((u) => [u.id, u]));
+    return list.map((item) => (byId.has(item.id) ? { ...item, x: byId.get(item.id)!.x, y: byId.get(item.id)!.y } : item));
+  }, { coalesce: "drag" });
+  // ── Groups ──────────────────────────────────────────────────────────────
+  const selectedGroupIds = [...new Set(selectedItems.flatMap((i) => (i.groupId ? [i.groupId] : [])))];
+  /** The selection is exactly one whole group. */
+  const wholeGroup = selectedGroupIds.length === 1 && selectedItems.length > 1 && items.filter((i) => i.groupId === selectedGroupIds[0]).length === selectedItems.length;
+  const canGroup = selectedItems.length > 1 && !wholeGroup;
+  const canUngroup = selectedGroupIds.length > 0;
+  const groupSelected = () => { if (selectedItems.length > 1) history.set((list) => groupItems(list, selectedIds, nextGroupName(list))); };
+  const ungroupSelected = () => history.set((list) => ungroupItems(list, selectedIds));
+  const renameGroup = (groupId: string, name: string) => history.set((list) => renameGroupIn(list, groupId, name), { coalesce: `rename-group:${groupId}` });
+  const updateMany = (ids: string[], patch: Partial<DesignItem>) => history.set((list) => list.map((item) => (ids.includes(item.id) ? { ...item, ...patch } : item)));
+  const selectGroupOf = (id: string) => { const item = items.find((i) => i.id === id); if (item) setSelectedIds(item.groupId ? items.filter((i) => i.groupId === item.groupId).map((i) => i.id) : [id]); };
+  const scaleGroup = (updates: { id: string; x: number; y: number; w: number; h: number; fontSize?: number }[]) => history.set((list) => {
+    const byId = new Map(updates.map((u) => [u.id, u]));
+    return list.map((item) => { const u = byId.get(item.id); return u ? { ...item, x: u.x, y: u.y, w: u.w, h: u.h, ...(u.fontSize !== undefined ? { fontSize: u.fontSize } : {}) } : item; });
+  }, { coalesce: "scale-group" });
+
+  const resizeItem = (id: string, box: { x: number; y: number; w: number; h: number }) => updateItem(id, box, `resize:${id}`);
+  const applyTransforms = (updates: Transform[], coalesce: string) => history.set((list) => {
+    const byId = new Map(updates.map((u) => [u.id, u]));
+    return list.map((item) => (byId.has(item.id) ? { ...item, ...byId.get(item.id)! } : item));
+  }, { coalesce });
+  const rotateGroup = (updates: Transform[]) => applyTransforms(updates, "rotate-group");
+  const rotateSelectionBy = (delta: number) => {
+    const members = framed(selectedItems);
+    const movable = members.filter((item) => !item.locked);
+    if (movable.length) applyTransforms(rotateAbout(movable, delta, centerOf(boundsOf(members))), `rotate-by:${Date.now()}`);
+  };
+  const rotateItem = (id: string, rotation: number) => updateItem(id, { rotation }, `rotate:${id}`);
+
+  // Alignment, distribution, box-select and group rotation all work on each item's drawn frame (wrapped text can
+  // be taller than its box), so they agree with the outlines on screen. Only positions are written back.
+  const framed = (list: DesignItem[]) => list.map((item) => (item.type === "text" ? { ...item, h: itemFrame(item, currentRecord, meta).h / PX_PER_IN } : item));
+  const keepPositions = (original: DesignItem[], moved: DesignItem[]) =>
+    original.map((item, i) => (moved[i].x === item.x && moved[i].y === item.y ? item : { ...item, x: moved[i].x, y: moved[i].y }));
+
+  /**
+   * Alignment and distribution work on units: a group is one box, every other object its own. A single unit
+   * aligns to the template; several align to each other. Only positions change.
+   */
+  const alignUnits = (arrange: (boxes: DesignItem[], keys: string[]) => DesignItem[], boxesWithin: "selection" | "template") => {
+    history.set((list) => {
+      const framedList = framed(list);
+      const units = unitsOf(framedList, selectedIds);
+      if (!units.length) return list;
+      const boxes: DesignItem[] = units.map((u) => { const b = boundsOf(u.members); return { id: u.key, type: "rect", x: b.x, y: b.y, w: b.w, h: b.h, locked: u.members.every((m) => m.locked) } as DesignItem; });
+      void boxesWithin;
+      const moved = arrange(boxes, units.map((u) => u.key));
+      const shift = new Map(units.map((u, i) => [u.key, { dx: moved[i].x - boxes[i].x, dy: moved[i].y - boxes[i].y }]));
+      return list.map((item) => { const d = shift.get(item.groupId ?? item.id); return d && !item.locked && (d.dx || d.dy) ? { ...item, x: Number((item.x + d.dx).toFixed(3)), y: Number((item.y + d.dy).toFixed(3)) } : item; });
     });
-    event.target.value = "";
+  };
+  const align = (mode: AlignMode) => {
+    const unitCount = unitsOf(items, selectedIds).length;
+    const within = unitCount > 1 ? boundsOf(framed(selectedItems)) : { x: 0, y: 0, w: template.width, h: template.height };
+    alignUnits((boxes, keys) => alignItems(boxes, keys, mode, within), "selection");
+  };
+  const distribute = (axis: "x" | "y") => alignUnits((boxes, keys) => distributeItems(boxes, keys, axis), "selection");
+
+  const onMarquee = (box: { x: number; y: number; w: number; h: number }, additive: boolean) => {
+    const hits = framed(items)
+      .filter((item) => item.visible !== false)
+      .filter((item) => { const b = aabb(item); return b.x < box.x + box.w && b.x + b.w > box.x && b.y < box.y + box.h && b.y + b.h > box.y; })
+      .map((item) => item.id);
+    const withGroups = expandToGroups(items, hits);
+    setSelectedIds((current) => (additive ? [...new Set([...current, ...withGroups])] : withGroups));
   };
 
-  const addShape = () => {
-    const item: DesignItem = { id: uid(), type: "rect", x: 0.35, y: 0.35, w: 1.1, h: 0.65, fill: "#e9eee9", stroke: "#cbd5cc", visible: true };
-    setItems((previous) => [...previous, item]);
-    setSelectedId(item.id);
-  };
+  const moveLayer = (id: string, direction: -1 | 1, asGroup = false) => history.set((list) => moveLayerIn(list, id, direction, asGroup));
 
-  const addImage = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    event.target.value = "";
-
-    try {
-      let src: string;
-      let aspectRatio = 1;
-
-      if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-        // PDFs are imported as a high-resolution image of their first page.
-        const pdf = await getDocument({ data: await file.arrayBuffer() }).promise;
-        const page = await pdf.getPage(1);
-        const baseViewport = page.getViewport({ scale: 1 });
-        const scale = Math.min(3, Math.max(2, 1800 / Math.max(baseViewport.width, baseViewport.height)));
-        const viewport = page.getViewport({ scale });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.ceil(viewport.width);
-        canvas.height = Math.ceil(viewport.height);
-        const context = canvas.getContext("2d");
-        if (!context) throw new Error("Could not create an image for this PDF.");
-        await page.render({ canvasContext: context, viewport }).promise;
-        src = canvas.toDataURL("image/png");
-        aspectRatio = viewport.width / viewport.height;
-        await pdf.destroy();
-      } else {
-        src = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = () => reject(new Error("The image file could not be read."));
-          reader.readAsDataURL(file);
-        });
-        const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-          const image = new Image();
-          image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
-          image.onerror = () => reject(new Error("This image format could not be opened."));
-          image.src = src;
-        });
-        aspectRatio = dimensions.width / dimensions.height;
-      }
-
-      const width = 1.2;
-      const item: DesignItem = {
-        id: uid(), type: "image", x: 2.1, y: 0.35, w: width,
-        h: Math.max(0.25, Math.min(2.5, width / (aspectRatio || 1))),
-        src, assetName: file.name, visible: true,
-      };
-      setItems((previous) => [...previous, item]);
-      setSelectedId(item.id);
-      setWorkspace("template");
-    } catch (error) {
-      console.error("Asset import failed:", error);
-      window.alert(error instanceof Error ? error.message : "This file could not be imported.");
-    }
-  };
-
-  const bindSelected = (field: string) => {
-    setShowMobileLayers(false);
+  const bindField = (field: string) => {
+    if (justDragged.current) return;
     if (selected?.type === "text") updateItem(selected.id, { field, text: fieldDisplayName(field) });
     else addText(field);
-  };
-  const applyPreset = (preset: LabelPreset) => {
-    setTemplateWidth(preset.width); setTemplateHeight(preset.height);
-    setColumns(preset.columns); setRows(preset.rows);
-    setGapX(preset.gapX); setGapY(preset.gapY);
-    setMarginX(preset.marginX); setMarginY(preset.marginY);
-    setPresetSearch("");
+    if (!window.matchMedia(WIDE_QUERY).matches) setDataOpen(false); // overlay drawer: reveal the result
   };
 
-  const onDragStart = (event: DragEvent<HTMLButtonElement>, field: string) => {
-    event.dataTransfer.setData("text/plain", field);
-    event.dataTransfer.effectAllowed = "copy";
+  // ── Data import ─────────────────────────────────────────────────────────
+  const adoptData = (next: RecordRow[], name: string, mapping?: Record<string, string | null>) => {
+    if (mapping) history.set((list) => applyMapping(list, mapping));
+    setRecords(withIds(next));
+    setRecordIndex(0);
+    setFileName(name);
+    setPendingImport(null);
   };
 
-  const onCanvasDrop = (event: DragEvent<SVGSVGElement>) => {
-    event.preventDefault();
-    const field = event.dataTransfer.getData("text/plain");
-    const svg = svgRef.current;
-    if (!field || !svg) return;
-    const target = (event.target as Element).closest("[data-item-id]");
-    const targetId = target?.getAttribute("data-item-id");
-    const targetItem = items.find((item) => item.id === targetId);
-    if (targetItem?.type === "text") {
-      updateItem(targetItem.id, { field, text: field.replaceAll("_", " ") });
-      setSelectedId(targetItem.id);
+  const importData = (file: File) => {
+    Papa.parse<RecordRow>(file, {
+      header: true, skipEmptyLines: true,
+      complete: (result) => {
+        const cleaned = result.data.filter((row) => Object.values(row).some((v) => String(v ?? "").trim()));
+        if (!cleaned.length) { window.alert("No records were found in that file."); return; }
+        // Only interrupt when the template uses columns the new file lacks; same-shaped files just load.
+        const columns = new Set(Object.keys(cleaned[0]));
+        const missing = boundFields(items).some((field) => !columns.has(field));
+        if (missing) setPendingImport({ records: cleaned, fileName: file.name });
+        else adoptData(cleaned, file.name);
+      },
+      error: () => window.alert("That file could not be read."),
+    });
+  };
+
+  // ── Pictures ────────────────────────────────────────────────────────────
+  const pictureBox = (asset?: Asset) => {
+    const w = 1.2;
+    return { w, h: asset ? clamp(w / (asset.width / asset.height || 1), 0.25, 2.5) : w };
+  };
+  const insertPicture = (asset: Asset) => {
+    addItem({ id: uid(), type: "image", x: 0.35, y: 0.35, ...pictureBox(asset), assetId: asset.id, assetName: asset.name, visible: true });
+    setLibraryDialog(null);
+  };
+  const insertDataDriven = () => {
+    addItem({ id: uid(), type: "image", x: 0.35, y: 0.35, ...pictureBox(), imageSource: defaultImageSource(fields), visible: true });
+    setLibraryDialog(null);
+  };
+  const choosePicture = (itemId: string, target: "asset" | "fallback", asset: Asset) => {
+    if (inLayoutEdit && instRecord) {
+      setInstanceItem(instRecord[ID], itemId, target === "fallback" ? { fallbackAssetId: asset.id } : { assetId: asset.id, assetName: asset.name, imageSource: null, src: null });
+      setLibraryDialog(null);
       return;
     }
-    const point = svg.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
-    const matrix = svg.getScreenCTM();
-    if (!matrix) return;
-    const local = point.matrixTransform(matrix.inverse());
-    addText(field, inches(local.x / 96), inches(local.y / 96));
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    if (target === "fallback") updateItem(itemId, { fallbackAssetId: asset.id });
+    else {
+      // Keep the box's width and follow the new picture's proportions (static pictures only).
+      const box = item.imageSource ? {} : { h: Number(clamp(item.w / (asset.width / asset.height || 1), 0.1, 6).toFixed(3)) };
+      updateItem(itemId, { assetId: asset.id, assetName: asset.name, src: undefined, ...box });
+    }
+    setLibraryDialog(null);
+  };
+  const setOverrides = (itemId: string, changes: Record<string, string | null>) =>
+    history.set((list) => list.map((item) => {
+      if (item.id !== itemId) return item;
+      const next = { ...(item.overrides ?? {}) };
+      for (const [recordId, assetId] of Object.entries(changes)) { if (assetId) next[recordId] = assetId; else delete next[recordId]; }
+      return { ...item, overrides: next };
+    }));
+  /** Distinct web addresses a data-driven picture would fetch, not yet saved in the library. */
+  const webUrlsFor = (item: DesignItem) => {
+    const urls = new Set<string>();
+    for (const record of activeRecords) { const m = library.resolver.resolve(item, record); for (const x of [m, ...m.alternates]) if (x.url && isWebUrl(x.url)) urls.add(x.url); }
+    return [...urls];
+  };
+  const cacheWebPictures = async (itemId: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    const urls = webUrlsFor(item);
+    if (!urls.length) { setStatus({ text: "Everything from the web is already saved in the library.", kind: "ok" }); return; }
+    setStatus({ text: `Saving ${urls.length} web picture${urls.length === 1 ? "" : "s"} to the library…`, kind: "info", busy: true });
+    const result = await library.addRemote(urls, (done, total) => setStatus({ text: `Saving web pictures… ${done} of ${total}`, kind: "info", busy: true }));
+    setStatus(result.failed.length
+      ? { text: `Saved ${result.added} of ${urls.length}. ${result.failed.length} couldn’t be downloaded; they’ll still load from the web when printing.`, kind: "warn", detail: [...new Set(result.failed.map((f) => f.reason))] }
+      : { text: `Saved ${result.added} picture${result.added === 1 ? "" : "s"} to the library. They now work offline and travel with the project.`, kind: "ok" });
+  };
+  const checkWebPictures = async (itemId: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    const urls = webUrlsFor(item);
+    if (!urls.length) { setStatus({ text: "No web pictures to check (they’re all saved in the library or the rule has none).", kind: "ok" }); return; }
+    setStatus({ text: `Checking ${urls.length} web address${urls.length === 1 ? "" : "es"}…`, kind: "info", busy: true });
+    const result = await checkImageUrls(urls, (done, total) => setStatus({ text: `Checking web pictures… ${done} of ${total}`, kind: "info", busy: true }));
+    setStatus(result.failed.size
+      ? { text: `${result.loaded.size} loaded, ${result.failed.size} didn’t.`, kind: "warn", detail: [...result.failed].slice(0, 5) }
+      : { text: `All ${result.loaded.size} web pictures loaded.`, kind: "ok" });
+  };
+  const imageTools = { webCount: (item: DesignItem) => webUrlsFor(item).length, onCacheWeb: cacheWebPictures, onCheckWeb: checkWebPictures, library, columns: fields, record: currentRecord, records: activeRecords, onChoose: (itemId: string, target: "asset" | "fallback") => setLibraryDialog({ kind: "pick", itemId, target }), onReview: (itemId: string) => setReviewItemId(itemId) };
+
+  // ── Template / page setup ───────────────────────────────────────────────
+  const applyPreset = (preset: LabelPreset) => {
+    setTemplate({ width: preset.width, height: preset.height });
+    setSheet((s) => ({ ...s, columns: preset.columns, rows: preset.rows, gapX: preset.gapX, gapY: preset.gapY, marginX: preset.marginX, marginY: preset.marginY }));
+    setViews((v) => ({ template: { ...v.template, fitted: false }, layout: { ...v.layout, fitted: false } }));
   };
 
-  const toSvgPoint = (clientX: number, clientY: number) => {
+  // ── Dragging a field from the drawer onto the canvas (mouse, touch long-press, pen) ──
+  const dropField = (field: string, clientX: number, clientY: number) => {
     const svg = svgRef.current;
-    const matrix = svg?.getScreenCTM();
-    if (!svg || !matrix) return null;
-    const point = svg.createSVGPoint();
-    point.x = clientX;
-    point.y = clientY;
-    return point.matrixTransform(matrix.inverse());
+    const element = document.elementFromPoint(clientX, clientY);
+    if (workspace !== "template" || !svg || !element?.closest(".viewport")) return;
+    const targetId = element.closest("[data-item-id]")?.getAttribute("data-item-id");
+    const target = items.find((item) => item.id === targetId);
+    if (target?.type === "text") { updateItem(target.id, { field, text: fieldDisplayName(field) }); setSelectedIds([target.id]); return; }
+    const rect = svg.getBoundingClientRect();
+    const scale = PX_PER_IN * view.zoom;
+    addText(field, Number(((clientX - rect.left) / scale).toFixed(2)), Number(((clientY - rect.top) / scale).toFixed(2)));
   };
 
-  const startMove = (event: PointerEvent<SVGGElement>, item: DesignItem) => {
-    if (workspace !== "template" || showPrintPreview || item.locked) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const point = toSvgPoint(event.clientX, event.clientY);
-    if (!point) return;
-    setSelectedId(item.id);
-    setShowMobileLayers(false);
-    dragRef.current = { id: item.id, startX: point.x, startY: point.y, itemX: item.x, itemY: item.y };
-    (event.currentTarget as SVGGElement).setPointerCapture(event.pointerId);
-  };
-
-  const moveItem = (event: PointerEvent<SVGSVGElement>) => {
-    if (!dragRef.current) return;
-    const point = toSvgPoint(event.clientX, event.clientY);
-    if (!point) return;
-    const deltaX = (point.x - dragRef.current.startX) / 96;
-    const deltaY = (point.y - dragRef.current.startY) / 96;
-    const step = snapToGrid ? 0.05 : 0.001;
-    let nextX = Math.round((dragRef.current.itemX + deltaX) / step) * step;
-    let nextY = Math.round((dragRef.current.itemY + deltaY) / step) * step;
-    if (snapToGrid) {
-      const nearX = guides.filter((guide) => guide.axis === "x").map((guide) => guide.position).find((position) => Math.abs(position - nextX) < 0.08);
-      const nearY = guides.filter((guide) => guide.axis === "y").map((guide) => guide.position).find((position) => Math.abs(position - nextY) < 0.08);
-      if (nearX !== undefined) nextX = nearX;
-      if (nearY !== undefined) nextY = nearY;
-    }
-    updateItem(dragRef.current.id, { x: Math.max(0, Number(nextX.toFixed(3))), y: Math.max(0, Number(nextY.toFixed(3))) });
-  };
-
-  const startPan = (event: PointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest(".canvas-object,button,input,select")) return;
+  const startFieldDrag = (field: string, event: React.PointerEvent) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    gesturePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    const points = [...gesturePointersRef.current.values()];
-    if (points.length >= 2) {
-      const dx = points[0].x - points[1].x;
-      const dy = points[0].y - points[1].y;
-      gestureRef.current = {
-        mode: "pinch", pointerId: event.pointerId, startX: 0, startY: 0,
-        panX: viewPan.x, panY: viewPan.y,
-        startDistance: Math.max(1, Math.hypot(dx, dy)), startZoom: zoom
-      };
-    } else {
-      gestureRef.current = {
-        mode: "pan", pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
-        panX: viewPan.x, panY: viewPan.y, startDistance: 0, startZoom: zoom
-      };
+    const { pointerId, clientX: startX, clientY: startY } = event;
+    const touch = event.pointerType !== "mouse";
+    let active = false;
+    const begin = () => { active = true; setFieldDrag({ field, x: startX, y: startY }); navigator.vibrate?.(8); };
+    const timer = touch ? window.setTimeout(begin, 260) : undefined;
+    const blockScroll = (e: TouchEvent) => { if (active) e.preventDefault(); };
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      window.removeEventListener("touchmove", blockScroll);
+      setFieldDrag(null);
+    };
+    function move(e: PointerEvent) {
+      if (e.pointerId !== pointerId) return;
+      if (!active && Math.hypot(e.clientX - startX, e.clientY - startY) > (touch ? 8 : 5)) {
+        if (touch) { cleanup(); return; } // finger moved first: the user is scrolling the list
+        begin();
+      }
+      if (active) setFieldDrag({ field, x: e.clientX, y: e.clientY });
     }
-  };
-
-  const movePan = (event: PointerEvent<HTMLDivElement>) => {
-    if (!gesturePointersRef.current.has(event.pointerId)) return;
-    gesturePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    const points = [...gesturePointersRef.current.values()];
-    const gesture = gestureRef.current;
-    if (!gesture) return;
-    if (points.length >= 2 && gesture.mode === "pinch") {
-      const dx = points[0].x - points[1].x;
-      const dy = points[0].y - points[1].y;
-      const distance = Math.hypot(dx, dy);
-      setZoom(Math.max(0.15, Math.min(2.5, gesture.startZoom * distance / gesture.startDistance)));
-    } else if (points.length === 1 && gesture.mode === "pan" && gesture.pointerId === event.pointerId) {
-      setViewPan({ x: gesture.panX + event.clientX - gesture.startX, y: gesture.panY + event.clientY - gesture.startY });
+    function end(e: PointerEvent) {
+      if (e.pointerId !== pointerId) return;
+      const wasActive = active;
+      cleanup();
+      if (!wasActive) return;
+      if (e.type === "pointerup") {
+        dropField(field, e.clientX, e.clientY);
+        if (!window.matchMedia(WIDE_QUERY).matches) setDataOpen(false); // overlay drawer: reveal the result
+      }
+      justDragged.current = true; // swallow the click that follows a drag
+      window.setTimeout(() => { justDragged.current = false; }, 60);
     }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    window.addEventListener("touchmove", blockScroll, { passive: false });
   };
 
-  const endPan = (event: PointerEvent<HTMLDivElement>) => {
-    gesturePointersRef.current.delete(event.pointerId);
-    const remaining = [...gesturePointersRef.current.entries()];
-    if (remaining.length === 1) {
-      const [pointerId, point] = remaining[0];
-      gestureRef.current = {
-        mode: "pan", pointerId, startX: point.x, startY: point.y,
-        panX: viewPan.x, panY: viewPan.y, startDistance: 0, startZoom: zoom
-      };
-    } else {
-      gestureRef.current = null;
+  // ── Projects: autosave to this browser, plus save / open as a file ──
+  const snapshot = (): Project => ({
+    version: 1, name: docName, fileName, records, items: itemsDoc.value[variants[0].id] ?? [], template, sheet, fonts: fontLibrary.fonts,
+    variants: variants.map((v) => ({ ...v, items: itemsDoc.value[v.id] ?? [] })), rules, overrides: instanceOverrides,
+  });
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSaveState(saveProject(snapshot()) ? "saved" : "error"), 600);
+    return () => window.clearTimeout(timer);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const applyProject = async (project: Project, images?: { asset: Asset; blob: Blob }[]) => {
+    if (images) await library.replaceAll(images);
+    const vs = project.variants?.length ? project.variants : [{ id: "a", name: "Template A", items: project.items }];
+    itemsDoc.reset(Object.fromEntries(vs.map((v) => [v.id, v.items])));
+    setVariants(vs.map(({ id, name }) => ({ id, name }))); setActiveVariant(vs[0].id); setRules(project.rules ?? []);
+    overrideDoc.reset(project.overrides ?? {}); setInstanceSel(null); setEditingText(null);
+    recordHistory.reset(withIds(project.records)); setFileName(project.fileName); setDocName(project.name);
+    setTemplate(project.template); setSheet(project.sheet);
+    fontLibrary.restore(project.fonts);
+    setSelectedIds([]); setRecordIndex(0);
+    setGuides({ template: [], layout: [] });
+    setViews({ template: freshView(), layout: freshView() });
+  };
+  const newProject = async () => {
+    await library.clear();
+    await applyProject({ version: 1, name: DEFAULT_NAME, fileName: "bird-records.csv", records: starterRecords, items: starterItems, template: { width: 3.5, height: 2 }, sheet: defaultSheet, fonts: [] });
+  };
+  /** Starts a new project from a gallery template. The image library is kept. */
+  const useTemplate = async (project: Project) => {
+    if (!window.confirm(`Start from “${project.name}”? This replaces your current project (its design, data and page layout).`)) return;
+    setGalleryOpen(false); setShowData(false); setWorkspace("template"); setPreview(false);
+    await applyProject(project);
+  };
+  const openProject = async (file: File) => {
+    try { const { project, images } = await readProjectAny(file); await applyProject(project, images); }
+    catch (error) { window.alert(error instanceof Error ? error.message : "That project file could not be opened."); }
+  };
+  /** One .zip when the project uses pictures (they travel with it); a plain .json otherwise. */
+  const saveToFile = async () => {
+    const project = snapshot();
+    if (!library.assets.length) { downloadBlob(new Blob([JSON.stringify(project)], { type: "application/json" }), projectFileName(docName, false)); return; }
+    downloadBlob(await bundleProject(project, library.assets, library.blobOf), projectFileName(docName, true));
+  };
+
+  // ── Data table edits (all undoable with the Data view's own undo) ──
+  const idSet = (ids: string[]) => new Set(ids);
+  const dataActions = {
+    onCell: (id: string, column: string, value: string) => editRecords((rows) => setCell(rows, id, column, value), `cell:${id}:${column}`),
+    onInclude: (ids: string[], included: boolean) => editRecords((rows) => setIncluded(rows, idSet(ids), included)),
+    onOnly: (ids: string[]) => editRecords((rows) => {
+      const keep = idSet(ids);
+      return setIncluded(setIncluded(rows, new Set(rows.filter((r) => !keep.has(r[ID])).map((r) => r[ID])), false), keep, true);
+    }),
+    onAddRow: () => editRecords((rows) => [...rows, blankRow(columnsOf(rows))]),
+    onDuplicate: (ids: string[]) => editRecords((rows) => duplicateRows(rows, idSet(ids))),
+    onDelete: (ids: string[]) => editRecords((rows) => keepOneRow(rows.filter((row) => !ids.includes(row[ID])), columnsOf(rows))),
+    onAddColumn: () => {
+      const name = window.prompt("New column name")?.trim();
+      if (!name) return;
+      if (fields.includes(name)) { window.alert(`There’s already a column called “${name}”.`); return; }
+      editRecords((rows) => addColumn(rows, name));
+    },
+    onRenameColumn: (column: string) => {
+      const name = window.prompt("Rename column", column)?.trim();
+      if (!name || name === column) return;
+      if (fields.includes(name)) { window.alert(`There’s already a column called “${name}”.`); return; }
+      editRecords((rows) => renameColumn(rows, column, name));
+      history.set((list) => applyMapping(list, { [column]: name })); // keep the template's linked text connected
+    },
+    onDeleteColumn: (column: string) => {
+      const used = items.some((item) => item.field === column);
+      if (window.confirm(`Delete the “${column}” column?${used ? " Text linked to it will show “—”." : ""}`)) editRecords((rows) => removeColumn(rows, column));
+    },
+    onSort: (column: string, direction: 1 | -1) => editRecords((rows) => sortRows(rows, column, direction)),
+    onPaste: (id: string, column: string, grid: string[][]) => editRecords((rows) => pasteGrid(rows, fields, id, column, grid)),
+    onExport: () => {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([toCsv(records, fields)], { type: "text/csv" }));
+      link.download = fileName.replace(/\.[^.]+$/, "") + "-edited.csv";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    },
+  };
+
+  // ── Page layout: editing one record's copy ──────────────────────────────
+  const commitInstanceText = (value: string) => {
+    if (editingText) { setInstanceItem(editingText.recordId, editingText.itemId, { field: null, text: value }); setInstanceSel(editingText); }
+    setEditingText(null);
+  };
+  const dropPictureOnSlot = async (recordId: string, itemId: string | null, files: Parameters<typeof library.addFiles>[0]) => {
+    const index = indexOfRecord(recordId);
+    const list = index >= 0 ? instanceFor(activeRecords[index], index, index % slots).items : [];
+    let target = list.find((i) => i.id === itemId && i.type === "image");
+    if (!target) { const pictures = list.filter((i) => i.type === "image" && i.visible !== false); if (pictures.length === 1) target = pictures[0]; }
+    if (!target) { setStatus({ text: "Drop the picture onto a picture box.", kind: "warn" }); return; }
+    const result = await library.addFiles(files);
+    const asset = result.assets[0];
+    if (!asset) { setStatus({ text: "That file couldn’t be used as a picture.", kind: "warn", detail: result.skipped.map((s) => `${s.name}: ${s.reason}`).slice(0, 3) }); return; }
+    setInstanceItem(recordId, target.id, { assetId: asset.id, assetName: asset.name, imageSource: null, src: null });
+    setInstanceSel({ recordId, itemId: target.id });
+  };
+  /** From the text audit (or a badge): go to that record's sheet with the text selected, ready to fix. */
+  const fixOnPage = (recordId: string, itemId: string) => {
+    const index = indexOfRecord(recordId);
+    if (index < 0) return;
+    setAuditDialog(null); setShowData(false); setWorkspace("layout"); setPreview(false); setSelectedIds([]);
+    setRecordIndex(index); setInstanceMode(true); setInstanceSel({ recordId, itemId }); setInspectorOpen(true);
+  };
+  const jumpToInstance = (recordId: string) => {
+    const index = indexOfRecord(recordId);
+    if (index >= 0) { setRecordIndex(index); setInstanceMode(true); setInstanceSel(null); }
+  };
+  const editedList = Object.entries(instanceOverrides).filter(([, o]) => hasEdits(o)).flatMap(([recordId, o]) => {
+    const record = activeRecords.find((r) => r[ID] === recordId);
+    return record ? [{ recordId, label: recordLabel(record), off: !!o.off }] : [];
+  });
+  const instanceBanner = inLayoutEdit && instRecord && instanceSel ? {
+    recordLabel: recordLabel(instRecord),
+    itemEdited: !!instOverride?.items[instanceSel.itemId],
+    off: !!instOverride?.off,
+    onRevertItem: () => revertInstanceItem(instRecord[ID], instanceSel.itemId),
+    onToggleOff: () => toggleInstanceOff(instRecord[ID]),
+    onResetInstance: () => { resetInstance(instRecord[ID]); setInstanceSel(null); },
+  } : null;
+
+  // ── Records ─────────────────────────────────────────────────────────────
+  const stepRecord = (delta: number) => {
+    if (pagedNav) setRecordIndex(clamp(currentPage + delta, 0, pageCount - 1) * slots);
+    else setRecordIndex((index) => clamp(index + delta, 0, Math.max(0, activeRecords.length - 1)));
+  };
+
+  // ── Print: mount every sheet, print, then unmount ───────────────────────
+  /**
+   * Nothing prints until pictures and text have been checked: web pictures are actually loaded, picture rules that
+   * match nothing are counted, and text that doesn't fit is counted. Problems need a confirmation.
+   */
+  const printNow = async () => {
+    if (printing) { window.print(); return; }
+    setStatus({ text: "Checking pictures and text before printing…", kind: "info", busy: true });
+    const indices = allIndices();
+    const urls = new Set<string>();
+    const chains: { web: string[]; local: boolean; empty: boolean }[] = [];
+    let textProblems = 0;
+    for (const index of indices) {
+      const record = activeRecords[index];
+      const inst = instanceFor(record, index, index % slots);
+      textProblems += instanceIssues(inst.items, record, metaFor(index)).length;
+      for (const item of inst.items) {
+        if (item.type !== "image" || item.visible === false || !item.imageSource) continue;
+        const match = library.resolver.resolve(item, record);
+        const chain = [match, ...match.alternates].filter((m) => m.kind !== "none");
+        const web = chain.filter((m) => m.url && isWebUrl(m.url)).map((m) => m.url!);
+        web.forEach((u) => urls.add(u));
+        chains.push({ web, local: chain.some((m) => m.asset) || !!item.fallbackAssetId, empty: chain.length === 0 });
+      }
     }
+    const check = await checkImageUrls([...urls], (done, total) => setStatus({ text: `Checking web pictures… ${done} of ${total}`, kind: "info", busy: true }));
+    const noMatch = chains.filter((c) => c.empty && !c.local).length;
+    const brokenWeb = chains.filter((c) => !c.local && c.web.length > 0 && c.web.every((u) => check.failed.has(u))).length;
+    const problems = [
+      brokenWeb && `${brokenWeb} web picture${brokenWeb === 1 ? "" : "s"} couldn’t be loaded`,
+      noMatch && `${noMatch} picture${noMatch === 1 ? "" : "s"} ${noMatch === 1 ? "has" : "have"} no match`,
+      textProblems && `${textProblems} text${textProblems === 1 ? "" : "s"} ${textProblems === 1 ? "doesn’t" : "don’t"} fit ${textProblems === 1 ? "its" : "their"} box`,
+    ].filter(Boolean) as string[];
+    setStatus(null);
+    if (problems.length && !window.confirm(`Before printing:\n\n• ${problems.join("\n• ")}\n\nAffected pictures will print blank (or show the placeholder) and long text will spill or be cut off.\n\nPrint anyway?\n(Cancel, then use “Review matches”, “Check text fit” or “Save web pictures to the library”.)`)) return;
+    setPrinting("sheets");
   };
-  const copySelected = () => { if (selected) setClipboardItem({ ...selected }); };
-  const cutSelected = () => {
-    if (!selected) return;
-    setClipboardItem({ ...selected });
-    setItems((current) => current.filter((item) => item.id !== selected.id));
-    setSelectedId(null);
-  };
-  const pasteItem = () => {
-    if (!clipboardItem) return;
-    const next = { ...clipboardItem, id: uid(), x: clipboardItem.x + 0.12, y: clipboardItem.y + 0.12 };
-    setItems((current) => [...current, next]);
-    setSelectedId(next.id);
-  };
-  const deleteSelected = () => {
-    if (!selected) return;
-    setItems((current) => current.filter((item) => item.id !== selected.id));
-    setSelectedId(null);
-  };
+  /** Test page for printer calibration (crosshairs 1" from each edge, outlines of every label). */
+  const printCalibration = () => { if (printing) return; setPrinting("calibration"); };
+  useEffect(() => {
+    if (!printing) return;
+    const done = () => setPrinting(null);
+    window.addEventListener("afterprint", done);
+    const timer = window.setTimeout(() => window.print(), 150);
+    return () => { window.removeEventListener("afterprint", done); window.clearTimeout(timer); };
+  }, [printing]);
 
-  const startGuide = (event: PointerEvent<HTMLDivElement>, axis: "x" | "y") => {
-    if (event.detail > 1) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = event.currentTarget.closest(".ruler-stage")?.querySelector(".paper-shadow, .layout-paper")?.getBoundingClientRect();
-    if (!rect) return;
-    const id = crypto.randomUUID();
-    const position = axis === "x" ? (event.clientX - rect.left) / (96 * zoom) : (event.clientY - rect.top) / (96 * zoom);
-    setGuides((current) => [...current, { id, axis, position: Math.max(0, position) }]);
-    guideDragRef.current = { id, axis, rect };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-  const moveGuide = (event: PointerEvent<HTMLDivElement>) => {
-    if (!guideDragRef.current) return;
-    const { id, axis, rect } = guideDragRef.current;
-    const raw = axis === "x" ? (event.clientX - rect.left) / (96 * zoom) : (event.clientY - rect.top) / (96 * zoom);
-    const limit = axis === "x" ? (workspace === "layout" ? pageWidth : templateWidth) : (workspace === "layout" ? pageHeight : templateHeight);
-    const position = Math.max(0, Math.min(limit, raw));
-    setGuides((current) => current.map((guide) => guide.id === id ? { ...guide, position } : guide));
-  };
-  const endGuide = () => { guideDragRef.current = null; };
-
-  const addPageSlot = (slot: number) => repeatMode === "same" ? recordIndex : Math.min(records.length - 1, currentPage * totalSlots + slot);
-  const fitZoom = () => {
-    const area = document.querySelector(".canvas-area");
-    const width = Math.max(160, (area?.clientWidth ?? window.innerWidth) - 72);
-    const height = Math.max(160, (area?.clientHeight ?? window.innerHeight) - 100);
-    const targetWidth = workspace === "layout" ? pageWidth * 96 : templateWidth * 96;
-    const targetHeight = workspace === "layout" ? pageHeight * 96 : templateHeight * 96;
-    return Math.max(0.15, Math.min(2, width / targetWidth, height / targetHeight));
-  };
-  const toggleZoomPreset = () => {
-    setViewPan({ x: 0, y: 0 });
-    setZoom((current) => Math.abs(current - 1) < 0.02 ? fitZoom() : 1);
-  };
-  const printNow = () => {
-    if (!showPrintPreview) setShowPrintPreview(true);
-    window.setTimeout(() => window.print(), 180);
-  };
-  const moveLayer = (id: string, direction: -1 | 1) => setItems((previous) => {
-    const index = previous.findIndex((item) => item.id === id);
-    const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= previous.length) return previous;
-    const reordered = [...previous];
-    [reordered[index], reordered[nextIndex]] = [reordered[nextIndex], reordered[index]];
-    return reordered;
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const tag = (event.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const mod = event.metaKey || event.ctrlKey;
+      const key = event.key.toLowerCase();
+      const has = selectedItems.length > 0;
+      const target = showData ? recordHistory : workspace === "layout" ? overrideDoc : history; // each view undoes its own edits
+      if (mod && key === "z") { event.preventDefault(); event.shiftKey ? target.redo() : target.undo(); }
+      else if (mod && key === "y") { event.preventDefault(); target.redo(); }
+      else if (workspace === "layout" && !showData) { if (key === "escape") { setInstanceSel(null); setEditingText(null); } }
+      else if (workspace !== "template" || showData) return;
+      else if (mod && key === "a") { event.preventDefault(); setSelectedIds(items.filter((i) => i.visible !== false).map((i) => i.id)); }
+      else if (mod && key === "c") { if (has) { event.preventDefault(); copySelected(); } }
+      else if (mod && key === "x") { if (has) { event.preventDefault(); cutSelected(); } }
+      else if (mod && key === "v") { if (clipboard.length) { event.preventDefault(); pasteItems(); } }
+      else if (mod && key === "d") { if (has) { event.preventDefault(); duplicateSelected(); } }
+      else if (mod && key === "g") { event.preventDefault(); if (event.shiftKey) ungroupSelected(); else groupSelected(); }
+      else if (key === "delete" || key === "backspace") { if (has) { event.preventDefault(); deleteSelected(); } }
+      else if (key === "escape") setSelectedIds([]);
+      else if (has && key.startsWith("arrow")) {
+        event.preventDefault();
+        const step = event.shiftKey ? 0.1 : snap ? 0.05 : 0.01;
+        const dx = key === "arrowleft" ? -step : key === "arrowright" ? step : 0;
+        const dy = key === "arrowup" ? -step : key === "arrowdown" ? step : 0;
+        moveMany(selectedItems.filter((i) => !i.locked).map((i) => ({ id: i.id, x: Number((i.x + dx).toFixed(3)), y: Number((i.y + dy).toFixed(3)) })));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   });
 
-  const renderTemplate = (record: RecordRow, mini = false, recordNumber = recordIndex + 1, pageNumber = currentPage + 1) => (
-    <svg viewBox={`0 0 ${templateWidth * 96} ${templateHeight * 96}`} className={mini ? "mini-template" : "template-svg"} xmlns="http://www.w3.org/2000/svg">
-      {showGrid && !mini && <defs><pattern id="smallGrid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#e8ece8" strokeWidth="0.7"/></pattern></defs>}
-      {showGrid && !mini && <rect width="100%" height="100%" fill="url(#smallGrid)"/>}
-      {items.filter((item) => item.visible !== false).map((item) => {
-        const isSelected = !mini && selectedId === item.id;
-        return (
-          <g key={item.id} data-item-id={item.id} transform={`translate(${item.x * 96} ${item.y * 96})`} onPointerDown={(event) => !mini && startMove(event, item)} onClick={(event) => { if (!mini) { event.stopPropagation(); setSelectedId(item.id); setShowMobileLayers(false); } }} className={!mini ? "canvas-object" : ""} style={{ cursor: mini ? "default" : "move" }}>
-            {item.type === "rect" && <rect width={item.w * 96} height={item.h * 96} rx="0" fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1"/>}
-            {item.type === "image" && item.src && <image href={item.src} width={item.w * 96} height={item.h * 96} preserveAspectRatio="xMidYMid slice"/>}
-            {item.type === "text" && <text x={item.align === "center" ? item.w * 48 : item.align === "right" ? item.w * 96 : 0} y={(item.fontSize ?? 12) * 1.15 * 96 / 72} fontFamily={item.fontFamily ?? "Inter, Arial, sans-serif"} fontSize={(item.fontSize ?? 12) * 96 / 72} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={item.align === "center" ? "middle" : item.align === "right" ? "end" : "start"}>{valueFor(item, record, { recordNumber, pageNumber, recordCount: records.length, pageCount })}</text>}
-            {isSelected && <rect x="-4" y="-4" width={item.w * 96 + 8} height={item.h * 96 + 8} fill="none" stroke="#d77d4e" strokeWidth="1.4" strokeDasharray="4 3" pointerEvents="none"/>}
-          </g>
-        );
-      })}
-    </svg>
-  );
+  // ── Render ──────────────────────────────────────────────────────────────
+  const meta = { recordNumber: recordIndex + 1, pageNumber: currentPage + 1, recordCount: activeRecords.length, pageCount };
+  /** The template as the previewed record sees it: conditional rules applied, rule-hidden objects kept (faded) so they stay selectable. */
+  const displayItems = applyConditions(items, currentRecord, meta, !preview);
+  const caption = workspace === "template"
+    ? { title: variants.length > 1 ? `INDIVIDUAL TEMPLATE · ${variants.find((v) => v.id === variantId)?.name.toUpperCase()}` : "INDIVIDUAL TEMPLATE", detail: `${template.width.toFixed(2)} × ${template.height.toFixed(2)} in` }
+    : { title: "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet${printer.x || printer.y ? ` · printer offset ${printer.x >= 0 ? "+" : ""}${printer.x.toFixed(3)}, ${printer.y >= 0 ? "+" : ""}${printer.y.toFixed(3)} in` : ""}` };
 
   return (
+    <ImageContext.Provider value={{ resolver: library.resolver, urlFor: library.urlFor }}>
     <div className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark"><span className="brand-sheet"/><span className="brand-star">✦</span></div>
-          <div className="brand-name">Sheet<span>Show</span><small>WHERE DATA TAKES THE STAGE</small></div>
-        </div>
-        <div className="topbar-center">
-          <div className="document-title"><FileText size={15}/><span>Untitled bird card</span><span className="saved-dot"/></div>
-          <div className="workspace-tabs">
-            <button className={workspace === "template" ? "active" : ""} onClick={() => { setWorkspace("template"); setSelectedId(null); setShowMobileLayers(false); setShowPrintPreview(false); }} title="Individual template"><svg className="template-tab-icon" viewBox="0 0 48 32" aria-hidden="true"><rect x="2.5" y="2.5" width="43" height="27" rx="2.5"/><path d="M9 2.5v5M39 2.5v5M9 24.5v5M39 24.5v5M2.5 10h5M2.5 22h5M40.5 10h5M40.5 22h5"/></svg> <span>Template</span></button>
-            <button className={workspace === "layout" ? "active" : ""} onClick={() => { setWorkspace("layout"); setSelectedId(null); setShowMobileLayers(false); setShowPrintPreview(false); }} title="Page layout"><svg className="page-tab-icon" viewBox="0 0 32 40" aria-hidden="true"><rect x="2" y="1.5" width="28" height="37" rx="1.5"/><rect x="6" y="6" width="9" height="6"/><rect x="17" y="6" width="9" height="6"/><rect x="6" y="15" width="9" height="6"/><rect x="17" y="15" width="9" height="6"/><rect x="6" y="24" width="9" height="6"/><rect x="17" y="24" width="9" height="6"/></svg> <span>Page layout</span></button>
-          </div>
-        </div>
-        <div className="top-actions">
-          <button className="icon-button" title="Help"><CircleHelp size={17}/></button>
-          <button className="button button-light" onClick={printNow}><Printer size={15}/> Print</button>
-          <button className="button button-primary make-button" onClick={printNow} aria-label="Make it" title="Make it"><Printer size={17}/></button>
-        </div>
-      </header>
+      <Topbar workspace={showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(tab); } }} onPrint={printNow} name={docName} onName={setDocName} saveState={saveState} onNew={newProject} onGallery={() => setGalleryOpen(true)} onOpen={openProject} onSave={saveToFile} />
 
-      <main className="workspace">
+      {showData && (
+        <main className="workspace">
+          <DataTable
+            rows={records} columns={fields} fileName={fileName}
+            canUndo={recordHistory.canUndo} canRedo={recordHistory.canRedo} onUndo={recordHistory.undo} onRedo={recordHistory.redo}
+            onImport={importData} {...dataActions}
+          />
+        </main>
+      )}
 
+      <main className="workspace" hidden={showData}>
+        <Toolbar
+          workspace={workspace} instanceMode={instanceMode} onInstanceMode={() => { setInstanceMode((v) => !v); setInstanceSel(null); setEditingText(null); }}
+          showGrid={showGrid} onGrid={() => setShowGrid((v) => !v)}
+          showRulers={showRulers} onRulers={() => setShowRulers((v) => !v)}
+          snap={snap} onSnap={() => setSnap((v) => !v)}
+          preview={preview} onPreview={() => setPreview((v) => !v)}
+          multi={multiMode} onMulti={() => setMultiMode((v) => !v)}
+          zoom={view.zoom} onZoom={setZoom} onZoomPreset={toggleZoomPreset}
+          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })}
+        />
 
-        <section className="center-panel">
-          <div className="canvas-toolbar">
-            <div className="tool-group">
-              <button className="tool-button active" title="Select"><MousePointer2 size={16}/></button>
-              <button className="tool-button" title="Add text" onClick={() => addText()}><Type size={16}/></button>
-              <button className="tool-button" title="Add shape" onClick={addShape}><Shapes size={16}/></button>
-              <button className="tool-button" title="Add image" onClick={() => imageRef.current?.click()}><ImagePlus size={16}/></button>
-              <input ref={imageRef} type="file" accept=".png,.jpg,.jpeg,.svg,.pdf,image/png,image/jpeg,image/svg+xml,application/pdf" hidden onChange={addImage}/>
-            </div>
-            <div className="toolbar-divider"/>
-            <div className="tool-group">
-              <button className={showGrid ? "tool-button active" : "tool-button"} title="Toggle grid" onClick={() => setShowGrid(!showGrid)}><Grid2X2 size={15}/></button>
-              <button className={showRulers ? "tool-button active" : "tool-button"} title="Toggle rulers" onClick={() => setShowRulers(!showRulers)}><Ruler size={15}/></button>
-              <button className={snapToGrid ? "tool-button active" : "tool-button"} title="Snap to 0.05 inch increments" onClick={() => setSnapToGrid(!snapToGrid)}><Magnet size={15}/></button>
-              <button className={showPrintPreview ? "tool-button active" : "tool-button"} title="Toggle print preview" onClick={() => setShowPrintPreview(!showPrintPreview)}><FileSearch size={16}/></button>
-            </div>
-            <div className="toolbar-spacer"/>
-            <div className="zoom-control"><button className="tool-button" title="Zoom out" onClick={() => setZoom(Math.max(0.25, Number((zoom - 0.1).toFixed(2))))}><ZoomOut size={15}/></button><input aria-label="Zoom level" className="zoom-slider" type="range" min="0.25" max="2" step="0.01" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}/><button className="zoom-percent" onClick={toggleZoomPreset} title="Toggle 100% / fit to screen">{Math.round(zoom * 100)}%</button><button className="tool-button" title="Zoom in" onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))}><ZoomIn size={15}/></button></div>
-          </div>
-          <div className={`content-frame ${dataDrawerOpen ? "with-data" : ""} ${inspectorOpen ? "with-inspector" : ""}`}>
-        <aside className="left-panel">
-          <div className="panel-heading"><h2>Data fields</h2><button className="drawer-collapse" title="Collapse data fields" aria-label="Collapse data fields" onClick={() => setDataDrawerOpen(false)}><ChevronLeft size={17}/></button></div>
-          <div className="panel-section">
-            <div className="section-title"><Database size={14}/> DATA SOURCE <button className="text-action" onClick={() => fileRef.current?.click()}>Change</button></div>
-            <div className="source-card">
-              <div className="file-icon"><FileText size={17}/></div>
-              <div className="source-meta"><strong>{fileName}</strong><span>{records.length} records · {fields.length} fields</span></div>
-              <BadgeCheck size={15} className="success-icon"/>
-            </div>
-            <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" hidden onChange={importFile}/>
-            <div className="field-search"><Search size={14}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a field..."/><ListFilter size={14}/></div>
-            <div className="field-group-label"><ChevronDown size={12}/> IMPORTED DATA <span>{fields.length}</span></div>
-            <div className="field-list">
-              {filteredFields.map((field) => (
-                <button key={field} className="field-row" draggable onDragStart={(event) => onDragStart(event, field)} onClick={() => bindSelected(field)} title={selected?.type === "text" ? "Click to bind selected text" : "Click to add as a new text field"}>
-                  <span className="field-grip">⠿</span><span className="field-type"><Type size={12}/></span><span className="field-name">{field.replaceAll("_", " ")}</span><span className="field-add"><Plus size={13}/></span>
-                </button>
-              ))}
-            </div>
-            <div className="drag-hint"><MousePointer2 size={13}/> Drag a field onto your design, or select text and click a field to link it.</div>
-            <div className="field-divider"/>
-            <div className="field-group-label special-field-heading">SPECIAL FIELDS <span>{specialFields.length}</span></div>
-            <div className="field-list special-field-list">
-              {specialFields.map((field) => (
-                <button key={field.key} className="field-row special-field-row" draggable onDragStart={(event) => onDragStart(event, field.key)} onClick={() => bindSelected(field.key)} title="Click to add or bind this automatic field">
-                  <span className="field-grip">⠿</span><span className="field-type"><Sparkles size={12}/></span><span className="field-name">{field.label}</span><span className="field-add"><Plus size={13}/></span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </aside>
-            <div className="editor-content">
-          <div className="canvas-area" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onClick={(event) => { if (!(event.target as HTMLElement).closest(".canvas-object,button,input,select")) setSelectedId(null); }}>
-            <button className={dataDrawerOpen ? "canvas-drawer-toggle left active" : "canvas-drawer-toggle left"} title={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-label={dataDrawerOpen ? "Hide data fields" : "Show data fields"} onClick={() => setDataDrawerOpen((open) => !open)}>{dataDrawerOpen ? <PanelLeftClose size={16}/> : <PanelLeft size={16}/>}</button>
-            <button className={inspectorOpen ? "canvas-drawer-toggle right active" : "canvas-drawer-toggle right"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} onClick={() => setInspectorOpen((open) => !open)}>{inspectorOpen ? <PanelRightClose size={16}/> : <PanelRight size={16}/>}</button>
-          <div className="viewport-edit-actions" onPointerDown={(e) => e.stopPropagation()}>
-            <button className="tool-button" title="Delete selected" disabled={!selected} onClick={deleteSelected}><Trash2 size={16}/></button>
-            <button className="tool-button" title="Cut" disabled={!selected} onClick={cutSelected}><Scissors size={16}/></button>
-            <button className="tool-button" title="Copy" disabled={!selected} onClick={copySelected}><Copy size={16}/></button>
-            <button className="tool-button glue-button" title="Paste" disabled={!clipboardItem} onClick={pasteItem}><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3h8v3l-1.5 2v2H9.5V8L8 6z"/><path d="M9.5 10h5v2.2l2.2 2.2V21H7.3v-6.6l2.2-2.2z"/><path d="M10 16h4M12 12.2v2"/></svg></button>
-          </div>
+        <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
+          {dataOpen && (
+            <DataPanel fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)} />
+          )}
 
-            {workspace === "template" && (
-              <div className="canvas-wrap" style={{ transform: `translate(${viewPan.x}px, ${viewPan.y}px)` }}>
-                <div className="canvas-caption"><span>INDIVIDUAL TEMPLATE</span><span>{templateWidth.toFixed(2)} × {templateHeight.toFixed(2)} in</span></div>
-                <div className="ruler-stage" onPointerMove={moveGuide} onPointerUp={endGuide} onPointerCancel={endGuide}>
-                  {showRulers && <div className="ruler-corner"/>}
-                  {showRulers && <div className="top-ruler" onPointerDown={(e) => startGuide(e, "y")} onDoubleClick={() => setRulerSettingsOpen(true)} title="Drag down to add a horizontal guide; double-click for size and margins" style={{width: templateWidth * 96 * zoom}}>{Array.from({length: Math.floor(templateWidth * 4) + 1}, (_, i) => <span key={i} style={{left: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
-                  {showRulers && <div className="left-ruler" onPointerDown={(e) => startGuide(e, "x")} onDoubleClick={() => setRulerSettingsOpen(true)} title="Drag right to add a vertical guide; double-click for size and margins" style={{height: templateHeight * 96 * zoom}}>{Array.from({length: Math.floor(templateHeight * 4) + 1}, (_, i) => <span key={i} style={{top: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
-                  <div className="paper-shadow" style={{width: templateWidth * 96 * zoom, height: templateHeight * 96 * zoom}}>
-                    <svg ref={svgRef} viewBox={`0 0 ${templateWidth * 96} ${templateHeight * 96}`} width={templateWidth * 96 * zoom} height={templateHeight * 96 * zoom} onPointerMove={moveItem} onPointerUp={() => { dragRef.current = null; }} onPointerCancel={() => { dragRef.current = null; }} onDragOver={(e) => e.preventDefault()} onDrop={onCanvasDrop} onClick={() => setSelectedId(null)} className="template-svg">
-                      {showGrid && <defs><pattern id="gridPattern" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#e9eee9" strokeWidth="0.7"/></pattern></defs>}
-                      {showGrid && <rect width="100%" height="100%" fill="url(#gridPattern)"/>}
-                      {items.filter((item) => item.visible !== false).map((item) => (
-                        <g key={item.id} data-item-id={item.id} transform={`translate(${item.x * 96} ${item.y * 96})`} onPointerDown={(event) => startMove(event, item)} onClick={(event) => { event.stopPropagation(); setSelectedId(item.id); }} className="canvas-object">
-                          {item.type === "rect" && <rect width={item.w * 96} height={item.h * 96} rx="2" fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1"/>}
-                          {item.type === "image" && item.src && <image href={item.src} width={item.w * 96} height={item.h * 96} preserveAspectRatio="xMidYMid slice"/>}
-                          {item.type === "text" && <text x={item.align === "center" ? item.w * 48 : item.align === "right" ? item.w * 96 : 0} y={(item.fontSize ?? 12) * 1.15 * 96 / 72} fontFamily={item.fontFamily ?? "Inter, Arial, sans-serif"} fontSize={(item.fontSize ?? 12) * 96 / 72} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={item.align === "center" ? "middle" : item.align === "right" ? "end" : "start"}>{valueFor(item, currentRecord, { recordNumber: recordIndex + 1, pageNumber: currentPage + 1, recordCount: records.length, pageCount })}</text>}
-                          {selectedId === item.id && !showPrintPreview && <rect x="-4" y="-4" width={item.w * 96 + 8} height={item.h * 96 + 8} fill="none" stroke="#d77d4e" strokeWidth="1.4" strokeDasharray="4 3" pointerEvents="none"/>}
-                        </g>
-                      ))}
-                    </svg>
-                    {guides.map((guide) => <div key={guide.id} className={`snap-guide ${guide.axis}`} style={guide.axis === "x" ? { left: guide.position * 96 * zoom } : { top: guide.position * 96 * zoom }} onPointerDown={(e) => { e.stopPropagation(); const rect = e.currentTarget.parentElement!.getBoundingClientRect(); guideDragRef.current = { id: guide.id, axis: guide.axis, rect }; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (guideDragRef.current?.id === guide.id) moveGuide(e as unknown as PointerEvent<HTMLDivElement>); }} onPointerUp={endGuide} onDoubleClick={() => setGuides((current) => current.filter((g) => g.id !== guide.id))} title="Drag to reposition · double-click to remove"/> )}
-                  </div>
+          <div className="editor-content">
+            <div className="canvas-frame">
+              <Viewport
+                containerRef={viewportRef}
+                view={view}
+                onView={patchView}
+                widthIn={widthOf(workspace)}
+                heightIn={heightOf(workspace)}
+                showRulers={showRulers}
+                guides={guides[workspace]}
+                onGuides={(update) => setGuides((g) => ({ ...g, [workspace]: update(g[workspace]) }))}
+                onRulerDoubleClick={() => { setSelectedIds([]); setInspectorOpen(true); }}
+                onBackgroundClick={() => { setSelectedIds([]); setInstanceSel(null); }}
+                marqueeMode={multiMode && workspace === "template"}
+                onMarquee={workspace === "template" ? onMarquee : undefined}
+                paperClassName={preview ? "preview" : ""}
+              >
+                {workspace === "template" ? (
+                  <TemplateStage
+                    items={displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
+                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} guides={guides.template} multi={multiMode} preview={preview} svgRef={svgRef}
+                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup}
+                  />
+                ) : (
+                  <LayoutStage
+                    sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
+                    slotRecord={(slot) => (sheet.repeatMode === "same" ? recordIndex : currentPage * slots + slot)}
+                    pageNumber={currentPage + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
+                    offset={printer} edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
+                    onSelect={(sel) => { setInstanceSel(sel); setEditingText(null); if (sel) setInspectorOpen(true); }}
+                    onStartEdit={(sel) => { const item = instanceFor(activeRecords[indexOfRecord(sel.recordId)], indexOfRecord(sel.recordId), 0).items.find((i) => i.id === sel.itemId); if (item?.type === "text") { setInstanceSel(sel); setEditingText(sel); } else if (item?.type === "image") { setInstanceSel(sel); setLibraryDialog({ kind: "pick", itemId: sel.itemId, target: "asset" }); } }}
+                    onCommitText={commitInstanceText} onCancelEdit={() => setEditingText(null)}
+                    onDropFiles={dropPictureOnSlot} onToggleOff={toggleInstanceOff} onResetInstance={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
+                  />
+                )}
+              </Viewport>
+
+              {workspace === "template" && !preview && (
+                <div className="variant-bar" data-no-pan role="tablist" aria-label="Templates">
+                  {variants.map((v, i) => <button key={v.id} role="tab" aria-selected={v.id === variantId} className={v.id === variantId ? "variant-chip active" : "variant-chip"} onClick={() => { setActiveVariant(v.id); setSelectedIds([]); }} title={`Edit ${v.name}`}>{variants.length > 1 ? `${String.fromCharCode(65 + i)} · ${v.name}` : v.name}</button>)}
+                  <button className="variant-chip" onClick={addVariant} title="Add another template, e.g. to alternate colours between records" aria-label="Add a template">+</button>
                 </div>
-                {rulerSettingsOpen && <div className="ruler-settings-popover" role="dialog" aria-label="Template size and margins">
-                  <div className="popover-title"><strong>Template setup</strong><button onClick={() => setRulerSettingsOpen(false)} aria-label="Close"><X size={15}/></button></div>
-                  <label>SIZE · INCHES</label>
-                  <div className="popover-fields"><div><span>Width</span><input type="number" min="0.1" step="0.01" value={templateWidth} onChange={(e) => setTemplateWidth(Math.max(0.1, Number(e.target.value)))}/></div><div><span>Height</span><input type="number" min="0.1" step="0.01" value={templateHeight} onChange={(e) => setTemplateHeight(Math.max(0.1, Number(e.target.value)))}/></div></div>
-                  <label>MARGINS · INCHES</label>
-                  <div className="popover-fields"><div><span>Left / Right</span><input type="number" min="0" step="0.01" value={marginX} onChange={(e) => setMarginX(Math.max(0, Number(e.target.value)))}/></div><div><span>Top / Bottom</span><input type="number" min="0" step="0.01" value={marginY} onChange={(e) => setMarginY(Math.max(0, Number(e.target.value)))}/></div></div>
-                </div>}
-                <div className="canvas-footnote"><span><span className="orange-dot"/> {showPrintPreview ? "Print preview · editing paused" : selected ? "Object selected · drag to reposition" : "Select an object to edit"}</span><span>Measurements in inches</span></div>
-              </div>
-            )}
+              )}
+              <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
-            {workspace === "layout" && (
-              <div className="layout-editor" style={{ transform: `translate(${viewPan.x}px, ${viewPan.y}px)` }}>
-                <div className="canvas-caption"><span>PAGE LAYOUT</span><span>{pageWidth} × {pageHeight} in · {totalSlots} items per sheet</span></div>
-                <div className="ruler-stage layout-ruler-stage" onPointerMove={moveGuide} onPointerUp={endGuide} onPointerCancel={endGuide}>{showRulers && <div className="ruler-corner"/>}{showRulers && <div className="top-ruler" onPointerDown={(e) => startGuide(e, "y")} onDoubleClick={() => setRulerSettingsOpen(true)} title="Drag down to add a horizontal guide; double-click for page size and margins" style={{width: pageWidth * 96 * zoom}}>{Array.from({length: Math.floor(pageWidth * 4) + 1}, (_, i) => <span key={i} style={{left: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}{showRulers && <div className="left-ruler" onPointerDown={(e) => startGuide(e, "x")} onDoubleClick={() => setRulerSettingsOpen(true)} title="Drag right to add a vertical guide; double-click for page size and margins" style={{height: pageHeight * 96 * zoom}}>{Array.from({length: Math.floor(pageHeight * 4) + 1}, (_, i) => <span key={i} style={{top: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}<div className="layout-paper-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}>
-                  <div className={showPrintPreview ? "layout-paper preview-active" : "layout-paper"} style={{width: `${pageWidth * 96}px`, height: `${pageHeight * 96}px`, padding: `${marginY * 96}px ${marginX * 96}px`, boxSizing: "border-box"}}>
-                    <div className="layout-grid" style={{gridTemplateColumns: `repeat(${columns}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, gap: `${gapY * 7}px ${gapX * 7}px`}}>
-                      {Array.from({length: totalSlots}, (_, slot) => {
-                        const idx = addPageSlot(slot);
-                        return <div className={showGrid ? "layout-cell grid-visible" : "layout-cell"} key={slot}>{idx < records.length ? renderTemplate(records[idx], true, idx + 1, currentPage + 1) : <div className="empty-slot">Empty</div>}<span className="slot-number">{repeatMode === "same" ? `#${recordIndex + 1}` : `#${idx + 1}`}</span></div>;
-                      })}
-                    </div>
-                    {guides.map((guide) => <div key={guide.id} className={`snap-guide ${guide.axis}`} style={guide.axis === "x" ? { left: guide.position * 96 } : { top: guide.position * 96 }} onPointerDown={(e) => { e.stopPropagation(); const rect = e.currentTarget.parentElement!.getBoundingClientRect(); guideDragRef.current = { id: guide.id, axis: guide.axis, rect }; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (guideDragRef.current?.id === guide.id) moveGuide(e as unknown as PointerEvent<HTMLDivElement>); }} onPointerUp={endGuide} onDoubleClick={() => setGuides((current) => current.filter((g) => g.id !== guide.id))} title="Drag to reposition · double-click to remove"/> )}
-                  </div>
+              <button className={dataOpen ? "drawer-toggle left active" : "drawer-toggle left"} title={dataOpen ? "Hide data fields" : "Show data fields"} aria-label={dataOpen ? "Hide data fields" : "Show data fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
+                {dataOpen ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
+              </button>
+              <button className={inspectorOpen ? "drawer-toggle right active" : "drawer-toggle right"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>
+                {inspectorOpen ? <PanelRightClose size={16} /> : <PanelRight size={16} />}
+              </button>
+
+              {workspace === "layout" && instanceMode && (
+                <div className="edit-bar" data-no-pan>
+                  <button className="tool-button" title="Undo (Ctrl+Z)" aria-label="Undo (Ctrl+Z)" disabled={!overrideDoc.canUndo} onClick={overrideDoc.undo}><Undo2 size={16} /></button>
+                  <button className="tool-button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo (Ctrl+Shift+Z)" disabled={!overrideDoc.canRedo} onClick={overrideDoc.redo}><Redo2 size={16} /></button>
+                  <span className="edit-divider" />
+                  <span className="edit-hint">Click to select · double-click to edit · drop a photo on a picture</span>
                 </div>
-                </div>
-                {rulerSettingsOpen && <div className="ruler-settings-popover" role="dialog" aria-label="Page size and margins">
-                  <div className="popover-title"><strong>Page setup</strong><button onClick={() => setRulerSettingsOpen(false)} aria-label="Close"><X size={15}/></button></div>
-                  <label>PAGE SIZE · INCHES</label>
-                  <div className="popover-fields"><div><span>Width</span><input type="number" min="0.1" step="0.01" value={pageWidth} onChange={(e) => setPageWidth(Math.max(0.1, Number(e.target.value)))}/></div><div><span>Height</span><input type="number" min="0.1" step="0.01" value={pageHeight} onChange={(e) => setPageHeight(Math.max(0.1, Number(e.target.value)))}/></div></div>
-                  <label>MARGINS · INCHES</label>
-                  <div className="popover-fields"><div><span>Left / Right</span><input type="number" min="0" step="0.01" value={marginX} onChange={(e) => setMarginX(Math.max(0, Number(e.target.value)))}/></div><div><span>Top / Bottom</span><input type="number" min="0" step="0.01" value={marginY} onChange={(e) => setMarginY(Math.max(0, Number(e.target.value)))}/></div></div>
-                </div>}
-                <div className="layout-note"><Sparkles size={14}/> {repeatMode === "same" ? `Every item repeats record ${recordIndex + 1}.` : `Items advance through your data, ${totalSlots} records per sheet.`}</div>
-              </div>
-            )}
-
-
-          </div>
-
-          <div className="record-bar">
-            <div className="record-info"><div className="record-icon"><Database size={15}/></div><div><strong>Data preview</strong><span>Showing {recordIndex + 1} of {records.length} records</span></div></div>
-            <div className="record-controls">
-              <button className="tool-button" onClick={() => setRecordIndex(Math.max(0, recordIndex - 1))} disabled={recordIndex === 0}><ChevronLeft size={17}/></button>
-              <div className="record-select"><span>Record</span><strong>{String(recordIndex + 1).padStart(2, "0")}</strong><span>/ {records.length}</span></div>
-              <button className="tool-button" onClick={() => setRecordIndex(Math.min(records.length - 1, recordIndex + 1))} disabled={recordIndex >= records.length - 1}><ChevronRight size={17}/></button>
-            </div>
-            <div className="record-name"><span className="record-avatar">{String(currentRecord.name ?? "R").slice(0, 1).toUpperCase()}</span><strong>{currentRecord.name ?? "Current record"}</strong></div>
-          </div>
-
-            </div>
-        <aside className="right-panel">
-          <div className="inspector-heading"><span>{selected ? "Item properties" : workspace === "template" ? "Template setup" : "Page setup"}</span><button className="drawer-collapse" title="Collapse properties and layers" aria-label="Collapse properties and layers" onClick={() => setInspectorOpen(false)}><ChevronRight size={17}/></button></div><div className="right-tabs"><button className={!showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(false)}><SlidersHorizontal size={14}/> Properties</button><button className={showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(true)}><Layers size={14}/> Layers <span className="count-pill">{items.length}</span></button></div>
-          {showMobileLayers ? (
-            <div className="properties-content mobile-layer-list">
-              <div className="section-title"><Layers size={14}/> STACK ORDER <span className="count-pill">{items.length}</span></div>
-              {[...items].reverse().map((item) => (
-                <div key={item.id} className={selectedId === item.id ? "layer-row selected" : "layer-row"} onClick={() => { setSelectedId(item.id); setShowMobileLayers(false); setWorkspace("template"); setShowPrintPreview(false); }}>
-                  <span className="layer-kind">{item.type === "text" ? <Type size={13}/> : item.type === "image" ? <FileImage size={13}/> : <Square size={13}/>}</span>
-                  <span className="layer-label">{item.field ?? item.text ?? item.assetName ?? "Shape"}</span>
-                  <button className="layer-visibility" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); updateItem(item.id, { visible: item.visible === false }); }}><Eye size={12}/></button>
-                  <button className="layer-visibility" title={item.locked ? "Unlock" : "Lock"} onClick={(e) => { e.stopPropagation(); updateItem(item.id, { locked: !item.locked }); }}><LockKeyhole size={12}/></button>
-                  <button className="layer-visibility" title="Move up" onClick={(e) => { e.stopPropagation(); moveLayer(item.id, 1); }}><ArrowUp size={12}/></button>
-                  <button className="layer-visibility" title="Move down" onClick={(e) => { e.stopPropagation(); moveLayer(item.id, -1); }}><ArrowDown size={12}/></button>
-                </div>
-              ))}
-            </div>
-          ) : selected ? (
-            <div className="properties-content">
-              <div className="property-heading"><div className="property-icon">{selected.type === "text" ? <Type size={17}/> : selected.type === "image" ? <FileImage size={17}/> : <Square size={17}/>}</div><div><strong>{selected.type === "text" ? "Text object" : selected.type === "image" ? "Image object" : "Shape object"}</strong><span>{selected.field ? `Linked to ${fieldDisplayName(selected.field)}` : "Static content"}</span></div></div>
-              {selected.type === "text" && <>
-                <div className="property-section"><label>CONTENT</label><input className="property-input" value={selected.field ? (selected.field.replaceAll("_", " ")) : (selected.text ?? "")} onChange={(e) => updateItem(selected.id, { text: e.target.value, field: undefined })} placeholder="Enter text..."/><div className="binding-status" onClick={() => setSearch("")}><Link2 size={13}/>{selected.field ? `Connected to ${fieldDisplayName(selected.field)}` : "Choose a field on the left to link data"}</div></div>
-                <div className="property-section"><label>TYPOGRAPHY</label><div className="property-two"><div><span>Font size</span><div className="number-input"><input type="number" min="4" max="96" value={selected.fontSize ?? 12} onChange={(e) => updateItem(selected.id, { fontSize: Number(e.target.value) })}/><small>pt</small></div></div><div><span>Weight</span><select value={selected.weight ?? 500} onChange={(e) => updateItem(selected.id, { weight: Number(e.target.value) })}><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select></div></div><div className="align-buttons"><button className={(selected.align ?? "left") === "left" ? "active" : ""} onClick={() => updateItem(selected.id, { align: "left" })}><AlignLeft size={15}/></button><button className={selected.align === "center" ? "active" : ""} onClick={() => updateItem(selected.id, { align: "center" })}><AlignCenter size={15}/></button><button className={selected.align === "right" ? "active" : ""} onClick={() => updateItem(selected.id, { align: "right" })}><AlignRight size={15}/></button></div><div className="color-row"><span>Text color</span><input type="color" value={selected.color ?? "#34443d"} onChange={(e) => updateItem(selected.id, { color: e.target.value })}/></div></div>
-              </>}
-              {selected.type === "rect" && <div className="property-section"><label>APPEARANCE</label><div className="color-row"><span>Fill color</span><input type="color" value={selected.fill ?? "#e9eee9"} onChange={(e) => updateItem(selected.id, { fill: e.target.value })}/></div><div className="color-row"><span>Border color</span><input type="color" value={selected.stroke === "none" ? "#ffffff" : selected.stroke ?? "#cbd5cc"} onChange={(e) => updateItem(selected.id, { stroke: e.target.value })}/></div></div>}
-              <div className="property-section"><label>POSITION & SIZE <span className="unit-label">INCHES</span></label><div className="position-grid">{([["X", "x"], ["Y", "y"], ["W", "w"], ["H", "h"]] as const).map(([label, key]) => <div key={key}><span>{label}</span><input type="number" step="0.01" value={selected[key].toFixed(2)} onChange={(e) => updateItem(selected.id, { [key]: Math.max(0.01, Number(e.target.value)) })}/></div>)}</div></div>
-              <div className="property-actions"><button onClick={() => { const copy = { ...selected, id: uid(), x: selected.x + 0.12, y: selected.y + 0.12 }; setItems((prev) => [...prev, copy]); setSelectedId(copy.id); }}><Copy size={14}/> Duplicate</button><button onClick={() => updateItem(selected.id, { locked: !selected.locked })}>{selected.locked ? <Unlock size={14}/> : <LockKeyhole size={14}/>} {selected.locked ? "Unlock" : "Lock"}</button><button className="delete-action" onClick={() => { setItems((prev) => prev.filter((item) => item.id !== selected.id)); setSelectedId(null); }}><Trash2 size={14}/> Delete</button></div>
-            </div>
-          ) : (
-            <div className="properties-content">
-              {workspace === "template" ? (
-                <>
-                  <div className="document-summary"><div className="summary-icon"><Crop size={20}/></div><h3>Template setup</h3><p>Choose an Avery format or enter a custom size for one item.</p></div>
-                  <div className="property-section"><label>INDIVIDUAL TEMPLATE SIZE · INCHES</label><div className="property-two"><div><span>Width</span><div className="number-input"><input type="number" step="0.01" value={templateWidth} onChange={(e) => setTemplateWidth(Math.max(0.1, Number(e.target.value)))}/><small>in</small></div></div><div><span>Height</span><div className="number-input"><input type="number" step="0.01" value={templateHeight} onChange={(e) => setTemplateHeight(Math.max(0.1, Number(e.target.value)))}/><small>in</small></div></div></div></div>
-                  <div className="property-section"><label>AVERY LABEL TEMPLATES <span className="unit-label">{averyPresets.length} FORMATS</span></label><div className="preset-search"><Search size={13}/><input value={presetSearch} onChange={(e) => setPresetSearch(e.target.value)} placeholder="Search by number, name, or size"/><button onClick={() => setPresetSearch("")} aria-label="Clear preset search">×</button></div>
-                    <button className="preset-option custom-preset" onClick={() => setPresetSearch("")}><span><strong>Custom</strong><small>{templateWidth.toFixed(3)} × {templateHeight.toFixed(3)} in · current size</small></span><BadgeCheck size={14}/></button>
-                    {matchingPresets.length ? matchingPresets.map((preset) => <button key={preset.code} className="preset-option" onClick={() => applyPreset(preset)}><span><strong>Avery {preset.code}</strong><small>{preset.name}</small></span><em>{preset.width} × {preset.height}″</em></button>) : <p className="preset-empty">No close matches yet. Try entering a width or height, or search by Avery number.</p>}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="document-summary"><div className="summary-icon"><FileText size={20}/></div><h3>Page setup</h3><p>Choose the sheet size and arrange repeated templates across it.</p></div>
-                  <div className="property-section"><label>PAGE SIZE</label><select className="full-select" value={pageWidth === 8.5 && pageHeight === 11 ? "letter" : pageWidth === 8.27 && pageHeight === 11.69 ? "a4" : "custom"} onChange={(e) => { if (e.target.value === "letter") { setPageWidth(8.5); setPageHeight(11); } else if (e.target.value === "a4") { setPageWidth(8.27); setPageHeight(11.69); } }}><option value="letter">US Letter · 8.5 × 11 in</option><option value="a4">A4 · 8.27 × 11.69 in</option><option value="custom">Custom · {pageWidth} × {pageHeight} in</option></select></div>
-                  <div className="property-section"><label>ITEMS PER PAGE</label><div className="property-two"><div><span>Columns</span><div className="number-input"><input type="number" min="1" max="8" value={columns} onChange={(e) => setColumns(Math.max(1, Math.min(8, Number(e.target.value))))}/></div></div><div><span>Rows</span><div className="number-input"><input type="number" min="1" max="12" value={rows} onChange={(e) => setRows(Math.max(1, Math.min(12, Number(e.target.value))))}/></div></div></div></div>
-                  <div className="property-section"><label>PAGE MARGINS · INCHES</label><div className="property-two"><div><span>Left / Right</span><div className="number-input"><input type="number" min="0" step="0.05" value={marginX} onChange={(e) => setMarginX(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div><div><span>Top / Bottom</span><div className="number-input"><input type="number" min="0" step="0.05" value={marginY} onChange={(e) => setMarginY(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div></div></div>
-                  <div className="property-section"><label>ITEM SPACING</label><div className="property-two"><div><span>Horizontal</span><div className="number-input"><input type="number" min="0" step="0.05" value={gapX} onChange={(e) => setGapX(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div><div><span>Vertical</span><div className="number-input"><input type="number" min="0" step="0.05" value={gapY} onChange={(e) => setGapY(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div></div></div>
-                  <div className="property-section"><label>DATA ASSIGNMENT</label><div className="mode-options"><button className={repeatMode === "same" ? "mode-option active" : "mode-option"} onClick={() => setRepeatMode("same")}><span className="mode-icon"><Copy size={15}/></span><span><strong>Repeat same record</strong><small>Fill the sheet with one record</small></span><span className="mode-radio"/></button><button className={repeatMode === "next" ? "mode-option active" : "mode-option"} onClick={() => setRepeatMode("next")}><span className="mode-icon"><ListFilter size={15}/></span><span><strong>Next record each time</strong><small>Advance through your data</small></span><span className="mode-radio"/></button></div></div>
-                  <div className="output-summary"><div><span>Items per sheet</span><strong>{totalSlots}</strong></div><div><span>Estimated sheets</span><strong>{pageCount}</strong></div></div>
-                </>
+              )}
+              {workspace === "template" && (
+                <EditBar
+                  canGroup={canGroup} canUngroup={canUngroup} onGroup={groupSelected} onUngroup={ungroupSelected}
+                  hasSelection={selectedItems.length > 0} canPaste={clipboard.length > 0} canUndo={history.canUndo} canRedo={history.canRedo}
+                  onUndo={history.undo} onRedo={history.redo} onDelete={deleteSelected} onCut={cutSelected} onCopy={copySelected} onPaste={pasteItems}
+                />
               )}
             </div>
-          )}
-        </aside>
+
+            <RecordBar
+              label={pagedNav ? "Sheet" : "Record"}
+              position={pagedNav ? currentPage + 1 : recordIndex + 1}
+              total={pagedNav ? pageCount : activeRecords.length}
+              name={String(currentRecord.name ?? "") || `Record ${recordIndex + 1} of ${activeRecords.length}`}
+              onStep={stepRecord}
+            />
           </div>
-        </section>
 
-
+          {inspectorOpen && (
+            <Inspector
+              workspace={workspace}
+              items={inLayoutEdit ? instItems : items}
+              selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems}
+              onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
+              onUpdate={inLayoutEdit && instRecord ? (id, patch, coalesce) => setInstanceItem(instRecord[ID], id, toItemPatch(patch), coalesce) : updateItem}
+              instance={instanceBanner}
+              fitNote={inLayoutEdit && instItem?.type === "text" && instRecord ? (() => { const l = layoutText(instItem, valueFor(instItem, instRecord, metaFor(instIndex)), instItem.w * PX_PER_IN, instItem.h * PX_PER_IN); return l.issue ? { bad: true, text: l.issue === "truncated" ? "This text is being cut off." : "This text runs past its box." } : { bad: false, text: "This text fits." }; })() : fitNote}
+              fontLibrary={fontLibrary} onAlign={align} onDistribute={distribute} onRotateBy={rotateSelectionBy} imageTools={imageTools}
+              onDuplicate={duplicateSelected} onDelete={deleteSelected} onMoveLayer={moveLayer}
+              groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
+              templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate({ width, height })} onPreset={applyPreset}
+              sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
+              printer={printer} onCalibrationSheet={printCalibration}
+              fields={fields} editedList={editedList} onJumpInstance={jumpToInstance} onResetInstanceById={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
+              onAudit={(itemId) => setAuditDialog({ itemId })} auditCount={sheetIssueCount}
+              variants={{
+                variants, activeId: variantId, rules, fields, records: activeRecords, basis: sheet.variantBasis ?? "record",
+                onActivate: (id) => { setActiveVariant(id); setSelectedIds([]); }, onAdd: addVariant,
+                onRename: (id, name) => setVariants((list) => list.map((v) => (v.id === id ? { ...v, name } : v))),
+                onDelete: deleteVariant, onRules: setRules, onBasis: (variantBasis) => setSheet((sh) => ({ ...sh, variantBasis })),
+              }}
+              onClose={() => setInspectorOpen(false)}
+            />
+          )}
+        </div>
       </main>
-      <footer className="statusbar"><span><span className="status-dot"/> All changes in this session</span><span>SheetShow Studio <i>·</i> Prototype 0.1</span><span>Inches <i>·</i> 96 DPI canvas</span></footer>
+
+      {libraryDialog && (
+        <ImageLibraryDialog
+          library={library}
+          title={libraryDialog.kind === "insert" ? "Add a picture" : libraryDialog.target === "fallback" ? "Choose a placeholder" : "Choose a picture"}
+          onClose={() => setLibraryDialog(null)}
+          onPick={(asset) => (libraryDialog.kind === "insert" ? insertPicture(asset) : choosePicture(libraryDialog.itemId, libraryDialog.target, asset))}
+          onInsertDataDriven={libraryDialog.kind === "insert" ? insertDataDriven : undefined}
+        />
+      )}
+      {reviewItemId && items.find((i) => i.id === reviewItemId) && (
+        <MatchReviewDialog item={items.find((i) => i.id === reviewItemId)!} records={activeRecords} library={library} onOverrides={(changes) => setOverrides(reviewItemId, changes)} onClose={() => setReviewItemId(null)} />
+      )}
+
+      {galleryOpen && <TemplateGalleryDialog onUse={useTemplate} onClose={() => setGalleryOpen(false)} />}
+      {auditDialog && <TextAuditDialog issues={issues} itemId={auditDialog.itemId} onFix={(issue) => fixOnPage(issue.recordId, issue.itemId)} onClose={() => setAuditDialog(null)} />}
+
+      {status && (
+        <div className={`toast ${status.kind}`} role="status">
+          <div><span>{status.text}</span>{status.detail && <ul>{status.detail.map((d, i) => <li key={i}>{d}</li>)}</ul>}</div>
+          {!status.busy && <button onClick={() => setStatus(null)} aria-label="Dismiss">Dismiss</button>}
+        </div>
+      )}
+
+      {pendingImport && (
+        <MappingDialog
+          fileName={pendingImport.fileName} records={pendingImport.records} templateFields={boundFields(items)}
+          onApply={(mapping) => adoptData(pendingImport.records, pendingImport.fileName, mapping)}
+          onCancel={() => setPendingImport(null)}
+        />
+      )}
+
+      {fieldDrag && <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>}
+
+      {printing && (
+        <PrintSheets kind={printing} offset={printer} sheet={sheet} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} instanceFor={instanceFor} />
+      )}
     </div>
+    </ImageContext.Provider>
   );
 }
 
