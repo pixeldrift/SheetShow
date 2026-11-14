@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SheetShow">
+  <rect width="64" height="64" rx="14" fill="#f4e8dc"/>
+  <!-- the sheet, with a folded corner -->
+  <path d="M18 8.5h19.5L49.5 20.5V51a4.5 4.5 0 0 1-4.5 4.5H18A4.5 4.5 0 0 1 13.5 51V13A4.5 4.5 0 0 1 18 8.5Z" fill="#fff" stroke="#d17c4b" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M37.5 8.5v7.5a4.5 4.5 0 0 0 4.5 4.5h7.5" fill="#f6dcc8" stroke="#d17c4b" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- six labels, two across and three down -->
+  <g fill="#f7dfcd" stroke="#d17c4b" stroke-width="1.7" stroke-linejoin="round">
+    <rect x="18.5" y="25.5" width="11" height="7" rx="1.6"/><rect x="32.5" y="25.5" width="11" height="7" rx="1.6"/>
+    <rect x="18.5" y="34.5" width="11" height="7" rx="1.6"/><rect x="32.5" y="34.5" width="11" height="7" rx="1.6"/>
+    <rect x="18.5" y="43.5" width="11" height="7" rx="1.6"/><rect x="32.5" y="43.5" width="11" height="7" rx="1.6"/>
+  </g>
+  <!-- the sparkle is part of the mark, so it never moves relative to the sheet -->
+  <path d="M51 3.5 53 9.4 58.9 11.4 53 13.4 51 19.3 49 13.4 43.1 11.4 49 9.4Z" fill="#d17c4b"/>
+</svg>

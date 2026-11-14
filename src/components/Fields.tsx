@@ -1,7 +1,16 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
+
+type ScrubStart = (event: React.PointerEvent) => void;
+/** Lets a field's label start a drag-to-scrub on the number field next to it. */
+const ScrubContext = createContext<((start: ScrubStart | null) => void) | null>(null);
+
+const PIXELS_PER_STEP = 5;
 
 /**
  * Number input that lets you type freely (e.g. "1.") and only commits valid numbers.
+ * - Up/down arrows (click, or hold to repeat; Shift = ×10).
+ * - Drag the label, or the unit, left and right to scrub the value (Shift = ×10, Alt = fine).
  * While you're typing it shows your draft; otherwise it always shows the real value. A change from elsewhere
  * (undo, a ±90° button) is adopted even if this field still has focus, as Safari doesn't blur it on button clicks.
  */
@@ -9,9 +18,57 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
   const format = (n: number) => String(Number(n.toFixed(places)));
   const [draft, setDraft] = useState<string | null>(null); // null = not editing
   const lastCommitted = useRef<number | null>(null);
+  const register = useContext(ScrubContext);
+  const latest = useRef({ value, min, max, step, places, onChange });
+  latest.current = { value, min, max, step, places, onChange };
+
   useEffect(() => {
     if (value !== lastCommitted.current) { lastCommitted.current = null; setDraft((d) => (d === null ? null : format(value))); }
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const commit = useCallback((n: number) => {
+    const { min: lo, max: hi, places: p, onChange: change } = latest.current;
+    const clamped = Number(Math.min(hi ?? Infinity, Math.max(lo ?? -Infinity, n)).toFixed(p));
+    lastCommitted.current = clamped;
+    change(clamped);
+  }, []);
+
+  /** Drag to scrub. Pointer moves are tracked on the window so the drag survives leaving the label. */
+  const startScrub: ScrubStart = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX, startValue = latest.current.value;
+    document.body.classList.add("scrubbing");
+    const move = (e: PointerEvent) => {
+      const multiplier = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
+      commit(startValue + Math.round((e.clientX - startX) / PIXELS_PER_STEP) * latest.current.step * multiplier);
+    };
+    const up = () => {
+      document.body.classList.remove("scrubbing");
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }, [commit]);
+
+  useEffect(() => { register?.(startScrub); return () => register?.(null); }, [register, startScrub]);
+
+  /** Click an arrow to nudge; hold it to keep going. */
+  const press = (direction: 1 | -1) => (event: React.PointerEvent) => {
+    event.preventDefault();
+    const multiplier = event.shiftKey ? 10 : 1;
+    const bump = () => commit(latest.current.value + direction * latest.current.step * multiplier);
+    bump();
+    let interval: number | undefined;
+    const delay = window.setTimeout(() => { interval = window.setInterval(bump, 70); }, 380);
+    const stop = () => { window.clearTimeout(delay); window.clearInterval(interval); window.removeEventListener("pointerup", stop); window.removeEventListener("pointercancel", stop); };
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+  };
+
   return (
     <div className="number-input">
       <input
@@ -21,13 +78,14 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
         onChange={(e) => {
           setDraft(e.target.value);
           const n = parseFloat(e.target.value);
-          if (!Number.isFinite(n)) return;
-          const clamped = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n));
-          lastCommitted.current = clamped;
-          onChange(clamped);
+          if (Number.isFinite(n)) commit(n);
         }}
       />
-      {unit && <small>{unit}</small>}
+      {unit && <small className="scrub-unit" onPointerDown={startScrub} title="Drag to adjust">{unit}</small>}
+      <span className="stepper">
+        <button type="button" tabIndex={-1} aria-label="Increase" onPointerDown={press(1)}><ChevronUp size={11} /></button>
+        <button type="button" tabIndex={-1} aria-label="Decrease" onPointerDown={press(-1)}><ChevronDown size={11} /></button>
+      </span>
     </div>
   );
 }
@@ -36,6 +94,17 @@ export function Section({ title, unit, children }: { title: string; unit?: strin
   return <section className="property-section"><h3>{title}{unit && <span className="unit-label">{unit}</span>}</h3>{children}</section>;
 }
 
+/** A label above a field. If the field is a number, dragging the label scrubs its value. */
 export function Pair({ label, children }: { label: string; children: ReactNode }) {
-  return <div className="pair"><span>{label}</span>{children}</div>;
+  const start = useRef<ScrubStart | null>(null);
+  const [scrubbable, setScrubbable] = useState(false);
+  const register = useCallback((fn: ScrubStart | null) => { start.current = fn; setScrubbable(!!fn); }, []);
+  return (
+    <ScrubContext.Provider value={register}>
+      <div className="pair">
+        <span className={scrubbable ? "scrub-label" : undefined} onPointerDown={scrubbable ? (e) => start.current?.(e) : undefined} title={scrubbable ? "Drag to adjust" : undefined}>{label}</span>
+        {children}
+      </div>
+    </ScrubContext.Provider>
+  );
 }

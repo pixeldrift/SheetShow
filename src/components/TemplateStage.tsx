@@ -26,6 +26,8 @@ type Props = {
   multi: boolean;
   /** When true, editing is paused and the output is clipped to the template. */
   preview: boolean;
+  /** Show {field} names instead of values. */
+  rawFields?: boolean;
   svgRef: RefObject<SVGSVGElement>;
   onSelect: (ids: string[]) => void;
   onMove: (updates: { id: string; x: number; y: number }[]) => void;
@@ -56,7 +58,7 @@ const GUIDE_REACH = 0.08;
 const MIN_SIZE = 0.05;
 
 /** Editable template canvas. Items may be dragged anywhere, including past the template edge and over the rulers. */
-export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, guides, multi, preview, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd }: Props) {
+export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd }: Props) {
   const drag = useRef<Drag | null>(null);
   const lastTap = useRef<{ id: string; at: number } | null>(null);
   /** A double-click on a grouped object picks just that object, but only once the pointer is released without having moved (otherwise it was a quick click-and-drag of the group). */
@@ -103,7 +105,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     releaseFocus();
     event.preventDefault();
     const corner = handle.length === 2;
-    const frame = itemFrame(item, record, meta); // start from what's drawn, which can be taller than item.h for wrapped text
+    const frame = itemFrame(item, record, meta, rawFields); // start from what's drawn, which can be taller than item.h for wrapped text
     drag.current = { kind: "resize", id: item.id, handle, startX: event.clientX, startY: event.clientY, box: { x: item.x, y: item.y, w: item.w, h: frame.h / PX_PER_IN }, rotation: item.rotation ?? 0, keepAspect: corner && (item.type === "image" || event.shiftKey) };
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
   };
@@ -153,7 +155,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       const item = items.find((candidate) => candidate.id === d.id);
       const rect = svgRef.current?.getBoundingClientRect();
       if (!item || !rect) return;
-      const frame = itemFrame(item, record, meta);
+      const frame = itemFrame(item, record, meta, rawFields);
       const cx = rect.left + (item.x + item.w / 2) * scale, cy = rect.top + (item.y + frame.h / PX_PER_IN / 2) * scale;
       let degrees = (Math.atan2(event.clientY - cy, event.clientX - cx) * 180) / Math.PI + 90; // handle sits above the item
       if (event.shiftKey || snap) degrees = Math.round(degrees / 15) * 15;
@@ -220,7 +222,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
   const visual = 9 / zoom, hit = 26 / zoom;
   // Group bounds use each item's drawn frame (see itemFrame), so the group outline wraps the member outlines exactly.
   const group = items.filter((item) => selectedIds.includes(item.id) && item.visible !== false && !item.locked)
-    .map((item) => (item.type === "text" ? { ...item, h: itemFrame(item, record, meta).h / PX_PER_IN } : item));
+    .map((item) => (item.type === "text" ? { ...item, h: itemFrame(item, record, meta, rawFields).h / PX_PER_IN } : item));
   const single = selectedIds.length === 1 ? items.find((item) => item.id === selectedIds[0]) : undefined;
   return (
     <svg
@@ -240,7 +242,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
         </>
       )}
       {items.filter((item) => item.visible !== false).map((item) => (
-        <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} onPointerDown={(event) => startMove(event, item)} />
+        <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} raw={rawFields} onPointerDown={(event) => startMove(event, item)} />
       ))}
       {!preview && group.length > 1 && (() => {
         const box = boundsOf(group), reach = 30 / zoom;
@@ -266,7 +268,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
         );
       })()}
       {!preview && single && !single.locked && single.visible !== false && (() => {
-        const { w, h } = itemFrame(single, record, meta), rotation = single.rotation ?? 0;
+        const { w, h } = itemFrame(single, record, meta, rawFields), rotation = single.rotation ?? 0;
         const reach = 30 / zoom;
         return (
           <g transform={`translate(${single.x * PX_PER_IN} ${single.y * PX_PER_IN}) rotate(${rotation} ${w / 2} ${h / 2})`}>

@@ -74,7 +74,10 @@ function truncate(lines: string[], item: DesignItem, w: number, h: number, ignor
  * Lays text out in a w × h (px) box and decides what happens when it doesn't fit.
  * Auto-fit modes pick the largest size that fits (never below the minimum); "overflow" decides what to do if it still won't.
  */
-export function layoutText(source: DesignItem, text: string, w: number, h: number): TextLayout {
+export function layoutText(source: DesignItem, text: string, outerW: number, outerH: number): TextLayout {
+  // Padding insets the text from its box (a text box with a background): lay out in the inner area, report the outer height.
+  const pad = Math.max(0, (source.padding ?? 0) * PX_PER_IN);
+  const w = Math.max(8, outerW - 2 * pad), h = Math.max(8, outerH - 2 * pad);
   const mode = source.autoFit ?? "off";
   const lh = source.lineHeight ?? 1.2;
   let item: DesignItem = mode === "width" ? { ...source, wrap: false } : source;
@@ -113,5 +116,5 @@ export function layoutText(source: DesignItem, text: string, w: number, h: numbe
     if (source.overflow === "truncate") { lines = truncate(lines, item, w, h, mode === "width"); issue = "truncated"; }
     else issue = "spill";
   }
-  return { item, lines, fontPx, needH, issue, atMin };
+  return { item, lines, fontPx, needH: needH + 2 * pad, issue, atMin };
 }

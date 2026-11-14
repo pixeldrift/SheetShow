@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, Redo2, Undo2 } from "lucide-react";
+import { Braces, Redo2, SlidersHorizontal, Undo2 } from "lucide-react";
 import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -14,11 +14,13 @@ import { layoutText } from "./lib/text";
 import { TextAuditDialog } from "./components/TextAuditDialog";
 import { usePrinterCalibration } from "./hooks/usePrinterCalibration";
 import { TemplateGalleryDialog } from "./components/TemplateGalleryDialog";
+import { HelpDialog } from "./components/HelpDialog";
 import { useHistory } from "./hooks/useHistory";
 import { useFontLibrary } from "./hooks/useFontLibrary";
 import { aabb, alignItems, boundsOf, centerOf, distributeItems, rotateAbout, type AlignMode, type Transform } from "./lib/align";
 import { applyMapping, boundFields } from "./lib/mapping";
 import { MappingDialog } from "./components/MappingDialog";
+import { ImportDialog } from "./components/ImportDialog";
 import { bundleProject, downloadBlob, loadProject, projectFileName, readProjectAny, saveProject } from "./lib/storage";
 import { useImageLibrary } from "./hooks/useImageLibrary";
 import { ImageContext } from "./components/ImageContext";
@@ -29,9 +31,11 @@ import type { Asset } from "./types";
 import { Topbar } from "./components/Topbar";
 import { Toolbar } from "./components/Toolbar";
 import { EditBar } from "./components/EditBar";
+import { AlignBar } from "./components/AlignBar";
 import { DataPanel } from "./components/DataPanel";
 import { Inspector } from "./components/Inspector";
 import { RecordBar } from "./components/RecordBar";
+import { RecordsDrawer } from "./components/RecordsDrawer";
 import { MAX_ZOOM, MIN_ZOOM, Viewport } from "./components/Viewport";
 import { TemplateStage } from "./components/TemplateStage";
 import { LayoutStage, type InstanceInfo, type InstanceSelection } from "./components/LayoutStage";
@@ -47,34 +51,53 @@ const freshView = (): View => ({ zoom: 1, pan: { x: 0, y: 0 }, fitted: false });
 const defaultSheet: Sheet = { pageWidth: 8.5, pageHeight: 11, columns: 2, rows: 4, gapX: 0.18, gapY: 0.18, marginX: 0.25, marginY: 0.25, repeatMode: "next", cropMarks: false };
 const DEFAULT_NAME = "Untitled bird card";
 
+/** Everything the undo history covers. */
+type Doc = {
+  items: Record<string, DesignItem[]>; variants: Variant[]; rules: VariantRule[]; template: { width: number; height: number }; sheet: Sheet;
+  records: RecordRow[]; fileName: string; overrides: Record<string, InstanceOverride>;
+};
+/** Applies a column mapping to the linked text and rules of every template. */
+const mapAllTemplates = (map: Record<string, DesignItem[]>, mapping: Record<string, string | null>) =>
+  Object.fromEntries(Object.entries(map).map(([id, list]) => [id, applyMapping(list, mapping)]));
+
 function App() {
   // ── Document (restored from this browser's last session when available) ──
   const [initial] = useState(() => loadProject());
-  const recordHistory = useHistory<RecordRow[]>(withIds(initial?.records ?? starterRecords));
-  const records = recordHistory.value;
-  const setRecords = (next: RecordRow[]) => recordHistory.set(() => next);
+  // ONE undo history covers every document change: templates, alternate templates, rules, template size, page setup,
+  // data, and per-record edits. The pieces below are thin views onto it, so the rest of the editor reads as before.
+  const [startDoc] = useState<Doc>(() => {
+    const vs = initial?.variants?.length ? initial.variants : [{ id: "a", name: "Template A", items: initial?.items ?? starterItems }];
+    return {
+      items: Object.fromEntries(vs.map((v) => [v.id, v.items])), variants: vs.map(({ id, name }) => ({ id, name })), rules: initial?.rules ?? [],
+      template: initial?.template ?? { width: 3.5, height: 2 }, sheet: initial?.sheet ?? defaultSheet,
+      records: withIds(initial?.records ?? starterRecords), fileName: initial?.fileName ?? "bird-records.csv", overrides: initial?.overrides ?? {},
+    };
+  });
+  const doc = useHistory<Doc>(startDoc);
+  const D = doc.value;
+  /** A setter for one part of the document (accepts a value or an updater), recorded as an undo step. */
+  const part = <K extends keyof Doc>(key: K, coalesce?: string) => (update: Doc[K] | ((value: Doc[K]) => Doc[K]), options?: { coalesce?: string }) =>
+    doc.set((d) => { const next = typeof update === "function" ? (update as (v: Doc[K]) => Doc[K])(d[key]) : update; return next === d[key] ? d : { ...d, [key]: next }; }, { coalesce: options?.coalesce ?? coalesce });
+  const shared = { undo: doc.undo, redo: doc.redo, breakGroup: doc.breakGroup, canUndo: doc.canUndo, canRedo: doc.canRedo };
+  const records = D.records;
+  const fileName = D.fileName;
+  const variants = D.variants, rules = D.rules, template = D.template, sheet = D.sheet;
+  const instanceOverrides = D.overrides;
+  const setVariants = part("variants", "variants"), setRules = part("rules", "rules"), setTemplate = part("template", "template"), setSheet = part("sheet", "sheet");
+  const recordHistory = { value: records, set: part("records"), ...shared };
   const editRecords = (update: (rows: RecordRow[]) => RecordRow[], coalesce?: string) => recordHistory.set(update, { coalesce });
-  const [fileName, setFileName] = useState(initial?.fileName ?? "bird-records.csv");
+  const itemsDoc = { value: D.items, set: part("items"), ...shared };
+  const overrideDoc = { value: instanceOverrides, set: part("overrides"), ...shared };
   const [docName, setDocName] = useState(initial?.name ?? DEFAULT_NAME);
-  // Several templates can be combined into one output; `itemsDoc` holds each template's items under one undo history.
-  const [startVariants] = useState(() => (initial?.variants?.length ? initial.variants : [{ id: "a", name: "Template A", items: initial?.items ?? starterItems }]));
-  const [variants, setVariants] = useState<Variant[]>(() => startVariants.map(({ id, name }) => ({ id, name })));
-  const [rules, setRules] = useState<VariantRule[]>(initial?.rules ?? []);
-  const itemsDoc = useHistory<Record<string, DesignItem[]>>(Object.fromEntries(startVariants.map((v) => [v.id, v.items])));
-  const [activeVariant, setActiveVariant] = useState(startVariants[0].id);
+  const [activeVariant, setActiveVariant] = useState(variants[0].id);
   const variantId = itemsDoc.value[activeVariant] ? activeVariant : variants[0].id; // the template being edited
   const items = itemsDoc.value[variantId] ?? [];
   /** Edits the template being shown, so the rest of the editor keeps working with one plain list of items. */
   const history = {
     set: (update: (list: DesignItem[]) => DesignItem[], options?: { coalesce?: string }) =>
       itemsDoc.set((map) => { const current = map[variantId] ?? []; const next = update(current); return next === current ? map : { ...map, [variantId]: next }; }, options),
-    undo: itemsDoc.undo, redo: itemsDoc.redo, breakGroup: itemsDoc.breakGroup, canUndo: itemsDoc.canUndo, canRedo: itemsDoc.canRedo,
+    ...shared,
   };
-  // Hand edits to individual records' copies of the template (keyed by record id), with their own undo history.
-  const overrideDoc = useHistory<Record<string, InstanceOverride>>(initial?.overrides ?? {});
-  const instanceOverrides = overrideDoc.value;
-  const [template, setTemplate] = useState(initial?.template ?? { width: 3.5, height: 2 });
-  const [sheet, setSheet] = useState<Sheet>(initial?.sheet ?? defaultSheet);
   const [rawRecordIndex, setRecordIndex] = useState(0);
   const fontLibrary = useFontLibrary(initial?.fonts ?? []);
 
@@ -88,7 +111,7 @@ function App() {
   const [fieldDrag, setFieldDrag] = useState<{ field: string; x: number; y: number } | null>(null);
   const justDragged = useRef(false);
   // A freshly imported file waiting for the person to confirm how its columns map onto the template.
-  const [pendingImport, setPendingImport] = useState<{ records: RecordRow[]; fileName: string } | null>(null);
+  const [pendingImport, setPendingImport] = useState<{ records: RecordRow[]; fileName: string; stage: "choose" | "map" } | null>(null);
   const [dataOpen, setDataOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
   const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
   const [showGrid, setShowGrid] = useState(false);
@@ -98,6 +121,9 @@ function App() {
   const [printing, setPrinting] = useState<null | "sheets" | "calibration">(null);
   const printer = usePrinterCalibration();
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [recordsOpen, setRecordsOpen] = useState(false);
+  const [showFieldNames, setShowFieldNames] = useState(false);
   const [instanceMode, setInstanceMode] = useState(false);
   const [instanceSel, setInstanceSel] = useState<InstanceSelection | null>(null);
   const [editingText, setEditingText] = useState<InstanceSelection | null>(null);
@@ -230,16 +256,14 @@ function App() {
   const addVariant = () => {
     const id = uid();
     const name = `Template ${String.fromCharCode(65 + variants.length)}`;
-    itemsDoc.set((map) => ({ ...map, [id]: (map[variantId] ?? []).map((item) => ({ ...item })) })); // same item ids, so hand edits carry over
-    setVariants((list) => [...list, { id, name }]);
+    // One undo step: the copy (same item ids, so hand edits carry over) and the new entry in the list.
+    doc.set((d) => ({ ...d, items: { ...d.items, [id]: (d.items[variantId] ?? []).map((item) => ({ ...item })) }, variants: [...d.variants, { id, name }] }));
     setActiveVariant(id);
     setSelectedIds([]);
   };
   const deleteVariant = (id: string) => {
     if (variants.length < 2 || !window.confirm("Delete this template? Records that used it will fall back to the first template.")) return;
-    itemsDoc.set((map) => { const { [id]: _gone, ...rest } = map; return rest; });
-    setVariants((list) => list.filter((v) => v.id !== id));
-    setRules((list) => list.filter((r) => r.variantId !== id));
+    doc.set((d) => { const { [id]: _gone, ...items } = d.items; return { ...d, items, variants: d.variants.filter((v) => v.id !== id), rules: d.rules.filter((r) => r.variantId !== id) }; });
     if (variantId === id) setActiveVariant(variants.find((v) => v.id !== id)!.id);
     setSelectedIds([]);
   };
@@ -262,6 +286,10 @@ function App() {
   const addText = (field?: string, x = 0.5, y = 0.5) =>
     addItem({ id: uid(), type: "text", x, y, w: 2.5, h: 0.28, text: field ? fieldDisplayName(field) : "Your text", field, fontSize: 12, color: "#34443d", weight: 500, visible: true });
 
+  /** Text with a white background, a thin frame and some padding: a ready-made box for notes and labels. */
+  const addTextBox = () => addItem({ id: uid(), type: "text", x: 0.4, y: 0.4, w: 1.8, h: 0.7, text: "Text box", fontSize: 11, color: "#34443d", weight: 500, visible: true, fill: "#ffffff", stroke: "#cbd5cc", strokeWidth: 1, radius: 8, radiusUnit: "px", padding: 0.08, wrap: true });
+  /** A picture box that each record fills from your data (a column or a filename pattern). */
+  const addPhotoPlaceholder = () => addItem({ id: uid(), type: "image", x: 0.4, y: 0.4, w: 1.2, h: 1.2, radius: 6, imageSource: defaultImageSource(fields), visible: true });
   const addShape = () => addItem({ id: uid(), type: "rect", x: 0.35, y: 0.35, w: 1.1, h: 0.65, fill: "#e9eee9", stroke: "#cbd5cc", visible: true });
 
   const deleteSelected = () => {
@@ -363,24 +391,27 @@ function App() {
 
   // ── Data import ─────────────────────────────────────────────────────────
   const adoptData = (next: RecordRow[], name: string, mapping?: Record<string, string | null>) => {
-    if (mapping) history.set((list) => applyMapping(list, mapping));
-    setRecords(withIds(next));
+    doc.set((d) => ({ ...d, records: withIds(next), fileName: name, items: mapping ? mapAllTemplates(d.items, mapping) : d.items }));
     setRecordIndex(0);
-    setFileName(name);
     setPendingImport(null);
   };
 
+  /** The person chose "Replace": use the new file, matching the template's links first if it needs columns the file lacks. */
+  const replaceWithImport = () => {
+    if (!pendingImport) return;
+    const columns = new Set(Object.keys(pendingImport.records[0] ?? {}));
+    if (boundFields(items).some((field) => !columns.has(field))) setPendingImport({ ...pendingImport, stage: "map" });
+    else adoptData(pendingImport.records, pendingImport.fileName);
+  };
+  /** "Add" or "Merge": the finished list, as one undo step. */
+  const combineImport = (rows: RecordRow[]) => { recordHistory.set(() => rows); setPendingImport(null); };
   const importData = (file: File) => {
     Papa.parse<RecordRow>(file, {
       header: true, skipEmptyLines: true,
       complete: (result) => {
         const cleaned = result.data.filter((row) => Object.values(row).some((v) => String(v ?? "").trim()));
         if (!cleaned.length) { window.alert("No records were found in that file."); return; }
-        // Only interrupt when the template uses columns the new file lacks; same-shaped files just load.
-        const columns = new Set(Object.keys(cleaned[0]));
-        const missing = boundFields(items).some((field) => !columns.has(field));
-        if (missing) setPendingImport({ records: cleaned, fileName: file.name });
-        else adoptData(cleaned, file.name);
+        setPendingImport({ records: cleaned, fileName: file.name, stage: "choose" }); // ask: replace, add, or merge
       },
       error: () => window.alert("That file could not be read."),
     });
@@ -454,8 +485,8 @@ function App() {
 
   // ── Template / page setup ───────────────────────────────────────────────
   const applyPreset = (preset: LabelPreset) => {
-    setTemplate({ width: preset.width, height: preset.height });
-    setSheet((s) => ({ ...s, columns: preset.columns, rows: preset.rows, gapX: preset.gapX, gapY: preset.gapY, marginX: preset.marginX, marginY: preset.marginY }));
+    // Template size and page layout change together, as a single undo step.
+    doc.set((d) => ({ ...d, template: { width: preset.width, height: preset.height }, sheet: { ...d.sheet, pageWidth: 8.5, pageHeight: 11, columns: preset.columns, rows: preset.rows, gapX: preset.gapX, gapY: preset.gapY, marginX: preset.marginX, marginY: preset.marginY } }));
     setViews((v) => ({ template: { ...v.template, fitted: false }, layout: { ...v.layout, fitted: false } }));
   };
 
@@ -503,7 +534,7 @@ function App() {
       if (!wasActive) return;
       if (e.type === "pointerup") {
         dropField(field, e.clientX, e.clientY);
-        if (!window.matchMedia(WIDE_QUERY).matches) setDataOpen(false); // overlay drawer: reveal the result
+        if (!window.matchMedia(WIDE_QUERY).matches) { setDataOpen(false); setRecordsOpen(false); } // overlay drawers: reveal the result
       }
       justDragged.current = true; // swallow the click that follows a drag
       window.setTimeout(() => { justDragged.current = false; }, 60);
@@ -527,11 +558,11 @@ function App() {
   const applyProject = async (project: Project, images?: { asset: Asset; blob: Blob }[]) => {
     if (images) await library.replaceAll(images);
     const vs = project.variants?.length ? project.variants : [{ id: "a", name: "Template A", items: project.items }];
-    itemsDoc.reset(Object.fromEntries(vs.map((v) => [v.id, v.items])));
-    setVariants(vs.map(({ id, name }) => ({ id, name }))); setActiveVariant(vs[0].id); setRules(project.rules ?? []);
-    overrideDoc.reset(project.overrides ?? {}); setInstanceSel(null); setEditingText(null);
-    recordHistory.reset(withIds(project.records)); setFileName(project.fileName); setDocName(project.name);
-    setTemplate(project.template); setSheet(project.sheet);
+    doc.reset({
+      items: Object.fromEntries(vs.map((v) => [v.id, v.items])), variants: vs.map(({ id, name }) => ({ id, name })), rules: project.rules ?? [],
+      template: project.template, sheet: project.sheet, records: withIds(project.records), fileName: project.fileName, overrides: project.overrides ?? {},
+    });
+    setActiveVariant(vs[0].id); setInstanceSel(null); setEditingText(null); setDocName(project.name);
     fontLibrary.restore(project.fonts);
     setSelectedIds([]); setRecordIndex(0);
     setGuides({ template: [], layout: [] });
@@ -580,8 +611,8 @@ function App() {
       const name = window.prompt("Rename column", column)?.trim();
       if (!name || name === column) return;
       if (fields.includes(name)) { window.alert(`There’s already a column called “${name}”.`); return; }
-      editRecords((rows) => renameColumn(rows, column, name));
-      history.set((list) => applyMapping(list, { [column]: name })); // keep the template's linked text connected
+      // One undo step: the column and everything linked to it in every template.
+      doc.set((d) => ({ ...d, records: renameColumn(d.records, column, name), items: mapAllTemplates(d.items, { [column]: name }) }));
     },
     onDeleteColumn: (column: string) => {
       const used = items.some((item) => item.field === column);
@@ -700,7 +731,7 @@ function App() {
       const mod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
       const has = selectedItems.length > 0;
-      const target = showData ? recordHistory : workspace === "layout" ? overrideDoc : history; // each view undoes its own edits
+      const target = doc; // one history for the whole document
       if (mod && key === "z") { event.preventDefault(); event.shiftKey ? target.redo() : target.undo(); }
       else if (mod && key === "y") { event.preventDefault(); target.redo(); }
       else if (workspace === "layout" && !showData) { if (key === "escape") { setInstanceSel(null); setEditingText(null); } }
@@ -736,7 +767,7 @@ function App() {
   return (
     <ImageContext.Provider value={{ resolver: library.resolver, urlFor: library.urlFor }}>
     <div className="app-shell">
-      <Topbar workspace={showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(tab); } }} onPrint={printNow} name={docName} onName={setDocName} saveState={saveState} onNew={newProject} onGallery={() => setGalleryOpen(true)} onOpen={openProject} onSave={saveToFile} />
+      <Topbar workspace={showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(tab); } }} onPrint={printNow} onHelp={() => setHelpOpen(true)} name={docName} onName={setDocName} saveState={saveState} onNew={newProject} onGallery={() => setGalleryOpen(true)} onOpen={openProject} onSave={saveToFile} />
 
       {showData && (
         <main className="workspace">
@@ -757,7 +788,7 @@ function App() {
           preview={preview} onPreview={() => setPreview((v) => !v)}
           multi={multiMode} onMulti={() => setMultiMode((v) => !v)}
           zoom={view.zoom} onZoom={setZoom} onZoomPreset={toggleZoomPreset}
-          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })}
+          onAddText={() => addText()} onAddShape={addShape} onAddTextBox={addTextBox} onAddPhoto={addPhotoPlaceholder} onAddImage={() => setLibraryDialog({ kind: "insert" })}
         />
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
@@ -785,7 +816,7 @@ function App() {
                 {workspace === "template" ? (
                   <TemplateStage
                     items={displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
-                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} guides={guides.template} multi={multiMode} preview={preview} svgRef={svgRef}
+                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
                     onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup}
                   />
                 ) : (
@@ -810,21 +841,13 @@ function App() {
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
-              <button className={dataOpen ? "drawer-toggle left active" : "drawer-toggle left"} title={dataOpen ? "Hide data fields" : "Show data fields"} aria-label={dataOpen ? "Hide data fields" : "Show data fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
-                {dataOpen ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
+              <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields drawer (your data columns)" : "Show the Fields drawer (your data columns)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
+                <Braces size={15} /><span>Fields</span>
               </button>
-              <button className={inspectorOpen ? "drawer-toggle right active" : "drawer-toggle right"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>
-                {inspectorOpen ? <PanelRightClose size={16} /> : <PanelRight size={16} />}
+              <button className="drawer-toggle right" title={inspectorOpen ? "Hide the Properties drawer" : "Show the Properties drawer (settings, layers)"} aria-label={inspectorOpen ? "Hide properties" : "Show properties"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>
+                <SlidersHorizontal size={15} /><span>Properties</span>
               </button>
-
-              {workspace === "layout" && instanceMode && (
-                <div className="edit-bar" data-no-pan>
-                  <button className="tool-button" title="Undo (Ctrl+Z)" aria-label="Undo (Ctrl+Z)" disabled={!overrideDoc.canUndo} onClick={overrideDoc.undo}><Undo2 size={16} /></button>
-                  <button className="tool-button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo (Ctrl+Shift+Z)" disabled={!overrideDoc.canRedo} onClick={overrideDoc.redo}><Redo2 size={16} /></button>
-                  <span className="edit-divider" />
-                  <span className="edit-hint">Click to select · double-click to edit · drop a photo on a picture</span>
-                </div>
-              )}
+              {workspace === "template" && !preview && selectedItems.length > 0 && <AlignBar units={unitsOf(items, selectedIds).length} onAlign={align} onDistribute={distribute} />}
               {workspace === "template" && (
                 <EditBar
                   canGroup={canGroup} canUngroup={canUngroup} onGroup={groupSelected} onUngroup={ungroupSelected}
@@ -834,12 +857,19 @@ function App() {
               )}
             </div>
 
+            <RecordsDrawer
+              open={recordsOpen} records={activeRecords} fields={fields} current={recordIndex} excluded={records.length - activeRecords.length}
+              onPick={(index) => { setRecordIndex(index); if (!window.matchMedia(WIDE_QUERY).matches) setRecordsOpen(false); }} onClose={() => setRecordsOpen(false)}
+              onCellPointerDown={startFieldDrag} justDragged={() => justDragged.current} dragging={!!fieldDrag}
+            />
             <RecordBar
               label={pagedNav ? "Sheet" : "Record"}
               position={pagedNav ? currentPage + 1 : recordIndex + 1}
               total={pagedNav ? pageCount : activeRecords.length}
-              name={String(currentRecord.name ?? "") || `Record ${recordIndex + 1} of ${activeRecords.length}`}
+              preview={fields.map((f) => (currentRecord[f] ?? "").trim()).filter(Boolean).join(" · ")}
               onStep={stepRecord}
+              drawerOpen={recordsOpen} onToggleDrawer={() => setRecordsOpen((o) => !o)}
+              showNames={showFieldNames} onToggleNames={workspace === "template" ? () => setShowFieldNames((v) => !v) : undefined}
             />
           </div>
 
@@ -852,7 +882,7 @@ function App() {
               onUpdate={inLayoutEdit && instRecord ? (id, patch, coalesce) => setInstanceItem(instRecord[ID], id, toItemPatch(patch), coalesce) : updateItem}
               instance={instanceBanner}
               fitNote={inLayoutEdit && instItem?.type === "text" && instRecord ? (() => { const l = layoutText(instItem, valueFor(instItem, instRecord, metaFor(instIndex)), instItem.w * PX_PER_IN, instItem.h * PX_PER_IN); return l.issue ? { bad: true, text: l.issue === "truncated" ? "This text is being cut off." : "This text runs past its box." } : { bad: false, text: "This text fits." }; })() : fitNote}
-              fontLibrary={fontLibrary} onAlign={align} onDistribute={distribute} onRotateBy={rotateSelectionBy} imageTools={imageTools}
+              fontLibrary={fontLibrary} onRotateBy={rotateSelectionBy} imageTools={imageTools}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onMoveLayer={moveLayer}
               groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
               templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate({ width, height })} onPreset={applyPreset}
@@ -885,6 +915,7 @@ function App() {
         <MatchReviewDialog item={items.find((i) => i.id === reviewItemId)!} records={activeRecords} library={library} onOverrides={(changes) => setOverrides(reviewItemId, changes)} onClose={() => setReviewItemId(null)} />
       )}
 
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
       {galleryOpen && <TemplateGalleryDialog onUse={useTemplate} onClose={() => setGalleryOpen(false)} />}
       {auditDialog && <TextAuditDialog issues={issues} itemId={auditDialog.itemId} onFix={(issue) => fixOnPage(issue.recordId, issue.itemId)} onClose={() => setAuditDialog(null)} />}
 
@@ -895,7 +926,13 @@ function App() {
         </div>
       )}
 
-      {pendingImport && (
+      {pendingImport?.stage === "choose" && (
+        <ImportDialog
+          fileName={pendingImport.fileName} incoming={pendingImport.records} existing={records} existingColumns={fields}
+          onReplace={replaceWithImport} onCombine={combineImport} onCancel={() => setPendingImport(null)}
+        />
+      )}
+      {pendingImport?.stage === "map" && (
         <MappingDialog
           fileName={pendingImport.fileName} records={pendingImport.records} templateFields={boundFields(items)}
           onApply={(mapping) => adoptData(pendingImport.records, pendingImport.fileName, mapping)}

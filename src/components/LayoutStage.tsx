@@ -101,7 +101,7 @@ export function LayoutStage(p: Props) {
             {edited && id && (
               <>
                 <button className={reverted ? "slot-badge reverted" : "slot-badge"} data-no-pan
-                  title={reverted ? "Hand edits are switched off for this record — click for options" : "This record has hand edits — click for options"}
+                  title={reverted ? "Overrides are switched off for this record — click for options" : "This record has overrides — click for options"}
                   onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === id ? null : id); }}>
                   {reverted ? <Undo2 size={12} /> : <PencilLine size={12} />}
                 </button>
@@ -110,8 +110,8 @@ export function LayoutStage(p: Props) {
                     <div className="menu-scrim" onClick={(e) => { e.stopPropagation(); setMenuFor(null); }} />
                     <div className="menu slot-menu" role="menu" data-no-pan onClick={(e) => e.stopPropagation()}>
                       <strong>{recordLabel(record!)}</strong>
-                      <button role="menuitem" onClick={() => { p.onToggleOff?.(id); setMenuFor(null); }}>{reverted ? <><PencilLine size={14} /> Use my edits again</> : <><Undo2 size={14} /> Show the template version</>}</button>
-                      <button role="menuitem" className="danger" onClick={() => { p.onResetInstance?.(id); setMenuFor(null); }}><RotateCcw size={14} /> Discard these edits</button>
+                      <button role="menuitem" onClick={() => { p.onToggleOff?.(id); setMenuFor(null); }}>{reverted ? <><PencilLine size={14} /> Use my overrides again</> : <><Undo2 size={14} /> Show the template version</>}</button>
+                      <button role="menuitem" className="danger" onClick={() => { p.onResetInstance?.(id); setMenuFor(null); }}><RotateCcw size={14} /> Discard these overrides</button>
                     </div>
                   </>
                 )}

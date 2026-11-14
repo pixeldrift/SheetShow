@@ -133,7 +133,7 @@ export function ConditionsSection({ item, patch, fields, records, record }: Prop
               <option value="all">When several match, apply all (later ones win)</option>
             </select>
           </div>
-          <p className="hint">A hand edit on a single record always beats a rule. In the template editor, an object that a rule hides for the previewed record is shown faded so you can still select it.</p>
+          <p className="hint">An override on a single record always beats a rule. In the template editor, an object that a rule hides for the previewed record is shown faded so you can still select it.</p>
         </>
       )}
     </Section>

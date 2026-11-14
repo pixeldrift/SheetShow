@@ -1,8 +1,11 @@
-import { BoxSelect, FileSearch, PencilLine, Grid2X2, ImagePlus, Magnet, Ruler, Shapes, Type, ZoomIn, ZoomOut } from "lucide-react";
+import { useRef, useState } from "react";
+import { BoxSelect, ChevronDown, FileSearch, Grid2X2, Image as PhotoIcon, ImagePlus, Magnet, PencilLine, Ruler, Shapes, Square, TextCursorInput, Type } from "lucide-react";
 import { MAX_ZOOM, MIN_ZOOM } from "./Viewport";
+import { ZoomField } from "./ZoomField";
 
 type Props = {
   workspace: "template" | "layout";
+  /** Override mode (page layout): change just one record's copy of the template. */
   instanceMode: boolean; onInstanceMode: () => void;
   showGrid: boolean; onGrid: () => void;
   showRulers: boolean; onRulers: () => void;
@@ -10,20 +13,28 @@ type Props = {
   preview: boolean; onPreview: () => void;
   zoom: number; onZoom: (zoom: number) => void; onZoomPreset: () => void;
   multi: boolean; onMulti: () => void;
-  onAddText: () => void; onAddShape: () => void; onAddImage: () => void;
+  onAddText: () => void; onAddShape: () => void; onAddTextBox: () => void; onAddPhoto: () => void; onAddImage: () => void;
 };
 
 export function Toolbar(p: Props) {
+  const [shapesAt, setShapesAt] = useState<{ x: number; y: number } | null>(null);
+  const shapesRef = useRef<HTMLButtonElement>(null);
+  // Only the two persistent states (on / off) are drawn; hover and press feedback never linger after a tap.
   const toggle = (on: boolean, label: string, onClick: () => void, icon: React.ReactNode) => (
-    <button className={on ? "tool-button active" : "tool-button"} title={label} aria-label={label} aria-pressed={on} onClick={onClick}>{icon}</button>
+    <button className="tool-button toggle" title={label} aria-label={label} aria-pressed={on} onClick={onClick}>{icon}</button>
   );
+  const openShapes = () => { const r = shapesRef.current?.getBoundingClientRect(); if (r) setShapesAt({ x: r.left, y: r.bottom + 6 }); };
+  const choose = (action: () => void) => () => { setShapesAt(null); action(); };
+
   return (
     <div className="canvas-toolbar">
       {p.workspace === "template" && (
         <>
           <div className="tool-group">
             <button className="tool-button" title="Add text" aria-label="Add text" onClick={p.onAddText}><Type size={16} /></button>
-            <button className="tool-button" title="Add shape" aria-label="Add shape" onClick={p.onAddShape}><Shapes size={16} /></button>
+            <button ref={shapesRef} className="tool-button with-caret" title="Shapes: rectangle, text box, photo placeholder" aria-label="Shapes" aria-haspopup="menu" aria-expanded={!!shapesAt} onClick={() => (shapesAt ? setShapesAt(null) : openShapes())}>
+              <Shapes size={16} /><ChevronDown size={10} className="caret" />
+            </button>
             <button className="tool-button" title="Add image or PDF" aria-label="Add image or PDF" onClick={p.onAddImage}><ImagePlus size={16} /></button>
           </div>
           <div className="toolbar-divider" />
@@ -31,8 +42,8 @@ export function Toolbar(p: Props) {
       )}
       {p.workspace === "layout" && (
         <>
-          <button className={p.instanceMode ? "button mode-button active" : "button mode-button"} aria-pressed={p.instanceMode} onClick={p.onInstanceMode} title="Click or double-click anything on a sheet to change just that record: edit a name, drop in a different photo, tweak a colour">
-            <PencilLine size={15} /> Edit individual records
+          <button className="button mode-button toggle" aria-pressed={p.instanceMode} onClick={p.onInstanceMode} title="Override mode: click or double-click anything on a sheet to change just that record — edit a name, drop in a different photo, tweak a colour">
+            <PencilLine size={15} /> Override
           </button>
           <div className="toolbar-divider" />
         </>
@@ -46,11 +57,20 @@ export function Toolbar(p: Props) {
       </div>
       <div className="toolbar-spacer" />
       <div className="zoom-control">
-        <button className="tool-button" title="Zoom out" aria-label="Zoom out" onClick={() => p.onZoom(p.zoom / 1.25)}><ZoomOut size={15} /></button>
         <input aria-label="Zoom level" className="zoom-slider" type="range" min={Math.log(MIN_ZOOM)} max={Math.log(MAX_ZOOM)} step="0.01" value={Math.log(p.zoom)} onChange={(e) => p.onZoom(Math.exp(Number(e.target.value)))} />
-        <button className="zoom-percent" onClick={p.onZoomPreset} title="Toggle fit-to-screen / 100% and re-centre">{Math.round(p.zoom * 100)}%</button>
-        <button className="tool-button" title="Zoom in" aria-label="Zoom in" onClick={() => p.onZoom(p.zoom * 1.25)}><ZoomIn size={15} /></button>
+        <ZoomField zoom={p.zoom} onZoom={p.onZoom} onPreset={p.onZoomPreset} />
       </div>
+
+      {shapesAt && (
+        <>
+          <div className="menu-scrim" onClick={() => setShapesAt(null)} />
+          <div className="menu shapes-menu" role="menu" style={{ position: "fixed", left: Math.min(shapesAt.x, window.innerWidth - 220), top: shapesAt.y }}>
+            <button role="menuitem" onClick={choose(p.onAddShape)}><Square size={15} /> <span>Rectangle<small>A shape you can fill and frame</small></span></button>
+            <button role="menuitem" onClick={choose(p.onAddTextBox)}><TextCursorInput size={15} /> <span>Text box<small>Text with a background, frame and padding</small></span></button>
+            <button role="menuitem" onClick={choose(p.onAddPhoto)}><PhotoIcon size={15} /> <span>Photo placeholder<small>A picture box filled from your data</small></span></button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

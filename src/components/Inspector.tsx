@@ -3,12 +3,10 @@ import {
   ChevronDown, Group, Ungroup,
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
   Hash, Italic, Layers, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
-  AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
-  AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, X, Filter,
+  X, Filter,
 } from "lucide-react";
 import type { DesignItem, LabelPreset, Sheet } from "../types";
 import { averyPresets, fieldDisplayName, prettyField } from "../lib/data";
-import type { AlignMode } from "../lib/align";
 import type { FontLibrary } from "../hooks/useFontLibrary";
 import { NumberField, Pair, Section } from "./Fields";
 import { FontPicker } from "./FontPicker";
@@ -16,6 +14,7 @@ import { EffectsSection, PictureSection, ShapeStyleSection, type ImageTools } fr
 import { VariantsSection } from "./VariantSections";
 import { ConditionsSection } from "./ConditionsSection";
 import { PrinterCalibrationSection } from "./PrinterCalibrationSection";
+import { StockPicker } from "./StockPicker";
 import type { PrinterCalibration } from "../hooks/usePrinterCalibration";
 
 type Props = {
@@ -24,8 +23,6 @@ type Props = {
   selectedItems: DesignItem[];
   onSelect: (ids: string[], additive?: boolean) => void;
   fontLibrary: FontLibrary;
-  onAlign: (mode: AlignMode) => void;
-  onDistribute: (axis: "x" | "y") => void;
   onRotateBy: (degrees: number) => void;
   imageTools: ImageTools;
   /** Grouping: the selection is exactly one group / could be grouped, plus the actions. */
@@ -78,7 +75,7 @@ export function Inspector(props: Props) {
   return (
     <aside className="panel right-panel" aria-label="Properties and layers">
       <div className="panel-heading">
-        <h2>{title}</h2>
+        <h2><SlidersHorizontal size={15} className="heading-icon" /> {title}</h2>
         <button className="icon-button" title="Collapse inspector" aria-label="Collapse inspector" onClick={onClose}><ChevronRight size={17} /></button>
       </div>
       <div className="tabs" role="tablist">
@@ -128,7 +125,7 @@ export function Inspector(props: Props) {
             {!items.length && <p className="empty-note">Nothing on this template yet.</p>}
           </div>
         ) : selectedItems.length > 1 ? (
-          <MultiProperties group={props.groups.wholeGroup ? { id: selectedItems[0].groupId!, name: selectedItems[0].groupName ?? "" } : null} groups={props.groups} count={selectedItems.length} onRotateBy={props.onRotateBy} onAlign={props.onAlign} onDistribute={props.onDistribute} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
+          <MultiProperties group={props.groups.wholeGroup ? { id: selectedItems[0].groupId!, name: selectedItems[0].groupName ?? "" } : null} groups={props.groups} count={selectedItems.length} onRotateBy={props.onRotateBy} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
         ) : selected ? (
           <>
             {selected.groupId && !props.instance && (
@@ -142,15 +139,15 @@ export function Inspector(props: Props) {
             )}
             {props.instance && (
               <div className="banner">
-                <span><strong>Editing {props.instance.recordLabel}’s copy.</strong> Changes here affect only this record; everyone else keeps the template.</span>
+                <span><strong>Overriding {props.instance.recordLabel}.</strong> Changes here affect only this record; everyone else keeps the template.</span>
                 <div className="banner-actions">
                   <button className="button" disabled={!props.instance.itemEdited} onClick={props.instance.onRevertItem}>Revert this item</button>
-                  <button className="button" onClick={props.instance.onToggleOff}>{props.instance.off ? "Use my edits again" : "Show template version"}</button>
-                  <button className="button" onClick={props.instance.onResetInstance}>Discard all edits</button>
+                  <button className="button" onClick={props.instance.onToggleOff}>{props.instance.off ? "Use my overrides again" : "Show template version"}</button>
+                  <button className="button" onClick={props.instance.onResetInstance}>Discard all overrides</button>
                 </div>
               </div>
             )}
-          <ItemProperties item={selected} onUpdate={onUpdate} onDuplicate={props.onDuplicate} onDelete={props.onDelete} fontLibrary={props.fontLibrary} onAlign={props.onAlign} imageTools={props.imageTools} fitNote={props.fitNote} instanceMode={!!props.instance} onFitReview={() => props.onAudit(selected!.id)} />
+          <ItemProperties item={selected} onUpdate={onUpdate} onDuplicate={props.onDuplicate} onDelete={props.onDelete} fontLibrary={props.fontLibrary} imageTools={props.imageTools} fitNote={props.fitNote} instanceMode={!!props.instance} onFitReview={() => props.onAudit(selected!.id)} />
           </>
         ) : workspace === "template" ? (
           <TemplateSetup {...props} />
@@ -165,26 +162,7 @@ export function Inspector(props: Props) {
 /** Normalises an angle to (-180, 180]. */
 const norm = (deg: number) => { const r = ((deg + 180) % 360 + 360) % 360 - 180; return r === -180 ? 180 : r; };
 
-const ALIGN_BUTTONS: [AlignMode, string, typeof AlignStartVertical][] = [
-  ["left", "Align left", AlignStartVertical], ["center", "Align centre horizontally", AlignCenterVertical], ["right", "Align right", AlignEndVertical],
-  ["top", "Align top", AlignStartHorizontal], ["middle", "Align centre vertically", AlignCenterHorizontal], ["bottom", "Align bottom", AlignEndHorizontal],
-];
-
-function AlignRow({ onAlign, onDistribute, label }: { onAlign: (mode: AlignMode) => void; onDistribute?: (axis: "x" | "y") => void; label: string }) {
-  return (
-    <Section title="ALIGN" unit={label}>
-      <div className="icon-row">
-        {ALIGN_BUTTONS.map(([mode, title, Icon]) => <button key={mode} title={title} aria-label={title} onClick={() => onAlign(mode)}><Icon size={16} /></button>)}
-        {onDistribute && <>
-          <button title="Distribute horizontally" aria-label="Distribute horizontally" onClick={() => onDistribute("x")}><AlignHorizontalDistributeCenter size={16} /></button>
-          <button title="Distribute vertically" aria-label="Distribute vertically" onClick={() => onDistribute("y")}><AlignVerticalDistributeCenter size={16} /></button>
-        </>}
-      </div>
-    </Section>
-  );
-}
-
-function MultiProperties({ count, onAlign, onDistribute, onRotateBy, onDuplicate, onDelete, group, groups }: { group: { id: string; name: string } | null; groups: Props["groups"]; count: number; onRotateBy: (deg: number) => void; onAlign: (m: AlignMode) => void; onDistribute: (a: "x" | "y") => void; onDuplicate: () => void; onDelete: () => void }) {
+function MultiProperties({ count, onRotateBy, onDuplicate, onDelete, group, groups }: { group: { id: string; name: string } | null; groups: Props["groups"]; count: number; onRotateBy: (deg: number) => void; onDuplicate: () => void; onDelete: () => void }) {
   return (
     <>
       <div className="property-heading"><div className="property-icon">{group ? <Group size={17} /> : <Layers size={17} />}</div><div><strong>{group ? "Group" : `${count} items selected`}</strong><span>{group ? `${count} items move, turn and resize together` : "Drag to move them together"}</span></div></div>
@@ -207,14 +185,13 @@ function MultiProperties({ count, onAlign, onDistribute, onRotateBy, onDuplicate
         </div>
         <p className="hint">Drag the round handle above the selection to turn it freely (Shift for 15° steps). Items turn together around the group’s centre.</p>
       </Section>
-      <AlignRow onAlign={onAlign} onDistribute={count >= 3 ? onDistribute : undefined} label="TO SELECTION" />
-      <p className="hint">Distribute needs three or more items. Shift-click items or layers to adjust the selection.</p>
+      <p className="hint">Shift-click items or layers to adjust the selection. Alignment is on the bar at the bottom of the canvas.</p>
       <div className="property-actions"><button onClick={onDuplicate}><Copy size={14} /> Duplicate</button><button className="danger" onClick={onDelete}><Trash2 size={14} /> Delete</button></div>
     </>
   );
 }
 
-function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, onAlign, imageTools, fitNote, instanceMode, onFitReview }: { instanceMode?: boolean; onFitReview?: () => void; fitNote?: { text: string; bad: boolean } | null; imageTools: ImageTools; item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary; onAlign: (m: AlignMode) => void }) {
+function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, imageTools, fitNote, instanceMode, onFitReview }: { instanceMode?: boolean; onFitReview?: () => void; fitNote?: { text: string; bad: boolean } | null; imageTools: ImageTools; item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary }) {
   const patch = (p: Partial<DesignItem>, key?: string) => onUpdate(item.id, p, key ?? `prop:${item.id}:${Object.keys(p).join()}`);
   return (
     <>
@@ -247,7 +224,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
                 </select>
               </Pair>
             </div>
-            <div className="two-col spaced">
+            <div className="spaced">
               <Pair label="Auto scale">
                 <select className="select" value={item.autoFit ?? "off"} onChange={(e) => patch({ autoFit: e.target.value as DesignItem["autoFit"] })}>
                   <option value="off">Fixed size</option>
@@ -263,7 +240,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
                 <div className="two-col spaced"><Pair label="Never smaller than"><NumberField value={item.minFontSize ?? 4} min={2} max={200} step={0.5} places={1} unit="pt" onChange={(n) => patch({ minFontSize: n })} /></Pair></div>
               </>
             )}
-            <div className="two-col spaced">
+            <div className="spaced">
               <Pair label="If it still doesn’t fit">
                 <select className="select" value={item.overflow ?? "spill"} onChange={(e) => patch({ overflow: e.target.value as DesignItem["overflow"] })}>
                   <option value="spill">Let it spill past the box</option>
@@ -285,7 +262,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
       )}
 
       {item.type === "image" && <PictureSection item={item} patch={patch} tools={imageTools} />}
-      {(item.type === "rect" || item.type === "image") && <ShapeStyleSection item={item} patch={patch} />}
+      <ShapeStyleSection item={item} patch={patch} />
       <EffectsSection item={item} patch={patch} />
       {!instanceMode && <ConditionsSection item={item} patch={patch} fields={imageTools.columns} records={imageTools.records} record={imageTools.record} />}
 
@@ -303,8 +280,6 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
         </div>
       </Section>
 
-      {!instanceMode && <AlignRow onAlign={onAlign} label="TO TEMPLATE" />}
-
       {!instanceMode && <div className="property-actions">
         <button onClick={onDuplicate}><Copy size={14} /> Duplicate</button>
         <button onClick={() => onUpdate(item.id, { locked: !item.locked })}>{item.locked ? <Unlock size={14} /> : <Lock size={14} />} {item.locked ? "Unlock" : "Lock"}</button>
@@ -314,14 +289,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
   );
 }
 
-function TemplateSetup({ templateWidth, templateHeight, onTemplateSize, onPreset, variants }: Props) {
-  const [query, setQuery] = useState("");
-  const q = query.trim().toLowerCase();
-  const matches = averyPresets
-    .map((preset) => ({ preset, error: Math.abs(preset.width - templateWidth) + Math.abs(preset.height - templateHeight) }))
-    .filter(({ preset, error }) => (q ? `${preset.code} ${preset.name} ${preset.width}x${preset.height}`.toLowerCase().includes(q) : error <= 1.25))
-    .sort((a, b) => a.error - b.error)
-    .slice(0, 8);
+function TemplateSetup({ templateWidth, templateHeight, onTemplateSize, onPreset, variants, sheet }: Props) {
   return (
     <>
       <VariantsSection {...variants} />
@@ -331,22 +299,12 @@ function TemplateSetup({ templateWidth, templateHeight, onTemplateSize, onPreset
           <Pair label="Height"><NumberField value={templateHeight} min={0.1} unit="in" onChange={(n) => onTemplateSize(templateWidth, n)} /></Pair>
         </div>
       </Section>
-      <Section title="AVERY LABEL TEMPLATES" unit={`${averyPresets.length} FORMATS`}>
-        <div className="field-search"><Search size={14} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by number, name, or size" aria-label="Search label formats" /></div>
-        <div className="preset-option current"><span><strong>Custom</strong><small>{templateWidth.toFixed(3)} × {templateHeight.toFixed(3)} in · current size</small></span><BadgeCheck size={14} /></div>
-        {matches.length
-          ? matches.map(({ preset }) => (
-            <button key={preset.code} className="preset-option" onClick={() => { onPreset(preset); setQuery(""); }}>
-              <span><strong>Avery {preset.code}</strong><small>{preset.name}</small></span><em>{preset.width} × {preset.height}″</em>
-            </button>
-          ))
-          : <p className="empty-note">No close matches. Try a different size or search by Avery number.</p>}
-      </Section>
+      <StockPicker templateWidth={templateWidth} templateHeight={templateHeight} sheet={sheet} onPreset={onPreset} />
     </>
   );
 }
 
-function PageSetup({ sheet, onSheet, pageCount, overflow, fields, onAudit, auditCount, editedList, onJumpInstance, onResetInstanceById, printer, onCalibrationSheet }: Props) {
+function PageSetup({ templateWidth, templateHeight, onPreset, sheet, onSheet, pageCount, overflow, fields, onAudit, auditCount, editedList, onJumpInstance, onResetInstanceById, printer, onCalibrationSheet }: Props) {
   const size = sheet.pageWidth === 8.5 && sheet.pageHeight === 11 ? "letter" : sheet.pageWidth === 8.27 && sheet.pageHeight === 11.69 ? "a4" : "custom";
   return (
     <>
@@ -362,6 +320,7 @@ function PageSetup({ sheet, onSheet, pageCount, overflow, fields, onAudit, audit
           <Pair label="Height"><NumberField value={sheet.pageHeight} min={1} unit="in" onChange={(n) => onSheet({ pageHeight: n })} /></Pair>
         </div>
       </Section>
+      <StockPicker templateWidth={templateWidth} templateHeight={templateHeight} sheet={sheet} onPreset={onPreset} />
       <Section title="ITEMS PER PAGE">
         <div className="two-col">
           <Pair label="Columns"><NumberField value={sheet.columns} min={1} max={20} step={1} places={0} onChange={(n) => onSheet({ columns: Math.round(n) })} /></Pair>
@@ -399,8 +358,8 @@ function PageSetup({ sheet, onSheet, pageCount, overflow, fields, onAudit, audit
         <button className="button wide first" onClick={() => onAudit(null)}><AlertTriangle size={14} /> Check text fit across all records</button>
         <p className="hint">{auditCount ? `${auditCount} text${auditCount === 1 ? "" : "s"} on this sheet ${auditCount === 1 ? "doesn’t" : "don’t"} fit — look for the orange badges.` : "Nothing on this sheet is too long for its box."}</p>
       </Section>
-      <Section title="HAND-EDITED RECORDS" unit={editedList.length ? String(editedList.length) : undefined}>
-        {editedList.length === 0 ? <p className="hint first">Turn on <strong>Edit individual records</strong> in the toolbar, then click or double-click anything on a sheet to change just that record — a name, a photo, a colour.</p> : (
+      <Section title="OVERRIDDEN RECORDS" unit={editedList.length ? String(editedList.length) : undefined}>
+        {editedList.length === 0 ? <p className="hint first">Turn on <strong>Override</strong> in the toolbar, then click or double-click anything on a sheet to change just that record — a name, a photo, a colour.</p> : (
           <div className="edited-list">
             {editedList.slice(0, 40).map((e) => (
               <div key={e.recordId} className="edited-row">
