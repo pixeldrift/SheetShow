@@ -84,7 +84,7 @@ function App() {
   const filteredFields = fields.filter((field) => field.toLowerCase().includes(search.toLowerCase()));
   const totalSlots = columns * rows;
   const pageCount = repeatMode === "same" ? 1 : Math.max(1, Math.ceil(records.length / totalSlots));
-  const currentPage = Math.floor(recordIndex / totalSlots);
+  const currentPage = repeatMode === "same" ? 0 : Math.floor(recordIndex / totalSlots);
 
   const updateItem = (id: string, patch: Partial<DesignItem>) =>
     setItems((previous) => previous.map((item) => item.id === id ? { ...item, ...patch } : item));
@@ -179,7 +179,7 @@ function App() {
   };
 
   const addPageSlot = (slot: number) => repeatMode === "same" ? recordIndex : Math.min(records.length - 1, currentPage * totalSlots + slot);
-  const printNow = () => window.print();
+  const printNow = () => {\n    if (workspace !== "preview") {\n      setWorkspace("preview");\n      window.setTimeout(() => window.print(), 250);\n    } else {\n      window.print();\n    }\n  };
 
   const renderTemplate = (record: RecordRow, mini = false) => (
     <svg viewBox={`0 0 ${templateWidth * 96} ${templateHeight * 96}`} className={mini ? "mini-template" : "template-svg"} xmlns="http://www.w3.org/2000/svg">
