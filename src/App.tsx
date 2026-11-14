@@ -77,7 +77,7 @@ const averyPresets: LabelPreset[] = [
   { code: "22806", name: "Shipping labels · 10 per sheet", width: 4, height: 2, columns: 2, rows: 5, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
 ];
 const uid = () => Math.random().toString(36).slice(2, 9);
-const valueFor = (item: DesignItem, record: RecordRow) => item.field ? (record[item.field] ?? "—") : (item.text ?? "");
+const specialFields = [\n  { key: "__record_number", label: "Record number" },\n  { key: "__page_number", label: "Page number" },\n  { key: "__record_count", label: "Record count" },\n  { key: "__page_count", label: "Page count" },\n];\nconst valueFor = (item: DesignItem, record: RecordRow, meta: { recordNumber: number; pageNumber: number; recordCount: number; pageCount: number }) => {\n  if (!item.field) return item.text ?? "";\n  const special: Record<string, number> = { __record_number: meta.recordNumber, __page_number: meta.pageNumber, __record_count: meta.recordCount, __page_count: meta.pageCount };\n  return item.field in special ? String(special[item.field]) : (record[item.field] ?? "—");\n};
 const inches = (n: number) => Number(n.toFixed(2));
 
 function App() {
@@ -407,7 +407,7 @@ function App() {
     return reordered;
   });
 
-  const renderTemplate = (record: RecordRow, mini = false) => (
+  const renderTemplate = (record: RecordRow, mini = false, recordNumber = recordIndex + 1, pageNumber = currentPage + 1) => (
     <svg viewBox={`0 0 ${templateWidth * 96} ${templateHeight * 96}`} className={mini ? "mini-template" : "template-svg"} xmlns="http://www.w3.org/2000/svg">
       {showGrid && !mini && <defs><pattern id="smallGrid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#e8ece8" strokeWidth="0.7"/></pattern></defs>}
       {showGrid && !mini && <rect width="100%" height="100%" fill="url(#smallGrid)"/>}
@@ -417,7 +417,7 @@ function App() {
           <g key={item.id} data-item-id={item.id} transform={`translate(${item.x * 96} ${item.y * 96})`} onPointerDown={(event) => !mini && startMove(event, item)} onClick={(event) => { if (!mini) { event.stopPropagation(); setSelectedId(item.id); setShowMobileLayers(false); } }} className={!mini ? "canvas-object" : ""} style={{ cursor: mini ? "default" : "move" }}>
             {item.type === "rect" && <rect width={item.w * 96} height={item.h * 96} rx="0" fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1"/>}
             {item.type === "image" && item.src && <image href={item.src} width={item.w * 96} height={item.h * 96} preserveAspectRatio="xMidYMid slice"/>}
-            {item.type === "text" && <text x={item.align === "center" ? item.w * 48 : item.align === "right" ? item.w * 96 : 0} y={(item.fontSize ?? 12) * 1.15 * 96 / 72} fontFamily={item.fontFamily ?? "Inter, Arial, sans-serif"} fontSize={(item.fontSize ?? 12) * 96 / 72} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={item.align === "center" ? "middle" : item.align === "right" ? "end" : "start"}>{valueFor(item, record)}</text>}
+            {item.type === "text" && <text x={item.align === "center" ? item.w * 48 : item.align === "right" ? item.w * 96 : 0} y={(item.fontSize ?? 12) * 1.15 * 96 / 72} fontFamily={item.fontFamily ?? "Inter, Arial, sans-serif"} fontSize={(item.fontSize ?? 12) * 96 / 72} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={item.align === "center" ? "middle" : item.align === "right" ? "end" : "start"}>{valueFor(item, record, { recordNumber, pageNumber, recordCount: records.length, pageCount })}</text>}
             {isSelected && <rect x="-4" y="-4" width={item.w * 96 + 8} height={item.h * 96 + 8} fill="none" stroke="#d77d4e" strokeWidth="1.4" strokeDasharray="4 3" pointerEvents="none"/>}
           </g>
         );
@@ -495,7 +495,7 @@ function App() {
                 </button>
               ))}
             </div>
-            <div className="drag-hint"><MousePointer2 size={13}/> Drag a field onto your design, or select text and click a field to link it.</div>
+            <div className="drag-hint"><MousePointer2 size={13}/> Drag a field onto your design, or select text and click a field to link it.</div>\n            <div className="field-divider"/>\n            <div className="field-group-label special-field-heading">SPECIAL FIELDS <span>{specialFields.length}</span></div>\n            <div className="field-list special-field-list">\n              {specialFields.map((field) => (\n                <button key={field.key} className="field-row special-field-row" draggable onDragStart={(event) => onDragStart(event, field.key)} onClick={() => bindSelected(field.key)} title="Click to add or bind this automatic field">\n                  <span className="field-grip">⠿</span><span className="field-type"><Sparkles size={12}/></span><span className="field-name">{field.label}</span><span className="field-add"><Plus size={13}/></span>\n                </button>\n              ))}\n            </div>
           </div>
         </aside>
             <div className="editor-content">
@@ -549,7 +549,7 @@ function App() {
                     <div className="layout-grid" style={{gridTemplateColumns: `repeat(${columns}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, gap: `${gapY * 7}px ${gapX * 7}px`}}>
                       {Array.from({length: totalSlots}, (_, slot) => {
                         const idx = addPageSlot(slot);
-                        return <div className={showGrid ? "layout-cell grid-visible" : "layout-cell"} key={slot}>{idx < records.length ? renderTemplate(records[idx], true) : <div className="empty-slot">Empty</div>}<span className="slot-number">{repeatMode === "same" ? `#${recordIndex + 1}` : `#${idx + 1}`}</span></div>;
+                        return <div className={showGrid ? "layout-cell grid-visible" : "layout-cell"} key={slot}>{idx < records.length ? renderTemplate(records[idx], true, idx + 1, currentPage + 1) : <div className="empty-slot">Empty</div>}<span className="slot-number">{repeatMode === "same" ? `#${recordIndex + 1}` : `#${idx + 1}`}</span></div>;
                       })}
                     </div>
                     {guides.map((guide) => <div key={guide.id} className={`snap-guide ${guide.axis}`} style={guide.axis === "x" ? { left: guide.position * 96 } : { top: guide.position * 96 }} onPointerDown={(e) => { e.stopPropagation(); const rect = e.currentTarget.parentElement!.getBoundingClientRect(); guideDragRef.current = { id: guide.id, axis: guide.axis, rect }; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (guideDragRef.current?.id === guide.id) moveGuide(e as unknown as PointerEvent<HTMLDivElement>); }} onPointerUp={endGuide} onDoubleClick={() => setGuides((current) => current.filter((g) => g.id !== guide.id))} title="Drag to reposition · double-click to remove"/> )}
