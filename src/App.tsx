@@ -102,7 +102,7 @@ function App() {
   const [guides, setGuides] = useState<{ id: string; axis: "x" | "y"; position: number }[]>([]);
   const guideDragRef = useRef<{ id: string; axis: "x" | "y"; rect: DOMRect } | null>(null);
   const [clipboardItem, setClipboardItem] = useState<DesignItem | null>(null);
-  const touchZoomRef = useRef<{ distance: number; zoom: number } | null>(null);
+  const touchZoomRef = useRef<{ distance: number } | null>(null);
   const [pageWidth, setPageWidth] = useState(8.5);
   const [pageHeight, setPageHeight] = useState(11);
   const [templateWidth, setTemplateWidth] = useState(3.5);
@@ -325,14 +325,16 @@ function App() {
   };
   const onCanvasTouchStart = (event: TouchEvent<HTMLDivElement>) => {
     if (event.touches.length === 2) {
-      touchZoomRef.current = { distance: touchDistance(event.touches), zoom };
+      touchZoomRef.current = { distance: touchDistance(event.touches) };
     }
   };
   const onCanvasTouchMove = (event: TouchEvent<HTMLDivElement>) => {
     if (event.touches.length === 2 && touchZoomRef.current) {
       event.preventDefault();
-      const factor = touchDistance(event.touches) / touchZoomRef.current.distance;
-      setZoom(Math.max(0.15, Math.min(2.5, touchZoomRef.current.zoom * factor)));
+      const nextDistance = touchDistance(event.touches);
+      const factor = nextDistance / touchZoomRef.current.distance;
+      touchZoomRef.current.distance = nextDistance;
+      setZoom((current) => Math.max(0.15, Math.min(2.5, current * Math.pow(factor, 0.65))));
     }
   };
   const onCanvasTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
@@ -388,7 +390,10 @@ function App() {
     const targetHeight = workspace === "layout" ? pageHeight * 96 : templateHeight * 96;
     return Math.max(0.15, Math.min(2, width / targetWidth, height / targetHeight));
   };
-  const toggleZoomPreset = () => setZoom((current) => Math.abs(current - 1) < 0.02 ? fitZoom() : 1);
+  const toggleZoomPreset = () => {
+    setViewPan({ x: 0, y: 0 });
+    setZoom((current) => Math.abs(current - 1) < 0.02 ? fitZoom() : 1);
+  };
   const printNow = () => {
     if (!showPrintPreview) setShowPrintPreview(true);
     window.setTimeout(() => window.print(), 180);
@@ -495,6 +500,11 @@ function App() {
         </aside>
             <div className="editor-content">
           <div className="canvas-area" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onTouchStart={onCanvasTouchStart} onTouchMove={onCanvasTouchMove} onTouchEnd={onCanvasTouchEnd} onClick={(event) => { if (!(event.target as HTMLElement).closest(".canvas-object,button,input,select")) setSelectedId(null); }}>
+          <div className="viewport-edit-actions" onPointerDown={(e) => e.stopPropagation()}>
+            <button className="tool-button" title="Cut" disabled={!selected} onClick={cutSelected}><Scissors size={16}/></button>
+            <button className="tool-button" title="Copy" disabled={!selected} onClick={copySelected}><Copy size={16}/></button>
+            <button className="tool-button glue-button" title="Paste" disabled={!clipboardItem} onClick={pasteItem}><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3h8v3l-1.5 2v2H9.5V8L8 6z"/><path d="M9.5 10h5v2.2l2.2 2.2V21H7.3v-6.6l2.2-2.2z"/><path d="M10 16h4M12 12.2v2"/></svg></button>
+          </div>
             <button className={dataDrawerOpen ? "canvas-drawer-toggle left active" : "canvas-drawer-toggle left"} title={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-label={dataDrawerOpen ? "Hide data fields" : "Show data fields"} onClick={() => setDataDrawerOpen((open) => !open)}>{dataDrawerOpen ? <PanelLeftClose size={16}/> : <PanelLeft size={16}/>}</button>
             <button className={inspectorOpen ? "canvas-drawer-toggle right active" : "canvas-drawer-toggle right"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} onClick={() => setInspectorOpen((open) => !open)}>{inspectorOpen ? <PanelRightClose size={16}/> : <PanelRight size={16}/>}</button>
             {workspace === "template" && (
