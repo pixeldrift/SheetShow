@@ -23,6 +23,20 @@ export type DesignItem = {
   /** Text scaling: shrink to fit the box, or fit it exactly (grow or shrink). */
   autoFit?: "off" | "shrink" | "fit";
   imageFit?: "cover" | "contain";
+  /** A picture from the image library. */
+  assetId?: string;
+  /** Makes the picture data-driven: each record resolves its own image. */
+  imageSource?: ImageSource;
+  /** Shown when a data-driven picture finds no match. */
+  fallbackAssetId?: string;
+  /** Manual per-record choices for a data-driven picture, keyed by record id. */
+  overrides?: Record<string, string>;
+  /** Corner radius as a percentage of the shorter side (50 = fully round). */
+  radius?: number;
+  /** Frame / border thickness in points. */
+  strokeWidth?: number;
+  opacity?: number;
+  shadow?: Shadow;
   align?: "left" | "center" | "right";
   fill?: string;
   stroke?: string;
@@ -69,3 +83,10 @@ export type Project = {
   sheet: Sheet;
   fonts: FontEntry[];
 };
+
+export type ImageSource = { mode: "column"; column: string } | { mode: "pattern"; pattern: string };
+/** Offsets and blur in points. A glow is a shadow with no offset. */
+export type Shadow = { x: number; y: number; blur: number; color: string; opacity: number };
+
+/** Image library entry. The pixels live in IndexedDB. */
+export type Asset = { id: string; name: string; path: string; width: number; height: number; bytes: number };

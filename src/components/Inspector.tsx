@@ -11,6 +11,7 @@ import type { AlignMode } from "../lib/align";
 import type { FontLibrary } from "../hooks/useFontLibrary";
 import { NumberField, Pair, Section } from "./Fields";
 import { FontPicker } from "./FontPicker";
+import { EffectsSection, PictureSection, ShapeStyleSection, type ImageTools } from "./ItemStyleSections";
 
 type Props = {
   workspace: "template" | "layout";
@@ -21,6 +22,7 @@ type Props = {
   onAlign: (mode: AlignMode) => void;
   onDistribute: (axis: "x" | "y") => void;
   onRotateBy: (degrees: number) => void;
+  imageTools: ImageTools;
   onUpdate: (id: string, patch: Partial<DesignItem>, coalesce?: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -74,7 +76,7 @@ export function Inspector(props: Props) {
         ) : selectedItems.length > 1 ? (
           <MultiProperties count={selectedItems.length} onRotateBy={props.onRotateBy} onAlign={props.onAlign} onDistribute={props.onDistribute} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
         ) : selected ? (
-          <ItemProperties item={selected} onUpdate={onUpdate} onDuplicate={props.onDuplicate} onDelete={props.onDelete} fontLibrary={props.fontLibrary} onAlign={props.onAlign} />
+          <ItemProperties item={selected} onUpdate={onUpdate} onDuplicate={props.onDuplicate} onDelete={props.onDelete} fontLibrary={props.fontLibrary} onAlign={props.onAlign} imageTools={props.imageTools} />
         ) : workspace === "template" ? (
           <TemplateSetup {...props} />
         ) : (
@@ -125,13 +127,13 @@ function MultiProperties({ count, onAlign, onDistribute, onRotateBy, onDuplicate
   );
 }
 
-function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, onAlign }: { item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary; onAlign: (m: AlignMode) => void }) {
+function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, onAlign, imageTools }: { imageTools: ImageTools; item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary; onAlign: (m: AlignMode) => void }) {
   const patch = (p: Partial<DesignItem>, key?: string) => onUpdate(item.id, p, key ?? `prop:${item.id}:${Object.keys(p).join()}`);
   return (
     <>
       <div className="property-heading">
         <div className="property-icon">{kindIcon(item, 17)}</div>
-        <div><strong>{item.type === "text" ? "Text object" : item.type === "image" ? "Image object" : "Shape object"}</strong><span>{item.field ? `Linked to ${fieldDisplayName(item.field)}` : "Static content"}</span></div>
+        <div><strong>{item.type === "text" ? "Text object" : item.type === "image" ? "Image object" : "Shape object"}</strong><span>{item.field ? `Linked to ${fieldDisplayName(item.field)}` : item.type === "image" ? (item.imageSource ? "Data-driven picture" : "One picture") : "Static content"}</span></div>
       </div>
 
       {item.type === "text" && (
@@ -178,22 +180,9 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
         </>
       )}
 
-      {item.type === "rect" && (
-        <Section title="APPEARANCE">
-          <div className="color-row"><span>Fill color</span><input type="color" value={item.fill ?? "#e9eee9"} onChange={(e) => patch({ fill: e.target.value })} /></div>
-          <div className="color-row"><span>Border color</span><input type="color" value={item.stroke && item.stroke !== "none" ? item.stroke : "#ffffff"} onChange={(e) => patch({ stroke: e.target.value })} /></div>
-        </Section>
-      )}
-
-      {item.type === "image" && (
-        <Section title="IMAGE">
-          <Pair label="Scale to box">
-            <select className="select" value={item.imageFit ?? "cover"} onChange={(e) => patch({ imageFit: e.target.value as DesignItem["imageFit"] })}>
-              <option value="cover">Fill box (crop edges)</option><option value="contain">Fit inside box (no crop)</option>
-            </select>
-          </Pair>
-        </Section>
-      )}
+      {item.type === "image" && <PictureSection item={item} patch={patch} tools={imageTools} />}
+      {(item.type === "rect" || item.type === "image") && <ShapeStyleSection item={item} patch={patch} />}
+      <EffectsSection item={item} patch={patch} />
 
       <Section title="POSITION & SIZE" unit="INCHES">
         <div className="two-col">

@@ -1,7 +1,7 @@
-import { ChangeEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PanelLeft, PanelLeftClose, PanelRight, PanelRightClose } from "lucide-react";
 import Papa from "papaparse";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { DesignItem, Guide, LabelPreset, Project, RecordRow, Sheet, View, Workspace } from "./types";
 import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid } from "./lib/data";
@@ -10,7 +10,13 @@ import { useFontLibrary } from "./hooks/useFontLibrary";
 import { aabb, alignItems, boundsOf, centerOf, distributeItems, rotateAbout, type AlignMode, type Transform } from "./lib/align";
 import { applyMapping, boundFields } from "./lib/mapping";
 import { MappingDialog } from "./components/MappingDialog";
-import { downloadProject, loadProject, readProjectFile, saveProject } from "./lib/storage";
+import { bundleProject, downloadBlob, loadProject, projectFileName, readProjectAny, saveProject } from "./lib/storage";
+import { useImageLibrary } from "./hooks/useImageLibrary";
+import { ImageContext } from "./components/ImageContext";
+import { ImageLibraryDialog } from "./components/ImageLibraryDialog";
+import { MatchReviewDialog } from "./components/MatchReviewDialog";
+import { defaultImageSource, isWebUrl } from "./lib/images";
+import type { Asset } from "./types";
 import { Topbar } from "./components/Topbar";
 import { Toolbar } from "./components/Toolbar";
 import { EditBar } from "./components/EditBar";
@@ -74,7 +80,10 @@ function App() {
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const library = useImageLibrary();
+  // Which image dialog is open: inserting from the toolbar, choosing for an item, or reviewing a data-driven picture's matches.
+  const [libraryDialog, setLibraryDialog] = useState<null | { kind: "insert" } | { kind: "pick"; itemId: string; target: "asset" | "fallback" }>(null);
+  const [reviewItemId, setReviewItemId] = useState<string | null>(null);
 
   // ── Derived ─────────────────────────────────────────────────────────────
   const recordIndex = Math.min(rawRecordIndex, Math.max(0, records.filter(isIncluded).length - 1));
@@ -236,50 +245,38 @@ function App() {
     });
   };
 
-  const importImage = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    try {
-      let src: string;
-      let aspect = 1;
-      if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-        // PDFs are imported as a high-resolution image of their first page.
-        const pdf = await getDocument({ data: await file.arrayBuffer() }).promise;
-        const page = await pdf.getPage(1);
-        const base = page.getViewport({ scale: 1 });
-        const viewport = page.getViewport({ scale: clamp(1800 / Math.max(base.width, base.height), 2, 3) });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.ceil(viewport.width);
-        canvas.height = Math.ceil(viewport.height);
-        const context = canvas.getContext("2d");
-        if (!context) throw new Error("Could not create an image for this PDF.");
-        await page.render({ canvasContext: context, viewport }).promise;
-        src = canvas.toDataURL("image/png");
-        aspect = viewport.width / viewport.height;
-        await pdf.destroy();
-      } else {
-        src = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = () => reject(new Error("The image file could not be read."));
-          reader.readAsDataURL(file);
-        });
-        const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-          const image = new Image();
-          image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
-          image.onerror = () => reject(new Error("This image format could not be opened."));
-          image.src = src;
-        });
-        aspect = size.width / size.height;
-      }
-      const w = 1.2;
-      addItem({ id: uid(), type: "image", x: 0.35, y: 0.35, w, h: clamp(w / (aspect || 1), 0.25, 2.5), src, assetName: file.name, visible: true });
-    } catch (error) {
-      console.error("Asset import failed:", error);
-      window.alert(error instanceof Error ? error.message : "This file could not be imported.");
-    }
+  // ── Pictures ────────────────────────────────────────────────────────────
+  const pictureBox = (asset?: Asset) => {
+    const w = 1.2;
+    return { w, h: asset ? clamp(w / (asset.width / asset.height || 1), 0.25, 2.5) : w };
   };
+  const insertPicture = (asset: Asset) => {
+    addItem({ id: uid(), type: "image", x: 0.35, y: 0.35, ...pictureBox(asset), assetId: asset.id, assetName: asset.name, visible: true });
+    setLibraryDialog(null);
+  };
+  const insertDataDriven = () => {
+    addItem({ id: uid(), type: "image", x: 0.35, y: 0.35, ...pictureBox(), imageSource: defaultImageSource(fields), visible: true });
+    setLibraryDialog(null);
+  };
+  const choosePicture = (itemId: string, target: "asset" | "fallback", asset: Asset) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    if (target === "fallback") updateItem(itemId, { fallbackAssetId: asset.id });
+    else {
+      // Keep the box's width and follow the new picture's proportions (static pictures only).
+      const box = item.imageSource ? {} : { h: Number(clamp(item.w / (asset.width / asset.height || 1), 0.1, 6).toFixed(3)) };
+      updateItem(itemId, { assetId: asset.id, assetName: asset.name, src: undefined, ...box });
+    }
+    setLibraryDialog(null);
+  };
+  const setOverrides = (itemId: string, changes: Record<string, string | null>) =>
+    history.set((list) => list.map((item) => {
+      if (item.id !== itemId) return item;
+      const next = { ...(item.overrides ?? {}) };
+      for (const [recordId, assetId] of Object.entries(changes)) { if (assetId) next[recordId] = assetId; else delete next[recordId]; }
+      return { ...item, overrides: next };
+    }));
+  const imageTools = { library, columns: fields, record: currentRecord, records: activeRecords, onChoose: (itemId: string, target: "asset" | "fallback") => setLibraryDialog({ kind: "pick", itemId, target }), onReview: (itemId: string) => setReviewItemId(itemId) };
 
   // ── Template / page setup ───────────────────────────────────────────────
   const applyPreset = (preset: LabelPreset) => {
@@ -350,7 +347,8 @@ function App() {
     return () => window.clearTimeout(timer);
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const applyProject = (project: Project) => {
+  const applyProject = async (project: Project, images?: { asset: Asset; blob: Blob }[]) => {
+    if (images) await library.replaceAll(images);
     history.reset(project.items);
     recordHistory.reset(withIds(project.records)); setFileName(project.fileName); setDocName(project.name);
     setTemplate(project.template); setSheet(project.sheet);
@@ -359,10 +357,19 @@ function App() {
     setGuides({ template: [], layout: [] });
     setViews({ template: freshView(), layout: freshView() });
   };
-  const newProject = () => applyProject({ version: 1, name: DEFAULT_NAME, fileName: "bird-records.csv", records: starterRecords, items: starterItems, template: { width: 3.5, height: 2 }, sheet: defaultSheet, fonts: [] });
+  const newProject = async () => {
+    await library.clear();
+    await applyProject({ version: 1, name: DEFAULT_NAME, fileName: "bird-records.csv", records: starterRecords, items: starterItems, template: { width: 3.5, height: 2 }, sheet: defaultSheet, fonts: [] });
+  };
   const openProject = async (file: File) => {
-    try { applyProject(await readProjectFile(file)); }
+    try { const { project, images } = await readProjectAny(file); await applyProject(project, images); }
     catch (error) { window.alert(error instanceof Error ? error.message : "That project file could not be opened."); }
+  };
+  /** One .zip when the project uses pictures (they travel with it); a plain .json otherwise. */
+  const saveToFile = async () => {
+    const project = snapshot();
+    if (!library.assets.length) { downloadBlob(new Blob([JSON.stringify(project)], { type: "application/json" }), projectFileName(docName, false)); return; }
+    downloadBlob(await bundleProject(project, library.assets, library.blobOf), projectFileName(docName, true));
   };
 
   // ── Data table edits (all undoable with the Data view's own undo) ──
@@ -412,8 +419,30 @@ function App() {
   };
 
   // ── Print: mount every sheet, print, then unmount ───────────────────────
-  const printNow = () => {
+  /** Picture rules that resolved to nothing, plus web pictures that must be fetched before the sheets can print. */
+  const checkPictures = () => {
+    let missing = 0;
+    const web = new Set<string>();
+    for (const item of items.filter((i) => i.type === "image" && i.imageSource && i.visible !== false)) {
+      for (const record of activeRecords) {
+        const match = library.resolver.resolve(item, record);
+        if (match.kind === "none" && !item.fallbackAssetId) missing++;
+        for (const m of [match, ...match.alternates]) if (m.url && isWebUrl(m.url)) web.add(m.url);
+      }
+    }
+    return { missing, web: [...web] };
+  };
+  const printNow = async () => {
     if (printing) { window.print(); return; }
+    const { missing, web } = checkPictures();
+    if (missing && !window.confirm(`${missing} picture${missing === 1 ? " has" : "s have"} no match and will print blank. Print anyway?\n\nTip: open the picture’s “Review matches” to fix them.`)) return;
+    if (web.length) {
+      // Give web pictures a chance to load so they aren't missing from the printout.
+      await Promise.race([
+        Promise.allSettled(web.map((url) => new Promise<void>((resolve) => { const img = new Image(); img.onload = img.onerror = () => resolve(); img.src = url; }))),
+        new Promise((resolve) => window.setTimeout(resolve, 20000)),
+      ]);
+    }
     setPrinting(true);
   };
   useEffect(() => {
@@ -462,8 +491,9 @@ function App() {
     : { title: "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet` };
 
   return (
+    <ImageContext.Provider value={{ resolver: library.resolver, urlFor: library.urlFor }}>
     <div className="app-shell">
-      <Topbar workspace={showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(tab); } }} onPrint={printNow} name={docName} onName={setDocName} saveState={saveState} onNew={newProject} onOpen={openProject} onSave={() => downloadProject(snapshot())} />
+      <Topbar workspace={showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(tab); } }} onPrint={printNow} name={docName} onName={setDocName} saveState={saveState} onNew={newProject} onOpen={openProject} onSave={saveToFile} />
 
       {showData && (
         <main className="workspace">
@@ -483,9 +513,8 @@ function App() {
           preview={preview} onPreview={() => setPreview((v) => !v)}
           multi={multiMode} onMulti={() => setMultiMode((v) => !v)}
           zoom={view.zoom} onZoom={setZoom} onZoomPreset={toggleZoomPreset}
-          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => imageInputRef.current?.click()}
+          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })}
         />
-        <input ref={imageInputRef} type="file" accept=".png,.jpg,.jpeg,.svg,.pdf,image/png,image/jpeg,image/svg+xml,application/pdf" hidden onChange={importImage} />
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
           {dataOpen && (
@@ -553,7 +582,7 @@ function App() {
           {inspectorOpen && (
             <Inspector
               workspace={workspace} items={items} selectedItems={selectedItems} onSelect={setSelectedIds} onUpdate={updateItem}
-              fontLibrary={fontLibrary} onAlign={align} onDistribute={distribute} onRotateBy={rotateSelectionBy}
+              fontLibrary={fontLibrary} onAlign={align} onDistribute={distribute} onRotateBy={rotateSelectionBy} imageTools={imageTools}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onMoveLayer={moveLayer}
               templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate({ width, height })} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
@@ -562,6 +591,19 @@ function App() {
           )}
         </div>
       </main>
+
+      {libraryDialog && (
+        <ImageLibraryDialog
+          library={library}
+          title={libraryDialog.kind === "insert" ? "Add a picture" : libraryDialog.target === "fallback" ? "Choose a placeholder" : "Choose a picture"}
+          onClose={() => setLibraryDialog(null)}
+          onPick={(asset) => (libraryDialog.kind === "insert" ? insertPicture(asset) : choosePicture(libraryDialog.itemId, libraryDialog.target, asset))}
+          onInsertDataDriven={libraryDialog.kind === "insert" ? insertDataDriven : undefined}
+        />
+      )}
+      {reviewItemId && items.find((i) => i.id === reviewItemId) && (
+        <MatchReviewDialog item={items.find((i) => i.id === reviewItemId)!} records={activeRecords} library={library} onOverrides={(changes) => setOverrides(reviewItemId, changes)} onClose={() => setReviewItemId(null)} />
+      )}
 
       {pendingImport && (
         <MappingDialog
@@ -577,6 +619,7 @@ function App() {
         <PrintSheets sheet={sheet} items={items} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} />
       )}
     </div>
+    </ImageContext.Provider>
   );
 }
 

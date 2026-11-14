@@ -20,6 +20,7 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Resize handles, multi-select (shift-click or box-select), align and distribute
 - Multi-line, wrapping text with Google Fonts, installed fonts (Chromium) or any typed font name
 - Data table: edit cells in place, paste from a spreadsheet, add/rename/sort columns, and choose which records print (checkboxes, range select, “only these”)
+- Picture library with drag-and-drop, folder and zip import; data-driven pictures matched from a column or filename pattern
 - Import a new CSV/TSV and auto-match its columns to the template's linked fields
 - Autosave in the browser, plus save/open project files
 - Drag fields onto the design with mouse, pen or touch (long-press)
@@ -69,12 +70,15 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
 - [x] Record preview and page layout modes
 - [x] Editable data table with per-record include/exclude
 - [x] Column mapping when importing a new data file
-- [ ] **Variable images** — data-driven pictures (see design notes below)
-  - [ ] Image library (batch upload) and image objects bound to a column or a filename pattern
-  - [ ] Pattern builder: `{field}` variables with transforms (lower, slug, trim…) and fallbacks
-  - [ ] Exact → normalised → fuzzy filename matching with a match-review screen and manual overrides
-  - [ ] Web sources: URL patterns built from fields, with optional caching into the library
-  - [ ] Project bundle export that includes images
+- [x] **Variable images**
+  - [x] Image library: drop / browse / folder / zip / multi-select (stored in the browser), download all as a ZIP
+  - [x] Picture objects bound to a column or a filename/URL pattern, with `{field|transform}` variables and `||` fallbacks
+  - [x] Exact → normalised → fuzzy matching, a match-review screen with manual overrides, placeholder picture
+  - [x] Web sources via URL patterns (hotlinked, falling back to library pictures if a download fails)
+  - [x] Project bundle (.zip) that carries the pictures; pre-print warning for pictures with no match
+  - [ ] Optional “download web pictures into the library” (needs CORS; hotlinking works without it)
+  - [ ] Focus-point cropping, picture thumbnails in the data table
+- [x] Corner radius (circles), frames, opacity, drop shadow and glow on pictures and shapes (shadow and opacity on text too)
 - [ ] Scannable codes (QR, Code 128) generated from data fields
 - [ ] Printer calibration offset and smart guides
 - [ ] Persistent reusable template library
