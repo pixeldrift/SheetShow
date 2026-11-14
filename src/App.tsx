@@ -8,6 +8,8 @@ import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid }
 import { useHistory } from "./hooks/useHistory";
 import { useFontLibrary } from "./hooks/useFontLibrary";
 import { aabb, alignItems, boundsOf, centerOf, distributeItems, rotateAbout, type AlignMode, type Transform } from "./lib/align";
+import { applyMapping, boundFields } from "./lib/mapping";
+import { MappingDialog } from "./components/MappingDialog";
 import { downloadProject, loadProject, readProjectFile, saveProject } from "./lib/storage";
 import { Topbar } from "./components/Topbar";
 import { Toolbar } from "./components/Toolbar";
@@ -48,6 +50,8 @@ function App() {
   const [saveState, setSaveState] = useState<"saved" | "error">("saved");
   const [fieldDrag, setFieldDrag] = useState<{ field: string; x: number; y: number } | null>(null);
   const justDragged = useRef(false);
+  // A freshly imported file waiting for the person to confirm how its columns map onto the template.
+  const [pendingImport, setPendingImport] = useState<{ records: RecordRow[]; fileName: string } | null>(null);
   const [dataOpen, setDataOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
   const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
   const [showGrid, setShowGrid] = useState(false);
@@ -191,15 +195,25 @@ function App() {
   };
 
   // ── Data import ─────────────────────────────────────────────────────────
+  const adoptData = (next: RecordRow[], name: string, mapping?: Record<string, string | null>) => {
+    if (mapping) history.set((list) => applyMapping(list, mapping));
+    setRecords(next);
+    setRecordIndex(0);
+    setFileName(name);
+    setPendingImport(null);
+  };
+
   const importData = (file: File) => {
     Papa.parse<RecordRow>(file, {
       header: true, skipEmptyLines: true,
       complete: (result) => {
         const cleaned = result.data.filter((row) => Object.values(row).some((v) => String(v ?? "").trim()));
         if (!cleaned.length) { window.alert("No records were found in that file."); return; }
-        setRecords(cleaned);
-        setRecordIndex(0);
-        setFileName(file.name);
+        // Only interrupt when the template uses columns the new file lacks; same-shaped files just load.
+        const columns = new Set(Object.keys(cleaned[0]));
+        const missing = boundFields(items).some((field) => !columns.has(field));
+        if (missing) setPendingImport({ records: cleaned, fileName: file.name });
+        else adoptData(cleaned, file.name);
       },
       error: () => window.alert("That file could not be read."),
     });
@@ -480,6 +494,14 @@ function App() {
           )}
         </div>
       </main>
+
+      {pendingImport && (
+        <MappingDialog
+          fileName={pendingImport.fileName} records={pendingImport.records} templateFields={boundFields(items)}
+          onApply={(mapping) => adoptData(pendingImport.records, pendingImport.fileName, mapping)}
+          onCancel={() => setPendingImport(null)}
+        />
+      )}
 
       {fieldDrag && <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>}
 

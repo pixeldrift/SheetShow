@@ -19,6 +19,7 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Rotation (drag the handle, Shift or Snap for 15° steps) and auto-scaling text/images to their box
 - Resize handles, multi-select (shift-click or box-select), align and distribute
 - Multi-line, wrapping text with Google Fonts, installed fonts (Chromium) or any typed font name
+- Import a new CSV/TSV and auto-match its columns to the template's linked fields
 - Autosave in the browser, plus save/open project files
 - Drag fields onto the design with mouse, pen or touch (long-press)
 - Crop marks in the page margins and printing of every sheet
@@ -69,7 +70,7 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
 - [ ] Rich typography and image handling
 - [ ] Print-ready PDF export and crop marks
 - [ ] Curved text (text on a path / arc)
-- [ ] Column mapping when importing a new data file
+- [x] Column mapping when importing a new data file (auto-matched, confirm only when needed)
 - [ ] Hierarchical data adapters and BirdBox integration
 
 ## License
