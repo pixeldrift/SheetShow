@@ -187,7 +187,14 @@ function App() {
   };
 
   const addPageSlot = (slot: number) => repeatMode === "same" ? recordIndex : Math.min(records.length - 1, currentPage * totalSlots + slot);
-  const printNow = () => {\n    if (workspace !== "preview") {\n      setWorkspace("preview");\n      window.setTimeout(() => window.print(), 250);\n    } else {\n      window.print();\n    }\n  };
+  const printNow = () => {
+    if (workspace !== "preview") {
+      setWorkspace("preview");
+      window.setTimeout(() => window.print(), 250);
+    } else {
+      window.print();
+    }
+  };
 
   const renderTemplate = (record: RecordRow, mini = false) => (
     <svg viewBox={`0 0 ${templateWidth * 96} ${templateHeight * 96}`} className={mini ? "mini-template" : "template-svg"} xmlns="http://www.w3.org/2000/svg">
