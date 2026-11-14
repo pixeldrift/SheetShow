@@ -6,6 +6,7 @@ import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { DesignItem, Guide, InstanceOverride, ItemPatch, LabelPreset, Project, RecordRow, Sheet, Variant, VariantRule, View, Workspace } from "./types";
 import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid, valueFor } from "./lib/data";
 import { applyOverride, hasEdits, pickVariant, toItemPatch } from "./lib/instances";
+import { applyConditions } from "./lib/conditions";
 import { instanceIssues, itemLabel, recordLabel, type Issue } from "./lib/audit";
 import { checkImageUrls } from "./lib/webImages";
 import { layoutText } from "./lib/text";
@@ -139,7 +140,8 @@ function App() {
     const id = pickVariant(rules, variants, record, index, slot, sheet.variantBasis ?? "record");
     const base = itemsDoc.value[id] ?? itemsDoc.value[variants[0].id] ?? [];
     const override = instanceOverrides[record[ID]];
-    return { variantId: id, items: applyOverride(base, override), override };
+    // Order: the template, then conditional rules for this record, then this record's hand edits (which win).
+    return { variantId: id, items: applyOverride(applyConditions(base, record, metaFor(index)), override), override };
   };
   const metaFor = (index: number) => ({ recordNumber: index + 1, pageNumber: sheet.repeatMode === "same" ? 1 : Math.floor(index / slots) + 1, recordCount: activeRecords.length, pageCount });
   const indexOfRecord = (recordId: string) => activeRecords.findIndex((r) => r[ID] === recordId);
@@ -696,6 +698,8 @@ function App() {
 
   // ── Render ──────────────────────────────────────────────────────────────
   const meta = { recordNumber: recordIndex + 1, pageNumber: currentPage + 1, recordCount: activeRecords.length, pageCount };
+  /** The template as the previewed record sees it: conditional rules applied, rule-hidden objects kept (faded) so they stay selectable. */
+  const displayItems = applyConditions(items, currentRecord, meta, !preview);
   const caption = workspace === "template"
     ? { title: variants.length > 1 ? `INDIVIDUAL TEMPLATE · ${variants.find((v) => v.id === variantId)?.name.toUpperCase()}` : "INDIVIDUAL TEMPLATE", detail: `${template.width.toFixed(2)} × ${template.height.toFixed(2)} in` }
     : { title: "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet${printer.x || printer.y ? ` · printer offset ${printer.x >= 0 ? "+" : ""}${printer.x.toFixed(3)}, ${printer.y >= 0 ? "+" : ""}${printer.y.toFixed(3)} in` : ""}` };
@@ -751,7 +755,7 @@ function App() {
               >
                 {workspace === "template" ? (
                   <TemplateStage
-                    items={items} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
+                    items={displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
                     selectedIds={selectedIds} showGrid={showGrid} snap={snap} guides={guides.template} multi={multiMode} preview={preview} svgRef={svgRef}
                     onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onDragEnd={history.breakGroup}
                   />

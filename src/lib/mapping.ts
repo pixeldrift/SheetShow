@@ -1,9 +1,10 @@
 import type { DesignItem } from "../types";
 import { fieldDisplayName } from "./data";
+import { ruleFields } from "./conditions";
 
 /** Distinct data fields the template is linked to (automatic `__` fields excluded), in first-use order. */
 export const boundFields = (items: DesignItem[]): string[] =>
-  [...new Set(items.flatMap((item) => (item.field && !item.field.startsWith("__") ? [item.field] : [])))];
+  [...new Set(items.flatMap((item) => [...(item.field ? [item.field] : []), ...ruleFields(item)].filter((f) => !f.startsWith("__"))))];
 
 /** "Hatched" → "hatch", "Bands" → "band": enough stemming to line up ordinary header variations. */
 const stem = (word: string) => word.replace(/(ing|ed|es|s)$/, (m, _s, offset) => (offset >= 3 ? "" : m));
@@ -64,12 +65,18 @@ export function suggestMapping(templateFields: string[], columns: string[]): Rec
   return result;
 }
 
-/** Re-points linked text at the chosen columns. Placeholder text that was just the old field name follows the new one. */
+/** Re-points linked text, and the fields used in conditional rules, at the chosen columns. Placeholder text that was just the old field name follows the new one. */
 export function applyMapping(items: DesignItem[], mapping: Record<string, string | null>): DesignItem[] {
   return items.map((item) => {
+    let next = item;
     const target = item.field ? mapping[item.field] : undefined;
-    if (!item.field || !target || target === item.field) return item;
-    const wasPlaceholder = item.text === fieldDisplayName(item.field);
-    return { ...item, field: target, text: wasPlaceholder ? fieldDisplayName(target) : item.text };
+    if (item.field && target && target !== item.field) {
+      const wasPlaceholder = item.text === fieldDisplayName(item.field);
+      next = { ...next, field: target, text: wasPlaceholder ? fieldDisplayName(target) : item.text };
+    }
+    if (item.rules?.some((r) => r.when?.conditions.some((c) => mapping[c.field] && mapping[c.field] !== c.field))) {
+      next = { ...next, rules: item.rules.map((r) => (r.when ? { ...r, when: { ...r.when, conditions: r.when.conditions.map((c) => ({ ...c, field: mapping[c.field] || c.field })) } } : r)) };
+    }
+    return next;
   });
 }

@@ -3,7 +3,7 @@ import {
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
   Hash, Italic, Layers, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
-  AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, X,
+  AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, X, Filter,
 } from "lucide-react";
 import type { DesignItem, LabelPreset, Sheet } from "../types";
 import { averyPresets, fieldDisplayName, prettyField } from "../lib/data";
@@ -13,6 +13,7 @@ import { NumberField, Pair, Section } from "./Fields";
 import { FontPicker } from "./FontPicker";
 import { EffectsSection, PictureSection, ShapeStyleSection, type ImageTools } from "./ItemStyleSections";
 import { VariantsSection } from "./VariantSections";
+import { ConditionsSection } from "./ConditionsSection";
 import { PrinterCalibrationSection } from "./PrinterCalibrationSection";
 import type { PrinterCalibration } from "../hooks/usePrinterCalibration";
 
@@ -82,7 +83,7 @@ export function Inspector(props: Props) {
             {[...items].reverse().map((item) => (
               <div key={item.id} className={selectedItems.some((s) => s.id === item.id) ? "layer-row selected" : "layer-row"} onClick={(e) => { if (e.shiftKey || e.metaKey || e.ctrlKey) onSelect(selectedItems.some((s) => s.id === item.id) ? selectedItems.filter((s) => s.id !== item.id).map((s) => s.id) : [...selectedItems.map((s) => s.id), item.id]); else { onSelect([item.id]); setTab("properties"); } }}>
                 <span className="layer-kind">{kindIcon(item, 13)}</span>
-                <span className="layer-label">{layerLabel(item)}</span>
+                <span className="layer-label">{layerLabel(item)}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
                 <button className="mini-button" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { visible: item.visible === false }); }}>{item.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}</button>
                 <button className="mini-button" title={item.locked ? "Unlock" : "Lock"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { locked: !item.locked }); }}>{item.locked ? <Lock size={13} /> : <Unlock size={13} />}</button>
                 <button className="mini-button" title="Bring forward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(item.id, 1); }}><ArrowUp size={13} /></button>
@@ -230,6 +231,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
       {item.type === "image" && <PictureSection item={item} patch={patch} tools={imageTools} />}
       {(item.type === "rect" || item.type === "image") && <ShapeStyleSection item={item} patch={patch} />}
       <EffectsSection item={item} patch={patch} />
+      {!instanceMode && <ConditionsSection item={item} patch={patch} fields={imageTools.columns} records={imageTools.records} record={imageTools.record} />}
 
       <Section title="POSITION & SIZE" unit="INCHES">
         <div className="two-col">

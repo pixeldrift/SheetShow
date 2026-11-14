@@ -105,7 +105,7 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
           {item.type === "image" && <clipPath id={`${uid}c`}><rect width={w} height={boxH} rx={radiusPx} /></clipPath>}
         </defs>
       )}
-      <g opacity={item.opacity ?? 1} filter={shadow ? `url(#${uid}s)` : undefined}>
+      <g opacity={(item.opacity ?? 1) * (source._ruleHidden ? 0.22 : 1)} filter={shadow ? `url(#${uid}s)` : undefined}>
         {item.type === "rect" && <rect x={strokePx / 2} y={strokePx / 2} width={Math.max(0, w - strokePx)} height={Math.max(0, boxH - strokePx)} rx={Math.max(0, radiusPx - strokePx / 2)} fill={item.fill ?? "#e9eee9"} stroke={hasStroke ? item.stroke : "none"} strokeWidth={strokePx} />}
         {item.type === "image" && (
           <>
@@ -126,6 +126,7 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
       </g>
       {/* Outline sits exactly on the frame edge, so the resize handles (centred on the same edge) attach to it. */}
       {editor && !outline && <rect className="hover-outline" width={w} height={h} fill="none" stroke={ACCENT} strokeWidth={1 / zoom} pointerEvents="none" />}
+      {source._ruleHidden && editor && <rect width={w} height={h} fill="none" stroke="#8f968d" strokeWidth={1 / zoom} strokeDasharray={`${3 / zoom} ${3 / zoom}`} pointerEvents="none" />}
       {overridden && !outline && <rect width={w} height={h} fill="none" stroke={OVERRIDE} strokeWidth={1.5 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} pointerEvents="none" />}
       {outline && <rect width={w} height={h} fill="none" stroke={outline === "primary" && overridden ? OVERRIDE : ACCENT} strokeWidth={(outline === "primary" ? 1.5 : 1) / zoom} strokeOpacity={outline === "primary" ? 1 : 0.7} pointerEvents="none" />}
     </g>

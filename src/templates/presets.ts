@@ -1,4 +1,4 @@
-import type { DesignItem, Project, RecordRow, Sheet } from "../types";
+import type { ConditionalRule, DesignItem, Project, RecordRow, Sheet } from "../types";
 import { fieldDisplayName } from "../lib/data";
 import { starterRecords } from "../lib/data";
 
@@ -75,31 +75,38 @@ const address: TemplatePreset = {
   },
 };
 
-/* ── Conference badge (two templates: attendee / speaker) ──────────────────── */
+/* ── Conference badge (two templates by rule, plus a meal symbol shown by a condition) ── */
+/** Show an object only for guests whose meal choice is vegetarian or vegan. */
+const veggieOnly = (id: string): ConditionalRule[] => [
+  { id: `${id}-show`, when: { match: "any", conditions: [{ id: `${id}-c`, field: "meal", op: "oneOf", value: "Vegetarian, Vegan" }] }, effects: { visible: true } },
+  { id: `${id}-else`, when: null, effects: { visible: false } },
+];
 const badgeItems = (color: string): DesignItem[] => [
   box("band", 0, 0, 4, 0.72, color),
   text("event", 0.3, 0.2, 3.4, 0.35, "DESIGN SUMMIT 2026", { fontSize: 15, weight: 700, color: "#ffffff" }),
   box("photo-bg", 0.3, 0.98, 1.15, 1.15, "#e7ecef", { radius: 50 }),
   { id: "photo", type: "image", x: 0.3, y: 0.98, w: 1.15, h: 1.15, radius: 50, stroke: color, strokeWidth: 2.5, imageSource: { mode: "pattern", pattern: "{name}" }, visible: true },
   field("name", 1.65, 1.0, 2.15, 0.78, "name", { fontSize: 24, weight: 700, color: "#1f2d3a", autoFit: "shrink", minFontSize: 12 }),
-  field("org", 1.65, 1.86, 2.15, 0.3, "org", { fontSize: 12, color: "#51606d", autoFit: "width", minFontSize: 8 }),
+  field("org", 1.65, 1.86, 1.6, 0.3, "org", { fontSize: 12, color: "#51606d", autoFit: "width", minFontSize: 8 }),
+  box("veg", 3.35, 1.84, 0.4, 0.4, "#3f8f5a", { radius: 50, rules: veggieOnly("veg") }),
+  text("veg-v", 3.35, 1.9, 0.4, 0.3, "V", { fontSize: 14, weight: 700, color: "#ffffff", align: "center", rules: veggieOnly("veg-v") }),
   box("foot", 0, 2.5, 4, 0.5, color),
   field("ticket", 0, 2.6, 4, 0.3, "ticket", { fontSize: 14, weight: 700, color: "#ffffff", align: "center" }),
 ];
 const badge: TemplatePreset = {
   id: "conference-badge",
   name: "Conference badge",
-  description: "Two templates in one: speakers get an orange badge automatically. Add photos in the image library to fill the circle.",
+  description: "Speakers get an orange badge by rule, and vegetarian or vegan guests get a green V by a condition. Add photos in the image library to fill the circle.",
   stock: "4 × 3 in badges · 6 per sheet",
   project: {
     version: 1, name: "Conference badges", fileName: "sample-attendees.csv",
-    records: rows(["name", "org", "ticket"], [
-      ["Dr. Amelia Okonkwo", "Northwind Studio", "SPEAKER"],
-      ["Tomás Villanueva-Hernández", "Fabrikam Robotics", "ATTENDEE"],
-      ["Priya Raman", "Contoso Health", "ATTENDEE"],
-      ["Jonas Eriksen", "Tailspin Aviation", "SPEAKER"],
-      ["Wanjiru Kamau", "Adventure Works", "ATTENDEE"],
-      ["Sofia Marchetti-Delacroix", "Litware Foods International", "ATTENDEE"],
+    records: rows(["name", "org", "ticket", "meal"], [
+      ["Dr. Amelia Okonkwo", "Northwind Studio", "SPEAKER", "Standard"],
+      ["Tomás Villanueva-Hernández", "Fabrikam Robotics", "ATTENDEE", "Vegetarian"],
+      ["Priya Raman", "Contoso Health", "ATTENDEE", "Vegan"],
+      ["Jonas Eriksen", "Tailspin Aviation", "SPEAKER", "Vegetarian"],
+      ["Wanjiru Kamau", "Adventure Works", "ATTENDEE", "Standard"],
+      ["Sofia Marchetti-Delacroix", "Litware Foods International", "ATTENDEE", "Gluten-free"],
     ]),
     template: { width: 4, height: 3 },
     sheet: sheet({ columns: 2, rows: 3, marginX: 0.25, marginY: 1 }),

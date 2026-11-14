@@ -43,6 +43,12 @@ export type DesignItem = {
   strokeWidth?: number;
   opacity?: number;
   shadow?: Shadow;
+  /** Conditional formatting: show/hide this object or restyle it depending on a record's values. */
+  rules?: ConditionalRule[];
+  /** When several rules match: apply only the first (default) or all of them, later ones winning. */
+  rulesMode?: "first" | "all";
+  /** Derived while editing, never saved: hidden by a rule for the record being previewed (drawn faded so it stays selectable). */
+  _ruleHidden?: boolean;
   align?: "left" | "center" | "right";
   fill?: string;
   stroke?: string;
@@ -118,3 +124,14 @@ export type VariantRule = { id: string; variantId: string } & (
 export type ItemPatch = { [K in keyof DesignItem]?: DesignItem[K] | null };
 /** Hand edits to one record's copy of the template. `off` keeps them but shows the template version. */
 export type InstanceOverride = { off?: boolean; items: Record<string, ItemPatch> };
+
+export type ConditionOp =
+  | "equals" | "notEquals" | "contains" | "notContains" | "startsWith" | "endsWith" | "oneOf"
+  | "empty" | "notEmpty" | "gt" | "gte" | "lt" | "lte";
+export type Condition = { id: string; field: string; op: ConditionOp; value: string };
+/** `all` = AND, `any` = OR, `none` = NOT (any of them). */
+export type ConditionGroup = { match: "all" | "any" | "none"; conditions: Condition[] };
+/** The properties a rule is allowed to change. */
+export type RuleStyle = Partial<Pick<DesignItem, "color" | "fill" | "stroke" | "opacity" | "weight" | "italic" | "fontSize" | "text" | "radius">>;
+/** `when: null` is an "otherwise" rule: it applies when no earlier rule matched. */
+export type ConditionalRule = { id: string; when: ConditionGroup | null; effects: { visible?: boolean; set?: RuleStyle } };
