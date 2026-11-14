@@ -290,8 +290,14 @@ function App() {
     const deltaX = (event.clientX - dragRef.current.startX) * scaleX / 96;
     const deltaY = (event.clientY - dragRef.current.startY) * scaleY / 96;
     const step = snapToGrid ? 0.05 : 0.001;
-    const nextX = Math.round((dragRef.current.itemX + deltaX) / step) * step;
-    const nextY = Math.round((dragRef.current.itemY + deltaY) / step) * step;
+    let nextX = Math.round((dragRef.current.itemX + deltaX) / step) * step;
+    let nextY = Math.round((dragRef.current.itemY + deltaY) / step) * step;
+    if (snapToGrid) {
+      const nearX = guides.filter((guide) => guide.axis === "x").map((guide) => guide.position).find((position) => Math.abs(position - nextX) < 0.08);
+      const nearY = guides.filter((guide) => guide.axis === "y").map((guide) => guide.position).find((position) => Math.abs(position - nextY) < 0.08);
+      if (nearX !== undefined) nextX = nearX;
+      if (nearY !== undefined) nextY = nearY;
+    }
     updateItem(dragRef.current.id, { x: Math.max(0, Number(nextX.toFixed(3))), y: Math.max(0, Number(nextY.toFixed(3))) });
   };
 
