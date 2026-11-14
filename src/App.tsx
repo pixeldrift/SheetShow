@@ -55,6 +55,27 @@ const starterItems: DesignItem[] = [
   { id: "text-5", type: "text", x: 1.0, y: 1.55, w: 2.0, h: 0.18, text: "Band number", field: "band", fontSize: 8, color: "#47564f", visible: true },
 ];
 
+type LabelPreset = { code: string; name: string; width: number; height: number; columns: number; rows: number; gapX: number; gapY: number; marginX: number; marginY: number };
+const averyPresets: LabelPreset[] = [
+  { code: "5160", name: "Address labels · 30 per sheet", width: 2.625, height: 1, columns: 3, rows: 10, gapX: 0.125, gapY: 0, marginX: 0.1875, marginY: 0.5 },
+  { code: "5161", name: "Address labels · 20 per sheet", width: 4, height: 1, columns: 2, rows: 10, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
+  { code: "5162", name: "Address labels · 14 per sheet", width: 4, height: 1.333, columns: 2, rows: 7, gapX: 0.1875, gapY: 0.167, marginX: 0.15625, marginY: 0.5 },
+  { code: "5163", name: "Shipping labels · 10 per sheet", width: 4, height: 2, columns: 2, rows: 5, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
+  { code: "5164", name: "Shipping labels · 6 per sheet", width: 4, height: 3.333, columns: 2, rows: 3, gapX: 0.1875, gapY: 0.167, marginX: 0.15625, marginY: 0.5 },
+  { code: "5167", name: "Return address · 80 per sheet", width: 1.75, height: 0.5, columns: 4, rows: 20, gapX: 0.125, gapY: 0, marginX: 0.25, marginY: 0.5 },
+  { code: "5260", name: "Easy Peel address · 30 per sheet", width: 2.625, height: 1, columns: 3, rows: 10, gapX: 0.125, gapY: 0, marginX: 0.1875, marginY: 0.5 },
+  { code: "8160", name: "Inkjet address · 30 per sheet", width: 2.625, height: 1, columns: 3, rows: 10, gapX: 0.125, gapY: 0, marginX: 0.1875, marginY: 0.5 },
+  { code: "8161", name: "Inkjet address · 20 per sheet", width: 4, height: 1, columns: 2, rows: 10, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
+  { code: "8162", name: "Inkjet address · 14 per sheet", width: 4, height: 1.333, columns: 2, rows: 7, gapX: 0.1875, gapY: 0.167, marginX: 0.15625, marginY: 0.5 },
+  { code: "8163", name: "Inkjet shipping · 10 per sheet", width: 4, height: 2, columns: 2, rows: 5, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
+  { code: "8164", name: "Inkjet shipping · 6 per sheet", width: 4, height: 3.333, columns: 2, rows: 3, gapX: 0.1875, gapY: 0.167, marginX: 0.15625, marginY: 0.5 },
+  { code: "5195", name: "File folder labels · 60 per sheet", width: 0.667, height: 3.438, columns: 3, rows: 20, gapX: 0.125, gapY: 0.0, marginX: 0.25, marginY: 0.25 },
+  { code: "5390", name: "Name badges · 8 per sheet", width: 3.375, height: 2.333, columns: 2, rows: 4, gapX: 0.25, gapY: 0.25, marginX: 0.625, marginY: 0.5 },
+  { code: "5392", name: "Name badges · 8 per sheet", width: 3.5, height: 2.25, columns: 2, rows: 4, gapX: 0.25, gapY: 0.25, marginX: 0.5, marginY: 0.75 },
+  { code: "8371", name: "Business cards · 10 per sheet", width: 3.5, height: 2, columns: 2, rows: 5, gapX: 0.25, gapY: 0, marginX: 0.5, marginY: 0.5 },
+  { code: "8871", name: "Business cards · 10 per sheet", width: 3.5, height: 2, columns: 2, rows: 5, gapX: 0.25, gapY: 0, marginX: 0.5, marginY: 0.5 },
+  { code: "22806", name: "Shipping labels · 10 per sheet", width: 4, height: 2, columns: 2, rows: 5, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
+];
 const uid = () => Math.random().toString(36).slice(2, 9);
 const valueFor = (item: DesignItem, record: RecordRow) => item.field ? (record[item.field] ?? "—") : (item.text ?? "");
 const inches = (n: number) => Number(n.toFixed(2));
@@ -65,6 +86,7 @@ function App() {
   const [items, setItems] = useState<DesignItem[]>(starterItems);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMobileLayers, setShowMobileLayers] = useState(false);
+  const [presetSearch, setPresetSearch] = useState("");
   const [recordIndex, setRecordIndex] = useState(0);
   const [workspace, setWorkspace] = useState<"template" | "layout">("template");
   const [zoom, setZoom] = useState(1);
@@ -94,6 +116,18 @@ function App() {
   const currentRecord = records[recordIndex] ?? {};
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const filteredFields = fields.filter((field) => field.toLowerCase().includes(search.toLowerCase()));
+  const matchingPresets = useMemo(() => {
+    const width = templateWidth || 0;
+    const height = templateHeight || 0;
+    const query = presetSearch.trim().toLowerCase();
+    const scored = averyPresets.map((preset) => {
+      const sizeError = Math.abs(preset.width - width) + Math.abs(preset.height - height);
+      const textMatch = !query || `${preset.code} ${preset.name} ${preset.width}x${preset.height}`.toLowerCase().includes(query);
+      return { preset, sizeError, textMatch };
+    }).filter(({ sizeError, textMatch }) => textMatch && (query ? true : sizeError <= 1.25))
+      .sort((x, y) => x.sizeError - y.sizeError);
+    return scored.slice(0, 7).map(({ preset }) => preset);
+  }, [templateWidth, templateHeight, presetSearch]);
   const totalSlots = columns * rows;
   const pageCount = repeatMode === "same" ? 1 : Math.max(1, Math.ceil(records.length / totalSlots));
   const currentPage = repeatMode === "same" ? 0 : Math.floor(recordIndex / totalSlots);
@@ -192,8 +226,16 @@ function App() {
   };
 
   const bindSelected = (field: string) => {
+    setShowMobileLayers(false);
     if (selected?.type === "text") updateItem(selected.id, { field, text: field.replaceAll("_", " ") });
     else addText(field);
+  };
+  const applyPreset = (preset: LabelPreset) => {
+    setTemplateWidth(preset.width); setTemplateHeight(preset.height);
+    setColumns(preset.columns); setRows(preset.rows);
+    setGapX(preset.gapX); setGapY(preset.gapY);
+    setMarginX(preset.marginX); setMarginY(preset.marginY);
+    setPresetSearch("");
   };
 
   const onDragStart = (event: DragEvent<HTMLButtonElement>, field: string) => {
@@ -322,23 +364,7 @@ function App() {
             </div>
             <div className="drag-hint"><MousePointer2 size={13}/> Drag a field onto your design, or select text and click a field to link it.</div>
           </div>
-          <div className="panel-section layers-section">
-            <div className="section-title"><Layers size={14}/> LAYERS <span className="count-pill">{items.length}</span><button className="text-action" onClick={() => addText()}>+ Add</button></div>
-            <div className="layer-list">
-              {[...items].reverse().map((item, displayIndex) => (
-                <div key={item.id} className={selectedId === item.id ? "layer-row selected" : "layer-row"} onClick={() => { setSelectedId(item.id); setWorkspace("template"); setShowPrintPreview(false); }}>
-                  <span className="layer-kind">{item.type === "text" ? <Type size={13}/> : item.type === "image" ? <FileImage size={13}/> : <Square size={13}/>}</span>
-                  <span className="layer-label">{item.field ? item.field.replaceAll("_", " ") : item.text || (item.type === "rect" ? "Shape" : item.assetName || "Image")}</span>
-                  {item.field && <Link2 size={11} className="linked-icon"/>}
-                  <button className="layer-visibility" title={item.visible === false ? "Show layer" : "Hide layer"} onClick={(e) => { e.stopPropagation(); updateItem(item.id, { visible: item.visible === false }); }}><Eye size={12} opacity={item.visible === false ? 0.35 : 1}/></button>
-                  <button className="layer-visibility" title={item.locked ? "Unlock layer" : "Lock layer"} onClick={(e) => { e.stopPropagation(); updateItem(item.id, { locked: !item.locked }); }}><LockKeyhole size={12} opacity={item.locked ? 1 : 0.35}/></button>
-                  <button className="layer-visibility" title="Move layer up" disabled={displayIndex === 0} onClick={(e) => { e.stopPropagation(); moveLayer(item.id, 1); }}><ArrowUp size={12}/></button>
-                  <button className="layer-visibility" title="Move layer down" disabled={displayIndex === items.length - 1} onClick={(e) => { e.stopPropagation(); moveLayer(item.id, -1); }}><ArrowDown size={12}/></button>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="left-footer"><div className="avatar">S</div><div><strong>Local project</strong><span>Saved in this session</span></div><Lock size={13}/></div>
+                    <div className="left-footer"><div className="avatar">S</div><div><strong>Local project</strong><span>Saved in this session</span></div><Lock size={13}/></div>
         </aside>
 
         <section className="center-panel">
@@ -422,7 +448,7 @@ function App() {
         </section>
 
         <aside className="right-panel">
-          <div className="right-tabs"><button className={!selected && !showMobileLayers ? "active" : ""} onClick={() => { setShowMobileLayers(false); setSelectedId(null); }}><Settings2 size={14}/> Document</button><button className={selected && !showMobileLayers ? "active" : ""} onClick={() => { setShowMobileLayers(false); if (!selected) setSelectedId(items[0]?.id ?? null); }}><SlidersHorizontal size={14}/> Properties</button><button className={showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(true)}><Layers size={14}/> Layers</button></div>
+          <div className="right-tabs"><button className={!showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(false)}><SlidersHorizontal size={14}/> Properties</button><button className={showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(true)}><Layers size={14}/> Layers <span className="count-pill">{items.length}</span></button></div>
           {showMobileLayers ? (
             <div className="properties-content mobile-layer-list">
               <div className="section-title"><Layers size={14}/> STACK ORDER <span className="count-pill">{items.length}</span></div>
@@ -450,15 +476,26 @@ function App() {
             </div>
           ) : (
             <div className="properties-content">
-              <div className="document-summary"><div className="summary-icon"><FileText size={20}/></div><h3>Document setup</h3><p>Set the size of your item and arrange how it prints on a sheet.</p></div>
-              <div className="property-section"><label>INDIVIDUAL TEMPLATE SIZE</label><div className="property-two"><div><span>Width</span><div className="number-input"><input type="number" step="0.125" value={templateWidth} onChange={(e) => setTemplateWidth(Math.max(0.5, Number(e.target.value)))}/><small>in</small></div></div><div><span>Height</span><div className="number-input"><input type="number" step="0.125" value={templateHeight} onChange={(e) => setTemplateHeight(Math.max(0.5, Number(e.target.value)))}/><small>in</small></div></div></div></div>
-              <div className="property-section"><label>LABEL PRESET</label><select className="full-select" value={templateWidth === 2.625 && templateHeight === 1 ? "avery5160" : "custom"} onChange={(e) => { if (e.target.value === "avery5160") { setTemplateWidth(2.625); setTemplateHeight(1); setColumns(3); setRows(10); setGapX(0.125); setGapY(0); } }}><option value="custom">Custom template</option><option value="avery5160">Avery 5160 · Address label</option></select></div>
-              <div className="property-section"><label>PAGE SIZE</label><select className="full-select" value={pageWidth === 8.5 && pageHeight === 11 ? "letter" : pageWidth === 8.27 && pageHeight === 11.69 ? "a4" : "custom"} onChange={(e) => { if (e.target.value === "letter") { setPageWidth(8.5); setPageHeight(11); } else if (e.target.value === "a4") { setPageWidth(8.27); setPageHeight(11.69); } }}><option value="letter">US Letter · 8.5 × 11 in</option><option value="a4">A4 · 8.27 × 11.69 in</option><option value="custom">Custom · {pageWidth} × {pageHeight} in</option></select></div>
-              <div className="property-section"><label>ITEMS PER PAGE</label><div className="property-two"><div><span>Columns</span><div className="number-input"><input type="number" min="1" max="8" value={columns} onChange={(e) => setColumns(Math.max(1, Math.min(8, Number(e.target.value))))}/></div></div><div><span>Rows</span><div className="number-input"><input type="number" min="1" max="12" value={rows} onChange={(e) => setRows(Math.max(1, Math.min(12, Number(e.target.value))))}/></div></div></div></div>
-              <div className="property-section"><label>PAGE MARGINS · INCHES</label><div className="property-two"><div><span>Left / Right</span><div className="number-input"><input type="number" min="0" step="0.05" value={marginX} onChange={(e) => setMarginX(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div><div><span>Top / Bottom</span><div className="number-input"><input type="number" min="0" step="0.05" value={marginY} onChange={(e) => setMarginY(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div></div></div>
-              <div className="property-section"><label>ITEM SPACING</label><div className="property-two"><div><span>Horizontal</span><div className="number-input"><input type="number" min="0" step="0.05" value={gapX} onChange={(e) => setGapX(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div><div><span>Vertical</span><div className="number-input"><input type="number" min="0" step="0.05" value={gapY} onChange={(e) => setGapY(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div></div></div>
-              <div className="property-section"><label>DATA ASSIGNMENT</label><div className="mode-options"><button className={repeatMode === "same" ? "mode-option active" : "mode-option"} onClick={() => setRepeatMode("same")}><span className="mode-icon"><Copy size={15}/></span><span><strong>Repeat same record</strong><small>Fill the sheet with one record</small></span><span className="mode-radio"/></button><button className={repeatMode === "next" ? "mode-option active" : "mode-option"} onClick={() => setRepeatMode("next")}><span className="mode-icon"><ListFilter size={15}/></span><span><strong>Next record each time</strong><small>Advance through your data</small></span><span className="mode-radio"/></button></div></div>
-              <div className="output-summary"><div><span>Items per sheet</span><strong>{totalSlots}</strong></div><div><span>Estimated sheets</span><strong>{pageCount}</strong></div></div>
+              {workspace === "template" ? (
+                <>
+                  <div className="document-summary"><div className="summary-icon"><Crop size={20}/></div><h3>Template setup</h3><p>Choose an Avery format or enter a custom size for one item.</p></div>
+                  <div className="property-section"><label>INDIVIDUAL TEMPLATE SIZE · INCHES</label><div className="property-two"><div><span>Width</span><div className="number-input"><input type="number" step="0.01" value={templateWidth} onChange={(e) => setTemplateWidth(Math.max(0.1, Number(e.target.value)))}/><small>in</small></div></div><div><span>Height</span><div className="number-input"><input type="number" step="0.01" value={templateHeight} onChange={(e) => setTemplateHeight(Math.max(0.1, Number(e.target.value)))}/><small>in</small></div></div></div></div>
+                  <div className="property-section"><label>AVERY LABEL TEMPLATES <span className="unit-label">{averyPresets.length} FORMATS</span></label><div className="preset-search"><Search size={13}/><input value={presetSearch} onChange={(e) => setPresetSearch(e.target.value)} placeholder="Search by number, name, or size"/><button onClick={() => setPresetSearch("")} aria-label="Clear preset search">×</button></div>
+                    <button className="preset-option custom-preset" onClick={() => setPresetSearch("")}><span><strong>Custom</strong><small>{templateWidth.toFixed(3)} × {templateHeight.toFixed(3)} in · current size</small></span><BadgeCheck size={14}/></button>
+                    {matchingPresets.length ? matchingPresets.map((preset) => <button key={preset.code} className="preset-option" onClick={() => applyPreset(preset)}><span><strong>Avery {preset.code}</strong><small>{preset.name}</small></span><em>{preset.width} × {preset.height}″</em></button>) : <p className="preset-empty">No close matches yet. Try entering a width or height, or search by Avery number.</p>}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="document-summary"><div className="summary-icon"><FileText size={20}/></div><h3>Page setup</h3><p>Choose the sheet size and arrange repeated templates across it.</p></div>
+                  <div className="property-section"><label>PAGE SIZE</label><select className="full-select" value={pageWidth === 8.5 && pageHeight === 11 ? "letter" : pageWidth === 8.27 && pageHeight === 11.69 ? "a4" : "custom"} onChange={(e) => { if (e.target.value === "letter") { setPageWidth(8.5); setPageHeight(11); } else if (e.target.value === "a4") { setPageWidth(8.27); setPageHeight(11.69); } }}><option value="letter">US Letter · 8.5 × 11 in</option><option value="a4">A4 · 8.27 × 11.69 in</option><option value="custom">Custom · {pageWidth} × {pageHeight} in</option></select></div>
+                  <div className="property-section"><label>ITEMS PER PAGE</label><div className="property-two"><div><span>Columns</span><div className="number-input"><input type="number" min="1" max="8" value={columns} onChange={(e) => setColumns(Math.max(1, Math.min(8, Number(e.target.value))))}/></div></div><div><span>Rows</span><div className="number-input"><input type="number" min="1" max="12" value={rows} onChange={(e) => setRows(Math.max(1, Math.min(12, Number(e.target.value))))}/></div></div></div></div>
+                  <div className="property-section"><label>PAGE MARGINS · INCHES</label><div className="property-two"><div><span>Left / Right</span><div className="number-input"><input type="number" min="0" step="0.05" value={marginX} onChange={(e) => setMarginX(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div><div><span>Top / Bottom</span><div className="number-input"><input type="number" min="0" step="0.05" value={marginY} onChange={(e) => setMarginY(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div></div></div>
+                  <div className="property-section"><label>ITEM SPACING</label><div className="property-two"><div><span>Horizontal</span><div className="number-input"><input type="number" min="0" step="0.05" value={gapX} onChange={(e) => setGapX(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div><div><span>Vertical</span><div className="number-input"><input type="number" min="0" step="0.05" value={gapY} onChange={(e) => setGapY(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div></div></div>
+                  <div className="property-section"><label>DATA ASSIGNMENT</label><div className="mode-options"><button className={repeatMode === "same" ? "mode-option active" : "mode-option"} onClick={() => setRepeatMode("same")}><span className="mode-icon"><Copy size={15}/></span><span><strong>Repeat same record</strong><small>Fill the sheet with one record</small></span><span className="mode-radio"/></button><button className={repeatMode === "next" ? "mode-option active" : "mode-option"} onClick={() => setRepeatMode("next")}><span className="mode-icon"><ListFilter size={15}/></span><span><strong>Next record each time</strong><small>Advance through your data</small></span><span className="mode-radio"/></button></div></div>
+                  <div className="output-summary"><div><span>Items per sheet</span><strong>{totalSlots}</strong></div><div><span>Estimated sheets</span><strong>{pageCount}</strong></div></div>
+                </>
+              )}
             </div>
           )}
           <div className="right-footer"><div className="tip-icon"><Sparkles size={14}/></div><p><strong>Little tip</strong> Select a text layer, then click any field in your data list to connect it.</p></div>
