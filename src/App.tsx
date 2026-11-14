@@ -1,9 +1,9 @@
-import { ChangeEvent, DragEvent, PointerEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, PointerEvent, TouchEvent, useMemo, useRef, useState } from "react";
 import {
-  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, BadgeCheck, ChevronDown,
+  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, BadgeCheck, ChevronDown, ClipboardPaste,
   ChevronLeft, ChevronRight, CircleHelp, Copy, Crop, Database, Eye, FileImage,
   FileSearch, FileStack, FileText, Grid2X2, ImagePlus, Layers, Link2, ListFilter,
-  Lock, LockKeyhole, Magnet, Minus, MousePointer2, PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, Plus, Printer, Ruler, Search,
+  Lock, LockKeyhole, Magnet, Minus, MousePointer2, Scissors, PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, Plus, Printer, Ruler, Search,
   Settings2, Shapes, SlidersHorizontal, Sparkles, Square, Trash2, Type, Unlock, Upload,
   WandSparkles, X, ZoomIn, ZoomOut
 } from "lucide-react";
@@ -101,6 +101,8 @@ function App() {
   const [rulerSettingsOpen, setRulerSettingsOpen] = useState(false);
   const [guides, setGuides] = useState<{ id: string; axis: "x" | "y"; position: number }[]>([]);
   const guideDragRef = useRef<{ id: string; axis: "x" | "y"; rect: DOMRect } | null>(null);
+  const [clipboardItem, setClipboardItem] = useState<DesignItem | null>(null);
+  const touchZoomRef = useRef<{ distance: number; zoom: number } | null>(null);
   const [pageWidth, setPageWidth] = useState(8.5);
   const [pageHeight, setPageHeight] = useState(11);
   const [templateWidth, setTemplateWidth] = useState(3.5);
@@ -313,12 +315,50 @@ function App() {
     setViewPan({ x: panRef.current.panX + event.clientX - panRef.current.startX, y: panRef.current.panY + event.clientY - panRef.current.startY });
   };
   const endPan = () => { panRef.current = null; };
+  const touchDistance = (touches: TouchList) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  };
+  const onCanvasTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length === 2) {
+      touchZoomRef.current = { distance: touchDistance(event.touches), zoom };
+    }
+  };
+  const onCanvasTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length === 2 && touchZoomRef.current) {
+      event.preventDefault();
+      const factor = touchDistance(event.touches) / touchZoomRef.current.distance;
+      setZoom(Math.max(0.15, Math.min(2.5, touchZoomRef.current.zoom * factor)));
+    }
+  };
+  const onCanvasTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length < 2) touchZoomRef.current = null;
+  };
+  const copySelected = () => { if (selected) setClipboardItem({ ...selected }); };
+  const cutSelected = () => {
+    if (!selected) return;
+    setClipboardItem({ ...selected });
+    setItems((current) => current.filter((item) => item.id !== selected.id));
+    setSelectedId(null);
+  };
+  const pasteItem = () => {
+    if (!clipboardItem) return;
+    const next = { ...clipboardItem, id: uid(), x: clipboardItem.x + 0.12, y: clipboardItem.y + 0.12 };
+    setItems((current) => [...current, next]);
+    setSelectedId(next.id);
+  };
+  const deleteSelected = () => {
+    if (!selected) return;
+    setItems((current) => current.filter((item) => item.id !== selected.id));
+    setSelectedId(null);
+  };
 
   const startGuide = (event: PointerEvent<HTMLDivElement>, axis: "x" | "y") => {
     if (event.detail > 1) return;
     event.preventDefault();
     event.stopPropagation();
-    const rect = event.currentTarget.closest(".ruler-stage")?.querySelector(".paper-shadow")?.getBoundingClientRect();
+    const rect = event.currentTarget.closest(".ruler-stage")?.querySelector(".paper-shadow, .layout-paper")?.getBoundingClientRect();
     if (!rect) return;
     const id = crypto.randomUUID();
     const position = axis === "x" ? (event.clientX - rect.left) / (96 * zoom) : (event.clientY - rect.top) / (96 * zoom);
@@ -330,7 +370,7 @@ function App() {
     if (!guideDragRef.current) return;
     const { id, axis, rect } = guideDragRef.current;
     const raw = axis === "x" ? (event.clientX - rect.left) / (96 * zoom) : (event.clientY - rect.top) / (96 * zoom);
-    const limit = axis === "x" ? templateWidth : templateHeight;
+    const limit = axis === "x" ? (workspace === "layout" ? pageWidth : templateWidth) : (workspace === "layout" ? pageHeight : templateHeight);
     const position = Math.max(0, Math.min(limit, raw));
     setGuides((current) => current.map((guide) => guide.id === id ? { ...guide, position } : guide));
   };
@@ -446,12 +486,12 @@ function App() {
                     <div className="left-footer"><div className="avatar">S</div><div><strong>Local project</strong><span>Saved in this session</span></div><Lock size={13}/></div>
         </aside>
             <div className="editor-content">
-          <div className="canvas-area" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan}>
+          <div className="canvas-area" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onTouchStart={onCanvasTouchStart} onTouchMove={onCanvasTouchMove} onTouchEnd={onCanvasTouchEnd} onClick={(event) => { if ((event.target as HTMLElement).classList.contains("canvas-area") || (event.target as HTMLElement).classList.contains("paper-shadow") || (event.target as HTMLElement).classList.contains("layout-paper")) setSelectedId(null); }}>
             <button className={dataDrawerOpen ? "canvas-drawer-toggle left active" : "canvas-drawer-toggle left"} title={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-label={dataDrawerOpen ? "Hide data fields" : "Show data fields"} onClick={() => setDataDrawerOpen((open) => !open)}>{dataDrawerOpen ? <PanelLeftClose size={16}/> : <PanelLeft size={16}/>}</button>
             <button className={inspectorOpen ? "canvas-drawer-toggle right active" : "canvas-drawer-toggle right"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} onClick={() => setInspectorOpen((open) => !open)}>{inspectorOpen ? <PanelRightClose size={16}/> : <PanelRight size={16}/>}</button>
             {workspace === "template" && (
               <div className="canvas-wrap" style={{ transform: `translate(${viewPan.x}px, ${viewPan.y}px)` }}>
-                <div className="canvas-caption"><span>INDIVIDUAL TEMPLATE</span><span>{templateWidth.toFixed(2)} × {templateHeight.toFixed(2)} in · {showPrintPreview ? "Preview" : "Editing"}</span></div>
+                <div className="canvas-caption"><span>INDIVIDUAL TEMPLATE</span><span>{templateWidth.toFixed(2)} × {templateHeight.toFixed(2)} in</span></div>
                 <div className="ruler-stage" onPointerMove={moveGuide} onPointerUp={endGuide} onPointerCancel={endGuide}>
                   {showRulers && <div className="ruler-corner"/>}
                   {showRulers && <div className="top-ruler" onPointerDown={(e) => startGuide(e, "y")} onDoubleClick={() => setRulerSettingsOpen(true)} title="Drag down to add a horizontal guide; double-click for size and margins" style={{width: templateWidth * 96 * zoom}}>{Array.from({length: Math.floor(templateWidth * 4) + 1}, (_, i) => <span key={i} style={{left: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
@@ -486,7 +526,7 @@ function App() {
             {workspace === "layout" && (
               <div className="layout-editor" style={{ transform: `translate(${viewPan.x}px, ${viewPan.y}px)` }}>
                 <div className="canvas-caption"><span>PAGE LAYOUT</span><span>{pageWidth} × {pageHeight} in · {totalSlots} items per sheet</span></div>
-                <div className="layout-paper-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}>
+                <div className="ruler-stage layout-ruler-stage" onPointerMove={moveGuide} onPointerUp={endGuide} onPointerCancel={endGuide}>{showRulers && <div className="ruler-corner"/>}{showRulers && <div className="top-ruler" onPointerDown={(e) => startGuide(e, "y")} onDoubleClick={() => setRulerSettingsOpen(true)} title="Drag down to add a horizontal guide; double-click for page size and margins" style={{width: pageWidth * 96 * zoom}}>{Array.from({length: Math.floor(pageWidth * 4) + 1}, (_, i) => <span key={i} style={{left: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}{showRulers && <div className="left-ruler" onPointerDown={(e) => startGuide(e, "x")} onDoubleClick={() => setRulerSettingsOpen(true)} title="Drag right to add a vertical guide; double-click for page size and margins" style={{height: pageHeight * 96 * zoom}}>{Array.from({length: Math.floor(pageHeight * 4) + 1}, (_, i) => <span key={i} style={{top: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}<div className="layout-paper-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}>
                   <div className={showPrintPreview ? "layout-paper preview-active" : "layout-paper"} style={{width: `${pageWidth * 96}px`, height: `${pageHeight * 96}px`, padding: `${marginY * 96}px ${marginX * 96}px`, boxSizing: "border-box"}}>
                     <div className="layout-grid" style={{gridTemplateColumns: `repeat(${columns}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, gap: `${gapY * 7}px ${gapX * 7}px`}}>
                       {Array.from({length: totalSlots}, (_, slot) => {
