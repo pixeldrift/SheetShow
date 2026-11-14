@@ -92,6 +92,14 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
 - [ ] Scannable codes (QR, Code 128) generated from data fields
 - [x] Printer calibration offset with saved printer settings and a calibration sheet
 - [x] Template gallery with built-in examples
+- [ ] **Conditional objects and formatting** — rules on individual objects, in the spirit of conditional formatting in a spreadsheet
+  - Show or hide any object (or layer) based on a field: a vegetarian-meal icon only for people who chose it, a “VIP” ribbon only for VIPs
+  - Change an object's style based on a field: badge colour by attendee type, a red price when `sale = yes`, bold when a value is over a threshold
+  - Conditions: equals / not equals / contains / starts with / is empty / is not empty / greater or less than (numbers and dates), combined with AND / OR / NOT
+  - Several rules per object, evaluated top to bottom with a clear “first match wins” or “all matches apply” choice, plus an “else”
+  - A rule editor with a live preview using the current record, a “which records match” count, and flags in the editor for objects that have rules
+  - Works with hand edits on individual records (a hand edit beats a rule) and shows up in the text-fit audit and the print check
+  - Complements the existing whole-template rules (alternating templates), which switch an entire design; this works per object
 - [ ] Smart guides (snap to other items' edges)
 - [ ] “My templates”: save your own designs into the gallery from inside the app
 - [ ] Print-ready PDF export with embedded fonts
