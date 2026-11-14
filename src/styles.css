@@ -465,3 +465,13 @@ button:disabled{opacity:.35;cursor:not-allowed}
  .content-frame.with-inspector>.right-panel{display:flex!important;visibility:visible!important;opacity:1!important}
  .content-frame:not(.with-inspector)>.right-panel{display:none!important}
 }
+
+
+/* Keep sidebar toggles on the canvas; separate tool and view controls clearly */
+.canvas-toolbar .drawer-toggles{display:none!important}
+.canvas-toolbar .view-divider{display:none}
+.canvas-area .canvas-drawer-toggle{border-radius:8px}
+@media(max-width:850px){
+ .content-frame.with-inspector>.right-panel{display:flex!important;visibility:visible!important;opacity:1!important}
+ .content-frame:not(.with-inspector)>.right-panel{display:none!important}
+}
