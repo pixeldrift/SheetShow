@@ -7,7 +7,9 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 ## Current foundation
 
 - React + TypeScript + Vite
-- CSV and TSV import
+- CSV and TSV data import
+- PNG, JPG/JPEG, and SVG artwork import
+- PDF artwork import (first page rasterized at high resolution)
 - Inch-based document dimensions (96 CSS pixels per inch internally)
 - Template canvas with text and shape objects
 - Drag a data field onto the canvas to create a bound text object
