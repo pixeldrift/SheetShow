@@ -31,6 +31,18 @@ npm run dev
 npm run build
 ```
 
+## Source layout
+
+```
+src/App.tsx              state + wiring (document, per-workspace view state, shortcuts, print)
+src/components/Viewport  pan / pinch / wheel zoom, rulers, guides (page is centred; pan 0,0 = centred)
+src/components/*Stage    template editor (SVG) and page layout (true physical slot positions)
+src/components/Inspector properties, layers, template + page setup
+src/lib, src/hooks       presets and data helpers, undo/redo history
+```
+
+Shortcuts: Ctrl/⌘ + Z / Shift+Z undo/redo, C / X / V / D copy, cut, paste, duplicate; arrows nudge (Shift = 0.1″); Delete removes.
+
 ## Product architecture
 
 The application keeps three concepts separate:
