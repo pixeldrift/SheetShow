@@ -465,7 +465,7 @@ function App() {
               <button className="tool-button" title="Copy" disabled={!selected} onClick={copySelected}><Copy size={15}/></button>
               <button className="tool-button" title="Paste" disabled={!clipboardItem} onClick={pasteItem}><ClipboardPaste size={15}/></button>
             </div>
-            <div className="toolbar-divider view-divider"/>
+            <button className="tool-button" title="Delete selected" disabled={!selected} onClick={deleteSelected}><Trash2 size={15}/></button>\n            <div className="toolbar-divider view-divider"/>
             <div className="tool-group">
               <button className={showGrid ? "tool-button active" : "tool-button"} title="Toggle grid" onClick={() => setShowGrid(!showGrid)}><Grid2X2 size={15}/></button>
               <button className={showRulers ? "tool-button active" : "tool-button"} title="Toggle rulers" onClick={() => setShowRulers(!showRulers)}><Ruler size={15}/></button>
