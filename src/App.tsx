@@ -77,7 +77,7 @@ const averyPresets: LabelPreset[] = [
   { code: "22806", name: "Shipping labels · 10 per sheet", width: 4, height: 2, columns: 2, rows: 5, gapX: 0.1875, gapY: 0, marginX: 0.15625, marginY: 0.5 },
 ];
 const uid = () => Math.random().toString(36).slice(2, 9);
-const specialFields = [\n  { key: "__record_number", label: "Record number" },\n  { key: "__page_number", label: "Page number" },\n  { key: "__record_count", label: "Record count" },\n  { key: "__page_count", label: "Page count" },\n];\nconst valueFor = (item: DesignItem, record: RecordRow, meta: { recordNumber: number; pageNumber: number; recordCount: number; pageCount: number }) => {\n  if (!item.field) return item.text ?? "";\n  const special: Record<string, number> = { __record_number: meta.recordNumber, __page_number: meta.pageNumber, __record_count: meta.recordCount, __page_count: meta.pageCount };\n  return item.field in special ? String(special[item.field]) : (record[item.field] ?? "—");\n};
+const specialFields = [\n  { key: "__record_number", label: "Record number" },\n  { key: "__page_number", label: "Page number" },\n  { key: "__record_count", label: "Record count" },\n  { key: "__page_count", label: "Page count" },\n];\nconst fieldDisplayName = (field: string) => specialFields.find((entry) => entry.key === field)?.label ?? field.replaceAll("_", " ");\nconst valueFor = (item: DesignItem, record: RecordRow, meta: { recordNumber: number; pageNumber: number; recordCount: number; pageCount: number }) => {\n  if (!item.field) return item.text ?? "";\n  const special: Record<string, number> = { __record_number: meta.recordNumber, __page_number: meta.pageNumber, __record_count: meta.recordCount, __page_count: meta.pageCount };\n  return item.field in special ? String(special[item.field]) : (record[item.field] ?? "—");\n};
 const inches = (n: number) => Number(n.toFixed(2));
 
 function App() {
@@ -147,7 +147,7 @@ function App() {
   const addText = (field?: string, x = 0.5, y = 0.5) => {
     const item: DesignItem = {
       id: uid(), type: "text", x, y, w: 2.5, h: 0.28,
-      text: field ? field.replaceAll("_", " ") : "Your text",
+      text: field ? fieldDisplayName(field) : "Your text",
       field, fontSize: 12, color: "#34443d", weight: 500, visible: true,
     };
     setItems((previous) => [...previous, item]);
@@ -236,7 +236,7 @@ function App() {
 
   const bindSelected = (field: string) => {
     setShowMobileLayers(false);
-    if (selected?.type === "text") updateItem(selected.id, { field, text: field.replaceAll("_", " ") });
+    if (selected?.type === "text") updateItem(selected.id, { field, text: fieldDisplayName(field) });
     else addText(field);
   };
   const applyPreset = (preset: LabelPreset) => {
@@ -599,9 +599,9 @@ function App() {
             </div>
           ) : selected ? (
             <div className="properties-content">
-              <div className="property-heading"><div className="property-icon">{selected.type === "text" ? <Type size={17}/> : selected.type === "image" ? <FileImage size={17}/> : <Square size={17}/>}</div><div><strong>{selected.type === "text" ? "Text object" : selected.type === "image" ? "Image object" : "Shape object"}</strong><span>{selected.field ? `Linked to ${selected.field}` : "Static content"}</span></div></div>
+              <div className="property-heading"><div className="property-icon">{selected.type === "text" ? <Type size={17}/> : selected.type === "image" ? <FileImage size={17}/> : <Square size={17}/>}</div><div><strong>{selected.type === "text" ? "Text object" : selected.type === "image" ? "Image object" : "Shape object"}</strong><span>{selected.field ? `Linked to ${fieldDisplayName(selected.field)}` : "Static content"}</span></div></div>
               {selected.type === "text" && <>
-                <div className="property-section"><label>CONTENT</label><input className="property-input" value={selected.field ? (selected.field.replaceAll("_", " ")) : (selected.text ?? "")} onChange={(e) => updateItem(selected.id, { text: e.target.value, field: undefined })} placeholder="Enter text..."/><div className="binding-status" onClick={() => setSearch("")}><Link2 size={13}/>{selected.field ? `Connected to ${selected.field}` : "Choose a field on the left to link data"}</div></div>
+                <div className="property-section"><label>CONTENT</label><input className="property-input" value={selected.field ? (selected.field.replaceAll("_", " ")) : (selected.text ?? "")} onChange={(e) => updateItem(selected.id, { text: e.target.value, field: undefined })} placeholder="Enter text..."/><div className="binding-status" onClick={() => setSearch("")}><Link2 size={13}/>{selected.field ? `Connected to ${fieldDisplayName(selected.field)}` : "Choose a field on the left to link data"}</div></div>
                 <div className="property-section"><label>TYPOGRAPHY</label><div className="property-two"><div><span>Font size</span><div className="number-input"><input type="number" min="4" max="96" value={selected.fontSize ?? 12} onChange={(e) => updateItem(selected.id, { fontSize: Number(e.target.value) })}/><small>pt</small></div></div><div><span>Weight</span><select value={selected.weight ?? 500} onChange={(e) => updateItem(selected.id, { weight: Number(e.target.value) })}><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select></div></div><div className="align-buttons"><button className={(selected.align ?? "left") === "left" ? "active" : ""} onClick={() => updateItem(selected.id, { align: "left" })}><AlignLeft size={15}/></button><button className={selected.align === "center" ? "active" : ""} onClick={() => updateItem(selected.id, { align: "center" })}><AlignCenter size={15}/></button><button className={selected.align === "right" ? "active" : ""} onClick={() => updateItem(selected.id, { align: "right" })}><AlignRight size={15}/></button></div><div className="color-row"><span>Text color</span><input type="color" value={selected.color ?? "#34443d"} onChange={(e) => updateItem(selected.id, { color: e.target.value })}/></div></div>
               </>}
               {selected.type === "rect" && <div className="property-section"><label>APPEARANCE</label><div className="color-row"><span>Fill color</span><input type="color" value={selected.fill ?? "#e9eee9"} onChange={(e) => updateItem(selected.id, { fill: e.target.value })}/></div><div className="color-row"><span>Border color</span><input type="color" value={selected.stroke === "none" ? "#ffffff" : selected.stroke ?? "#cbd5cc"} onChange={(e) => updateItem(selected.id, { stroke: e.target.value })}/></div></div>}
