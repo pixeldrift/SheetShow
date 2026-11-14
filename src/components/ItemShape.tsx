@@ -7,27 +7,45 @@ type Props = {
   item: DesignItem;
   record: RecordRow;
   meta: RecordMeta;
-  selected?: boolean;
+  /** Editor only: how to draw the selection outline. "primary" = the single selected item, "member" = one of several. */
+  outline?: "primary" | "member";
+  /** Editor zoom, so outlines keep a constant on-screen thickness. */
+  zoom?: number;
   /** Set for the editable canvas; omitted for thumbnails and print output. */
   onPointerDown?: (event: React.PointerEvent<SVGGElement>) => void;
 };
 
-/** One design object as SVG, positioned in inches. Shared by the editor, page layout and print output. */
-export function ItemShape({ item: source, record, meta, selected, onPointerDown }: Props) {
+/**
+ * Lays an item out. `frame` is the box shown to the user (outline, handles, rotation centre): the item's own box,
+ * grown to cover wrapped text that runs past it, unless auto-fit is keeping the text inside.
+ */
+function layoutItem(source: DesignItem, record: RecordRow, meta: RecordMeta) {
   const w = source.w * PX_PER_IN;
   const boxH = source.h * PX_PER_IN;
   const text = source.type === "text" ? valueFor(source, record, meta) : "";
-  // Auto-fit adjusts the font size so the text fills (or shrinks into) the box.
   const item = withAutoFit(source, text, w, boxH);
   const fontSize = fontSizePx(item);
-  const lineStep = fontSize * (item.lineHeight ?? 1.2);
   const lines = item.type === "text" ? layoutLines(text, item, w) : [];
   const fitted = !!item.autoFit && item.autoFit !== "off";
-  // Without auto-fit, wrapped text can run past the box, so the outline and grab area grow to cover it.
   const h = item.type === "text" && !fitted ? Math.max(boxH, textHeight(lines.length, fontSize, item.lineHeight ?? 1.2)) : boxH;
+  return { item, w, boxH, h, fontSize, lines };
+}
+
+/** The frame (px) the editor should draw handles and outlines on. */
+export const itemFrame = (item: DesignItem, record: RecordRow, meta: RecordMeta) => {
+  const { w, h } = layoutItem(item, record, meta);
+  return { w, h };
+};
+
+const ACCENT = "#d77d4e";
+
+/** One design object as SVG, positioned in inches. Shared by the editor, page layout and print output. */
+export function ItemShape({ item: source, record, meta, outline, zoom = 1, onPointerDown }: Props) {
+  const { item, w, boxH, h, fontSize, lines } = layoutItem(source, record, meta);
+  const lineStep = fontSize * (item.lineHeight ?? 1.2);
   const anchor = item.align === "center" ? "middle" : item.align === "right" ? "end" : "start";
   const textX = item.align === "center" ? w / 2 : item.align === "right" ? w : 0;
-  const rotate = item.rotation ? ` rotate(${item.rotation} ${w / 2} ${boxH / 2})` : "";
+  const rotate = item.rotation ? ` rotate(${item.rotation} ${w / 2} ${h / 2})` : "";
   return (
     <g
       data-item-id={item.id}
@@ -46,7 +64,9 @@ export function ItemShape({ item: source, record, meta, selected, onPointerDown 
           </text>
         </>
       )}
-      {selected && <rect x="-4" y="-4" width={w + 8} height={h + 8} fill="none" stroke="#d77d4e" strokeWidth="1.4" strokeDasharray="4 3" pointerEvents="none" />}
+      {/* Outline sits exactly on the frame edge, so the resize handles (centred on the same edge) attach to it. */}
+      {onPointerDown && !outline && <rect className="hover-outline" width={w} height={h} fill="none" stroke={ACCENT} strokeWidth={1 / zoom} pointerEvents="none" />}
+      {outline && <rect width={w} height={h} fill="none" stroke={ACCENT} strokeWidth={(outline === "primary" ? 1.5 : 1) / zoom} strokeOpacity={outline === "primary" ? 1 : 0.7} pointerEvents="none" />}
     </g>
   );
 }

@@ -75,7 +75,8 @@ h2,h3,p{margin:0}
 .template-svg.clip{overflow:hidden}
 .canvas-object{cursor:move;touch-action:none}
 .canvas-object.locked{cursor:default}
-.canvas-object:hover{filter:drop-shadow(0 0 1px #d47f4e)}
+.hover-outline{opacity:0;transition:opacity .08s}
+.canvas-object:hover .hover-outline{opacity:.55}
 
 .ruler,.ruler-corner{position:absolute;z-index:1;background:#eeede8;color:#90988e}
 .ruler-corner{left:-20px;top:-20px;width:19px;height:19px;border-right:1px solid #dcded7;border-bottom:1px solid #dcded7}

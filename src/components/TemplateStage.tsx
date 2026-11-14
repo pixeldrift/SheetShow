@@ -2,7 +2,7 @@ import { PointerEvent, RefObject, useRef } from "react";
 import type { DesignItem, Guide, RecordMeta, RecordRow } from "../types";
 import { PX_PER_IN, round } from "../lib/data";
 import { boundsOf, centerOf, rotateAbout, type Box, type Transform } from "../lib/align";
-import { ItemShape } from "./ItemShape";
+import { ItemShape, itemFrame } from "./ItemShape";
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
@@ -90,7 +90,8 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     releaseFocus();
     event.preventDefault();
     const corner = handle.length === 2;
-    drag.current = { kind: "resize", id: item.id, handle, startX: event.clientX, startY: event.clientY, box: { x: item.x, y: item.y, w: item.w, h: item.h }, rotation: item.rotation ?? 0, keepAspect: corner && (item.type === "image" || event.shiftKey) };
+    const frame = itemFrame(item, record, meta); // start from what's drawn, which can be taller than item.h for wrapped text
+    drag.current = { kind: "resize", id: item.id, handle, startX: event.clientX, startY: event.clientY, box: { x: item.x, y: item.y, w: item.w, h: frame.h / PX_PER_IN }, rotation: item.rotation ?? 0, keepAspect: corner && (item.type === "image" || event.shiftKey) };
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
   };
 
@@ -130,7 +131,8 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       const item = items.find((candidate) => candidate.id === d.id);
       const rect = svgRef.current?.getBoundingClientRect();
       if (!item || !rect) return;
-      const cx = rect.left + (item.x + item.w / 2) * scale, cy = rect.top + (item.y + item.h / 2) * scale;
+      const frame = itemFrame(item, record, meta);
+      const cx = rect.left + (item.x + item.w / 2) * scale, cy = rect.top + (item.y + frame.h / PX_PER_IN / 2) * scale;
       let degrees = (Math.atan2(event.clientY - cy, event.clientX - cx) * 180) / Math.PI + 90; // handle sits above the item
       if (event.shiftKey || snap) degrees = Math.round(degrees / 15) * 15;
       else for (const stop of [0, 90, 180, -90]) if (Math.abs(((degrees - stop + 540) % 360) - 180) < 3) degrees = stop; // gentle magnet at right angles
@@ -175,7 +177,9 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
 
   // Handles stay a constant on-screen size (and finger-sized hit area) at any zoom.
   const visual = 9 / zoom, hit = 26 / zoom;
-  const group = items.filter((item) => selectedIds.includes(item.id) && item.visible !== false && !item.locked);
+  // Group bounds use each item's drawn frame (see itemFrame), so the group outline wraps the member outlines exactly.
+  const group = items.filter((item) => selectedIds.includes(item.id) && item.visible !== false && !item.locked)
+    .map((item) => (item.type === "text" ? { ...item, h: itemFrame(item, record, meta).h / PX_PER_IN } : item));
   const single = selectedIds.length === 1 ? items.find((item) => item.id === selectedIds[0]) : undefined;
   return (
     <svg
@@ -195,15 +199,15 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
         </>
       )}
       {items.filter((item) => item.visible !== false).map((item) => (
-        <ItemShape key={item.id} item={item} record={record} meta={meta} selected={!preview && selectedIds.includes(item.id)} onPointerDown={(event) => startMove(event, item)} />
+        <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} onPointerDown={(event) => startMove(event, item)} />
       ))}
       {!preview && group.length > 1 && (() => {
         const box = boundsOf(group), reach = 30 / zoom;
         const x = box.x * PX_PER_IN, y = box.y * PX_PER_IN, w = box.w * PX_PER_IN, h = box.h * PX_PER_IN;
         return (
           <g>
-            <rect x={x - 6} y={y - 6} width={w + 12} height={h + 12} fill="none" stroke="#d77d4e" strokeWidth={1.2 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} pointerEvents="none" />
-            <line x1={x + w / 2} y1={y - 6} x2={x + w / 2} y2={y - reach} stroke="#d77d4e" strokeWidth={1.2 / zoom} pointerEvents="none" />
+            <rect x={x} y={y} width={w} height={h} fill="none" stroke="#d77d4e" strokeWidth={1.5 / zoom} pointerEvents="none" />
+            <line x1={x + w / 2} y1={y} x2={x + w / 2} y2={y - reach} stroke="#d77d4e" strokeWidth={1.2 / zoom} pointerEvents="none" />
             <g onPointerDown={(event) => startRotateGroup(event, group)} style={{ cursor: "grab", touchAction: "none" }}>
               <circle cx={x + w / 2} cy={y - reach} r={hit / 2} fill="transparent" />
               <circle cx={x + w / 2} cy={y - reach} r={visual * 0.62} fill="#fff" stroke="#d77d4e" strokeWidth={1.5 / zoom} pointerEvents="none" />
@@ -212,11 +216,11 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
         );
       })()}
       {!preview && single && !single.locked && single.visible !== false && (() => {
-        const w = single.w * PX_PER_IN, h = single.h * PX_PER_IN, rotation = single.rotation ?? 0;
+        const { w, h } = itemFrame(single, record, meta), rotation = single.rotation ?? 0;
         const reach = 30 / zoom;
         return (
           <g transform={`translate(${single.x * PX_PER_IN} ${single.y * PX_PER_IN}) rotate(${rotation} ${w / 2} ${h / 2})`}>
-            <line x1={w / 2} y1={-4} x2={w / 2} y2={-reach} stroke="#d77d4e" strokeWidth={1.2 / zoom} pointerEvents="none" />
+            <line x1={w / 2} y1={0} x2={w / 2} y2={-reach} stroke="#d77d4e" strokeWidth={1.2 / zoom} pointerEvents="none" />
             <g onPointerDown={(event) => startRotate(event, single)} style={{ cursor: "grab", touchAction: "none" }}>
               <circle cx={w / 2} cy={-reach} r={hit / 2} fill="transparent" />
               <circle cx={w / 2} cy={-reach} r={visual * 0.62} fill="#fff" stroke="#d77d4e" strokeWidth={1.5 / zoom} pointerEvents="none" />

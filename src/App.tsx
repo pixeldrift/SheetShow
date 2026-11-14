@@ -20,6 +20,7 @@ import { RecordBar } from "./components/RecordBar";
 import { MAX_ZOOM, MIN_ZOOM, Viewport } from "./components/Viewport";
 import { TemplateStage } from "./components/TemplateStage";
 import { LayoutStage } from "./components/LayoutStage";
+import { itemFrame } from "./components/ItemShape";
 import { PrintSheets } from "./components/PrintSheets";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -159,19 +160,26 @@ function App() {
   }, { coalesce });
   const rotateGroup = (updates: Transform[]) => applyTransforms(updates, "rotate-group");
   const rotateSelectionBy = (delta: number) => {
-    const group = selectedItems.filter((item) => !item.locked);
-    if (group.length) applyTransforms(rotateAbout(group, delta, centerOf(boundsOf(selectedItems))), `rotate-by:${Date.now()}`);
+    const members = framed(selectedItems);
+    const movable = members.filter((item) => !item.locked);
+    if (movable.length) applyTransforms(rotateAbout(movable, delta, centerOf(boundsOf(members))), `rotate-by:${Date.now()}`);
   };
   const rotateItem = (id: string, rotation: number) => updateItem(id, { rotation }, `rotate:${id}`);
 
+  // Alignment, distribution, box-select and group rotation all work on each item's drawn frame (wrapped text can
+  // be taller than its box), so they agree with the outlines on screen. Only positions are written back.
+  const framed = (list: DesignItem[]) => list.map((item) => (item.type === "text" ? { ...item, h: itemFrame(item, currentRecord, meta).h / PX_PER_IN } : item));
+  const keepPositions = (original: DesignItem[], moved: DesignItem[]) =>
+    original.map((item, i) => (moved[i].x === item.x && moved[i].y === item.y ? item : { ...item, x: moved[i].x, y: moved[i].y }));
+
   const align = (mode: AlignMode) => {
-    const within = selectedItems.length > 1 ? boundsOf(selectedItems) : { x: 0, y: 0, w: template.width, h: template.height };
-    history.set((list) => alignItems(list, selectedIds, mode, within));
+    const within = selectedItems.length > 1 ? boundsOf(framed(selectedItems)) : { x: 0, y: 0, w: template.width, h: template.height };
+    history.set((list) => keepPositions(list, alignItems(framed(list), selectedIds, mode, within)));
   };
-  const distribute = (axis: "x" | "y") => history.set((list) => distributeItems(list, selectedIds, axis));
+  const distribute = (axis: "x" | "y") => history.set((list) => keepPositions(list, distributeItems(framed(list), selectedIds, axis)));
 
   const onMarquee = (box: { x: number; y: number; w: number; h: number }, additive: boolean) => {
-    const hits = items
+    const hits = framed(items)
       .filter((item) => item.visible !== false)
       .filter((item) => { const b = aabb(item); return b.x < box.x + box.w && b.x + b.w > box.x && b.y < box.y + box.h && b.y + b.h > box.y; })
       .map((item) => item.id);
