@@ -98,6 +98,9 @@ function App() {
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [showRulers, setShowRulers] = useState(true);
+  const [rulerSettingsOpen, setRulerSettingsOpen] = useState(false);
+  const [guides, setGuides] = useState<{ id: string; axis: "x" | "y"; position: number }[]>([]);
+  const guideDragRef = useRef<{ id: string; axis: "x" | "y"; rect: DOMRect } | null>(null);
   const [pageWidth, setPageWidth] = useState(8.5);
   const [pageHeight, setPageHeight] = useState(11);
   const [templateWidth, setTemplateWidth] = useState(3.5);
@@ -305,6 +308,27 @@ function App() {
   };
   const endPan = () => { panRef.current = null; };
 
+  const startGuide = (event: React.PointerEvent<HTMLDivElement>, axis: "x" | "y") => {
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.closest(".ruler-stage")?.querySelector(".paper-shadow")?.getBoundingClientRect();
+    if (!rect) return;
+    const id = crypto.randomUUID();
+    const position = axis === "x" ? (event.clientX - rect.left) / (96 * zoom) : (event.clientY - rect.top) / (96 * zoom);
+    setGuides((current) => [...current, { id, axis, position: Math.max(0, position) }]);
+    guideDragRef.current = { id, axis, rect };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const moveGuide = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!guideDragRef.current) return;
+    const { id, axis, rect } = guideDragRef.current;
+    const raw = axis === "x" ? (event.clientX - rect.left) / (96 * zoom) : (event.clientY - rect.top) / (96 * zoom);
+    const limit = axis === "x" ? templateWidth : templateHeight;
+    const position = Math.max(0, Math.min(limit, raw));
+    setGuides((current) => current.map((guide) => guide.id === id ? { ...guide, position } : guide));
+  };
+  const endGuide = () => { guideDragRef.current = null; };
+
   const addPageSlot = (slot: number) => repeatMode === "same" ? recordIndex : Math.min(records.length - 1, currentPage * totalSlots + slot);
   const fitZoom = () => {
     const area = document.querySelector(".canvas-area");
@@ -421,10 +445,10 @@ function App() {
             {workspace === "template" && (
               <div className="canvas-wrap" style={{ transform: `translate(${viewPan.x}px, ${viewPan.y}px)` }}>
                 <div className="canvas-caption"><span>INDIVIDUAL TEMPLATE</span><span>{templateWidth.toFixed(2)} × {templateHeight.toFixed(2)} in · {showPrintPreview ? "Preview" : "Editing"}</span></div>
-                <div className="ruler-stage">
+                <div className="ruler-stage" onPointerMove={moveGuide} onPointerUp={endGuide} onPointerCancel={endGuide}>
                   {showRulers && <div className="ruler-corner"/>}
-                  {showRulers && <div className="top-ruler" style={{width: templateWidth * 96 * zoom}}>{Array.from({length: Math.floor(templateWidth * 4) + 1}, (_, i) => <span key={i} style={{left: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
-                  {showRulers && <div className="left-ruler" style={{height: templateHeight * 96 * zoom}}>{Array.from({length: Math.floor(templateHeight * 4) + 1}, (_, i) => <span key={i} style={{top: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
+                  {showRulers && <div className="top-ruler" onPointerDown={(e) => startGuide(e, "y")} onDoubleClick={() => setRulerSettingsOpen(true)} title="Drag down to add a horizontal guide; double-click for size and margins" style={{width: templateWidth * 96 * zoom}}>{Array.from({length: Math.floor(templateWidth * 4) + 1}, (_, i) => <span key={i} style={{left: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
+                  {showRulers && <div className="left-ruler" onPointerDown={(e) => startGuide(e, "x")} onDoubleClick={() => setRulerSettingsOpen(true)} title="Drag right to add a vertical guide; double-click for size and margins" style={{height: templateHeight * 96 * zoom}}>{Array.from({length: Math.floor(templateHeight * 4) + 1}, (_, i) => <span key={i} style={{top: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
                   <div className="paper-shadow" style={{width: templateWidth * 96 * zoom, height: templateHeight * 96 * zoom}}>
                     <svg ref={svgRef} viewBox={`0 0 ${templateWidth * 96} ${templateHeight * 96}`} width={templateWidth * 96 * zoom} height={templateHeight * 96 * zoom} onPointerMove={moveItem} onPointerUp={() => { dragRef.current = null; }} onPointerLeave={() => { dragRef.current = null; }} onDragOver={(e) => e.preventDefault()} onDrop={onCanvasDrop} onClick={() => setSelectedId(null)} className="template-svg">
                       {showGrid && <defs><pattern id="gridPattern" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#e9eee9" strokeWidth="0.7"/></pattern></defs>}
@@ -438,8 +462,16 @@ function App() {
                         </g>
                       ))}
                     </svg>
+                    {guides.map((guide) => <div key={guide.id} className={`snap-guide ${guide.axis}`} style={guide.axis === "x" ? { left: guide.position * 96 * zoom } : { top: guide.position * 96 * zoom }} onPointerDown={(e) => { e.stopPropagation(); const rect = e.currentTarget.parentElement!.getBoundingClientRect(); guideDragRef.current = { id: guide.id, axis: guide.axis, rect }; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (guideDragRef.current?.id === guide.id) moveGuide(e as unknown as React.PointerEvent<HTMLDivElement>); }} onPointerUp={endGuide} onDoubleClick={() => setGuides((current) => current.filter((g) => g.id !== guide.id))} title="Drag to reposition · double-click to remove"/> )}
                   </div>
                 </div>
+                {rulerSettingsOpen && <div className="ruler-settings-popover" role="dialog" aria-label="Template size and margins">
+                  <div className="popover-title"><strong>Template setup</strong><button onClick={() => setRulerSettingsOpen(false)} aria-label="Close"><X size={15}/></button></div>
+                  <label>SIZE · INCHES</label>
+                  <div className="popover-fields"><div><span>Width</span><input type="number" min="0.1" step="0.01" value={templateWidth} onChange={(e) => setTemplateWidth(Math.max(0.1, Number(e.target.value)))}/></div><div><span>Height</span><input type="number" min="0.1" step="0.01" value={templateHeight} onChange={(e) => setTemplateHeight(Math.max(0.1, Number(e.target.value)))}/></div></div>
+                  <label>MARGINS · INCHES</label>
+                  <div className="popover-fields"><div><span>Left / Right</span><input type="number" min="0" step="0.01" value={marginX} onChange={(e) => setMarginX(Math.max(0, Number(e.target.value)))}/></div><div><span>Top / Bottom</span><input type="number" min="0" step="0.01" value={marginY} onChange={(e) => setMarginY(Math.max(0, Number(e.target.value)))}/></div></div>
+                </div>}
                 <div className="canvas-footnote"><span><span className="orange-dot"/> {showPrintPreview ? "Print preview · editing paused" : selected ? "Object selected · drag to reposition" : "Select an object to edit"}</span><span>Measurements in inches</span></div>
               </div>
             )}
