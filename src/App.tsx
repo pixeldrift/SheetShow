@@ -465,7 +465,6 @@ function App() {
               <button className={showPrintPreview ? "tool-button active" : "tool-button"} title="Toggle print preview" onClick={() => setShowPrintPreview(!showPrintPreview)}><FileSearch size={16}/></button>
             </div>
             <div className="toolbar-spacer"/>
-            {workspace === "template" && <div className="dimension-chip"><span>{templateWidth.toFixed(2)}″</span><i>×</i><span>{templateHeight.toFixed(2)}″</span></div>}
             <div className="zoom-control"><button className="tool-button" title="Zoom out" onClick={() => setZoom(Math.max(0.25, Number((zoom - 0.1).toFixed(2))))}><ZoomOut size={15}/></button><input aria-label="Zoom level" className="zoom-slider" type="range" min="0.25" max="2" step="0.01" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}/><button className="zoom-percent" onClick={toggleZoomPreset} title="Toggle 100% / fit to screen">{Math.round(zoom * 100)}%</button><button className="tool-button" title="Zoom in" onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))}><ZoomIn size={15}/></button></div>
           </div>
           <div className={`content-frame ${dataDrawerOpen ? "with-data" : ""} ${inspectorOpen ? "with-inspector" : ""}`}>
@@ -492,7 +491,7 @@ function App() {
           </div>
         </aside>
             <div className="editor-content">
-          <div className="canvas-area" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onTouchStart={onCanvasTouchStart} onTouchMove={onCanvasTouchMove} onTouchEnd={onCanvasTouchEnd} onClick={(event) => { if ((event.target as HTMLElement).classList.contains("canvas-area") || (event.target as HTMLElement).classList.contains("paper-shadow") || (event.target as HTMLElement).classList.contains("layout-paper")) setSelectedId(null); }}>
+          <div className="canvas-area" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onTouchStart={onCanvasTouchStart} onTouchMove={onCanvasTouchMove} onTouchEnd={onCanvasTouchEnd} onClick={(event) => { if (!(event.target as HTMLElement).closest(".canvas-object,button,input,select")) setSelectedId(null); }}>
             <button className={dataDrawerOpen ? "canvas-drawer-toggle left active" : "canvas-drawer-toggle left"} title={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-label={dataDrawerOpen ? "Hide data fields" : "Show data fields"} onClick={() => setDataDrawerOpen((open) => !open)}>{dataDrawerOpen ? <PanelLeftClose size={16}/> : <PanelLeft size={16}/>}</button>
             <button className={inspectorOpen ? "canvas-drawer-toggle right active" : "canvas-drawer-toggle right"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} onClick={() => setInspectorOpen((open) => !open)}>{inspectorOpen ? <PanelRightClose size={16}/> : <PanelRight size={16}/>}</button>
             {workspace === "template" && (
