@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   ChevronDown, Group, Ungroup,
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
-  Hash, Italic, Layers, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
+  Hash, Image as ImageIcon, Italic, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   X, Filter,
 } from "lucide-react";
 import type { DesignItem, LabelPreset, Sheet } from "../types";
@@ -14,6 +14,7 @@ import { EffectsSection, PictureSection, ShapeStyleSection, type ImageTools } fr
 import { VariantsSection } from "./VariantSections";
 import { ConditionsSection } from "./ConditionsSection";
 import { PrinterCalibrationSection } from "./PrinterCalibrationSection";
+import { defaultImageSource } from "../lib/images";
 import { StockPicker } from "./StockPicker";
 import type { PrinterCalibration } from "../hooks/usePrinterCalibration";
 
@@ -260,6 +261,15 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
           </Section>
         </>
       )}
+
+      <Section title="THIS OBJECT IS">
+        <div className="two-col">
+          {item.type !== "rect" && <button className="button" onClick={() => patch({ type: "rect", text: undefined, field: undefined, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><Square size={14} /> Plain shape</button>}
+          {item.type !== "text" && <button className="button" onClick={() => patch({ type: "text", text: item.text ?? "Text", fontSize: item.fontSize ?? 11, color: item.color ?? "#34443d", weight: item.weight ?? 500, wrap: true, padding: item.padding ?? 0.08, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><TextCursorInput size={14} /> Text box</button>}
+          {item.type !== "image" && <button className="button" onClick={() => patch({ type: "image", imageSource: defaultImageSource(imageTools.columns), text: undefined, field: undefined }, `kind:${item.id}`)}><ImageIcon size={14} /> Photo placeholder</button>}
+        </div>
+        <p className="hint">{item.type === "rect" ? "Turn this shape into a text box or a photo placeholder, then link it to your data." : "Switch what this object is. Its position, size and frame are kept."}</p>
+      </Section>
 
       {item.type === "image" && <PictureSection item={item} patch={patch} tools={imageTools} />}
       <ShapeStyleSection item={item} patch={patch} />

@@ -46,7 +46,7 @@ The **field names** button at the right of the bar swaps every linked text for i
 
 ## Designing a template
 
-- **Add things** with the toolbar: **Text**, **Shapes** (rectangle, text box, photo placeholder) and **Image**.
+- **Add things** with the toolbar: **Text**, **Rectangle** and **Image**. Select a rectangle and use **This object is** in Properties to turn it into a text box or a photo placeholder, ready to link to your data. On a narrow screen the add buttons collapse into one **Add** menu.
 - **Link text to data**: select a text object and tap a field in the **Fields** drawer. Or type your own wording with merge fields, such as `{city}, {state} {zip}` or `${price}`.
 - **Properties**: the **Properties** drawer holds the settings for the selected object. Number fields have small arrows, and you can **drag a field's label** (or its unit) left and right to scrub the value. Hold Shift to go ten times faster, or Alt for fine steps.
 - **Move, resize and rotate**: drag an object, use its square handles, or the round handle above it to rotate.

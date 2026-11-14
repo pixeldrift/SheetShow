@@ -287,9 +287,6 @@ function App() {
     addItem({ id: uid(), type: "text", x, y, w: 2.5, h: 0.28, text: field ? fieldDisplayName(field) : "Your text", field, fontSize: 12, color: "#34443d", weight: 500, visible: true });
 
   /** Text with a white background, a thin frame and some padding: a ready-made box for notes and labels. */
-  const addTextBox = () => addItem({ id: uid(), type: "text", x: 0.4, y: 0.4, w: 1.8, h: 0.7, text: "Text box", fontSize: 11, color: "#34443d", weight: 500, visible: true, fill: "#ffffff", stroke: "#cbd5cc", strokeWidth: 1, radius: 8, radiusUnit: "px", padding: 0.08, wrap: true });
-  /** A picture box that each record fills from your data (a column or a filename pattern). */
-  const addPhotoPlaceholder = () => addItem({ id: uid(), type: "image", x: 0.4, y: 0.4, w: 1.2, h: 1.2, radius: 6, imageSource: defaultImageSource(fields), visible: true });
   const addShape = () => addItem({ id: uid(), type: "rect", x: 0.35, y: 0.35, w: 1.1, h: 0.65, fill: "#e9eee9", stroke: "#cbd5cc", visible: true });
 
   const deleteSelected = () => {
@@ -788,7 +785,7 @@ function App() {
           preview={preview} onPreview={() => setPreview((v) => !v)}
           multi={multiMode} onMulti={() => setMultiMode((v) => !v)}
           zoom={view.zoom} onZoom={setZoom} onZoomPreset={toggleZoomPreset}
-          onAddText={() => addText()} onAddShape={addShape} onAddTextBox={addTextBox} onAddPhoto={addPhotoPlaceholder} onAddImage={() => setLibraryDialog({ kind: "insert" })}
+          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })}
         />
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>

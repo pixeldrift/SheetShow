@@ -748,3 +748,6 @@ kbd,.help-body kbd{font:600 11px ui-monospace,Menlo,monospace;background:#f3f1ec
   .record-peek{padding:4px}.peek-chevron{display:none}
   .record-bar{gap:6px;padding:0 8px}
 }
+
+.add-collapsed{display:none}
+@media(max-width:520px){.add-inline{display:none}.add-collapsed{display:flex}}

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { BoxSelect, ChevronDown, FileSearch, Grid2X2, Image as PhotoIcon, ImagePlus, Magnet, PencilLine, Ruler, Shapes, Square, TextCursorInput, Type } from "lucide-react";
+import { BoxSelect, ChevronDown, FileSearch, Grid2X2, ImagePlus, Magnet, PencilLine, Plus, Ruler, Square, Type } from "lucide-react";
 import { MAX_ZOOM, MIN_ZOOM } from "./Viewport";
 import { ZoomField } from "./ZoomField";
 
@@ -13,7 +13,7 @@ type Props = {
   preview: boolean; onPreview: () => void;
   zoom: number; onZoom: (zoom: number) => void; onZoomPreset: () => void;
   multi: boolean; onMulti: () => void;
-  onAddText: () => void; onAddShape: () => void; onAddTextBox: () => void; onAddPhoto: () => void; onAddImage: () => void;
+  onAddText: () => void; onAddShape: () => void; onAddImage: () => void;
 };
 
 export function Toolbar(p: Props) {
@@ -30,12 +30,15 @@ export function Toolbar(p: Props) {
     <div className="canvas-toolbar">
       {p.workspace === "template" && (
         <>
-          <div className="tool-group">
+          <div className="tool-group add-inline">
             <button className="tool-button" title="Add text" aria-label="Add text" onClick={p.onAddText}><Type size={16} /></button>
-            <button ref={shapesRef} className="tool-button with-caret" title="Shapes: rectangle, text box, photo placeholder" aria-label="Shapes" aria-haspopup="menu" aria-expanded={!!shapesAt} onClick={() => (shapesAt ? setShapesAt(null) : openShapes())}>
-              <Shapes size={16} /><ChevronDown size={10} className="caret" />
-            </button>
+            <button className="tool-button" title="Add rectangle: then turn it into a text box or photo placeholder in Properties" aria-label="Add rectangle" onClick={p.onAddShape}><Square size={16} /></button>
             <button className="tool-button" title="Add image or PDF" aria-label="Add image or PDF" onClick={p.onAddImage}><ImagePlus size={16} /></button>
+          </div>
+          <div className="tool-group add-collapsed">
+            <button ref={shapesRef} className="tool-button with-caret" title="Add something to the template" aria-label="Add" aria-haspopup="menu" aria-expanded={!!shapesAt} onClick={() => (shapesAt ? setShapesAt(null) : openShapes())}>
+              <Plus size={16} /><ChevronDown size={10} className="caret" />
+            </button>
           </div>
           <div className="toolbar-divider" />
         </>
@@ -65,9 +68,9 @@ export function Toolbar(p: Props) {
         <>
           <div className="menu-scrim" onClick={() => setShapesAt(null)} />
           <div className="menu shapes-menu" role="menu" style={{ position: "fixed", left: Math.min(shapesAt.x, window.innerWidth - 220), top: shapesAt.y }}>
-            <button role="menuitem" onClick={choose(p.onAddShape)}><Square size={15} /> <span>Rectangle<small>A shape you can fill and frame</small></span></button>
-            <button role="menuitem" onClick={choose(p.onAddTextBox)}><TextCursorInput size={15} /> <span>Text box<small>Text with a background, frame and padding</small></span></button>
-            <button role="menuitem" onClick={choose(p.onAddPhoto)}><PhotoIcon size={15} /> <span>Photo placeholder<small>A picture box filled from your data</small></span></button>
+            <button role="menuitem" onClick={choose(p.onAddText)}><Type size={15} /> <span>Text<small>Typed or linked to a field</small></span></button>
+            <button role="menuitem" onClick={choose(p.onAddShape)}><Square size={15} /> <span>Rectangle<small>Turn it into a text box or photo placeholder in Properties</small></span></button>
+            <button role="menuitem" onClick={choose(p.onAddImage)}><ImagePlus size={15} /> <span>Image or PDF<small>From your library or a file</small></span></button>
           </div>
         </>
       )}
