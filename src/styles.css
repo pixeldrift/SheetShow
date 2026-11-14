@@ -240,6 +240,7 @@ button:disabled{opacity:.35;cursor:not-allowed}
 .content-frame.with-inspector{grid-template-columns:minmax(0,1fr) 286px}
 .content-frame.with-data.with-inspector{grid-template-columns:258px minmax(0,1fr) 286px}
 .content-frame>.left-panel,.content-frame>.right-panel{display:flex;min-width:0;min-height:0;height:100%}
+.content-frame:not(.with-data)>.left-panel,.content-frame:not(.with-inspector)>.right-panel{display:none}
 .editor-content{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
 .editor-content>.canvas-area{flex:1;min-height:0}
 .editor-content>.record-bar{flex-shrink:0}
