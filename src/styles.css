@@ -303,3 +303,9 @@ button.preset-option:hover{background:#f8f5ef}
 .crop-marks line{stroke:#000;stroke-width:.007;stroke-linecap:butt}
 @media print{.crop-marks line{stroke:#000}}
 @media(max-width:620px){.title-input{width:110px}}
+
+/* ── Rotation row ──────────────────────────────────────────────────────── */
+.rotation-row{display:flex;align-items:flex-end;gap:6px;margin-top:10px}
+.rotation-row .pair{flex:1}
+.rotation-row button{width:34px;height:34px;flex:none;border:1px solid #e3e5de;border-radius:6px;background:#fff;color:#7b867d;display:grid;place-items:center}
+.rotation-row button:hover{background:#f8f3ed;color:#b76f46}

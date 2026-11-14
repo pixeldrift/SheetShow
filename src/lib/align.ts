@@ -3,9 +3,19 @@ import type { DesignItem } from "../types";
 export type AlignMode = "left" | "center" | "right" | "top" | "middle" | "bottom";
 export type Box = { x: number; y: number; w: number; h: number };
 
+/** Axis-aligned bounds of an item, accounting for rotation. */
+export function aabb(item: DesignItem): Box {
+  const r = ((item.rotation ?? 0) * Math.PI) / 180;
+  if (!r) return { x: item.x, y: item.y, w: item.w, h: item.h };
+  const cos = Math.abs(Math.cos(r)), sin = Math.abs(Math.sin(r));
+  const w = item.w * cos + item.h * sin, h = item.w * sin + item.h * cos;
+  return { x: item.x + item.w / 2 - w / 2, y: item.y + item.h / 2 - h / 2, w, h };
+}
+
 export const boundsOf = (items: DesignItem[]): Box => {
-  const x = Math.min(...items.map((i) => i.x)), y = Math.min(...items.map((i) => i.y));
-  return { x, y, w: Math.max(...items.map((i) => i.x + i.w)) - x, h: Math.max(...items.map((i) => i.y + i.h)) - y };
+  const boxes = items.map(aabb);
+  const x = Math.min(...boxes.map((b) => b.x)), y = Math.min(...boxes.map((b) => b.y));
+  return { x, y, w: Math.max(...boxes.map((b) => b.x + b.w)) - x, h: Math.max(...boxes.map((b) => b.y + b.h)) - y };
 };
 
 /** Aligns the given items to `within` (the selection's bounds, or the template when one item is selected). */
@@ -13,13 +23,14 @@ export function alignItems(list: DesignItem[], ids: string[], mode: AlignMode, w
   const round = (n: number) => Number(n.toFixed(3));
   return list.map((item) => {
     if (!ids.includes(item.id) || item.locked) return item;
+    const box = aabb(item);
     switch (mode) {
-      case "left": return { ...item, x: round(within.x) };
-      case "center": return { ...item, x: round(within.x + (within.w - item.w) / 2) };
-      case "right": return { ...item, x: round(within.x + within.w - item.w) };
-      case "top": return { ...item, y: round(within.y) };
-      case "middle": return { ...item, y: round(within.y + (within.h - item.h) / 2) };
-      case "bottom": return { ...item, y: round(within.y + within.h - item.h) };
+      case "left": return { ...item, x: round(item.x + within.x - box.x) };
+      case "center": return { ...item, x: round(item.x + within.x + (within.w - box.w) / 2 - box.x) };
+      case "right": return { ...item, x: round(item.x + within.x + within.w - box.w - box.x) };
+      case "top": return { ...item, y: round(item.y + within.y - box.y) };
+      case "middle": return { ...item, y: round(item.y + within.y + (within.h - box.h) / 2 - box.y) };
+      case "bottom": return { ...item, y: round(item.y + within.y + within.h - box.h - box.y) };
     }
   });
 }
@@ -27,13 +38,13 @@ export function alignItems(list: DesignItem[], ids: string[], mode: AlignMode, w
 /** Evenly spaces the gaps between items (needs three or more). */
 export function distributeItems(list: DesignItem[], ids: string[], axis: "x" | "y"): DesignItem[] {
   const size = axis === "x" ? "w" : "h";
-  const picked = list.filter((i) => ids.includes(i.id)).sort((a, b) => a[axis] - b[axis]);
+  const picked = list.filter((i) => ids.includes(i.id)).map((item) => ({ item, box: aabb(item) })).sort((a, b) => a.box[axis] - b.box[axis]);
   if (picked.length < 3) return list;
-  const first = picked[0], last = picked[picked.length - 1];
+  const first = picked[0].box, last = picked[picked.length - 1].box;
   const total = last[axis] + last[size] - first[axis];
-  const gap = (total - picked.reduce((sum, i) => sum + i[size], 0)) / (picked.length - 1);
-  const positions = new Map<string, number>();
+  const gap = (total - picked.reduce((sum, p) => sum + p.box[size], 0)) / (picked.length - 1);
+  const shifts = new Map<string, number>();
   let cursor = first[axis];
-  for (const item of picked) { positions.set(item.id, Number(cursor.toFixed(3))); cursor += item[size] + gap; }
-  return list.map((item) => (positions.has(item.id) && !item.locked ? { ...item, [axis]: positions.get(item.id)! } : item));
+  for (const { item, box } of picked) { shifts.set(item.id, cursor - box[axis]); cursor += box[size] + gap; }
+  return list.map((item) => (shifts.has(item.id) && !item.locked ? { ...item, [axis]: Number((item[axis] + shifts.get(item.id)!).toFixed(3)) } : item));
 }

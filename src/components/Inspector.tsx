@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
-  Hash, Italic, Layers, Link2Off, ListFilter, Lock, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
+  Hash, Italic, Layers, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
   AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter,
 } from "lucide-react";
@@ -84,6 +84,9 @@ export function Inspector(props: Props) {
   );
 }
 
+/** Normalises an angle to (-180, 180]. */
+const norm = (deg: number) => { const r = ((deg + 180) % 360 + 360) % 360 - 180; return r === -180 ? 180 : r; };
+
 const ALIGN_BUTTONS: [AlignMode, string, typeof AlignStartVertical][] = [
   ["left", "Align left", AlignStartVertical], ["center", "Align centre horizontally", AlignCenterVertical], ["right", "Align right", AlignEndVertical],
   ["top", "Align top", AlignStartHorizontal], ["middle", "Align centre vertically", AlignCenterHorizontal], ["bottom", "Align bottom", AlignEndHorizontal],
@@ -147,6 +150,14 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
                 </select>
               </Pair>
             </div>
+            <div className="two-col spaced">
+              <Pair label="Auto scale">
+                <select className="select" value={item.autoFit ?? "off"} onChange={(e) => patch({ autoFit: e.target.value as DesignItem["autoFit"] })}>
+                  <option value="off">Fixed size</option><option value="shrink">Shrink to fit</option><option value="fit">Fit to box</option>
+                </select>
+              </Pair>
+            </div>
+            {item.autoFit && item.autoFit !== "off" && <p className="hint">{item.autoFit === "shrink" ? "Text shrinks below the size above when it doesn’t fit the box." : "Text is sized to fill the box. Resize the box to change it."}</p>}
             <div className="align-buttons">
               {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([value, Icon]) => (
                 <button key={value} aria-label={`Align ${value}`} className={(item.align ?? "left") === value ? "active" : ""} onClick={() => patch({ align: value })}><Icon size={15} /></button>
@@ -166,12 +177,27 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
         </Section>
       )}
 
+      {item.type === "image" && (
+        <Section title="IMAGE">
+          <Pair label="Scale to box">
+            <select className="select" value={item.imageFit ?? "cover"} onChange={(e) => patch({ imageFit: e.target.value as DesignItem["imageFit"] })}>
+              <option value="cover">Fill box (crop edges)</option><option value="contain">Fit inside box (no crop)</option>
+            </select>
+          </Pair>
+        </Section>
+      )}
+
       <Section title="POSITION & SIZE" unit="INCHES">
         <div className="two-col">
           <Pair label="X"><NumberField value={item.x} onChange={(n) => patch({ x: n })} /></Pair>
           <Pair label="Y"><NumberField value={item.y} onChange={(n) => patch({ y: n })} /></Pair>
           <Pair label="Width"><NumberField value={item.w} min={0.01} onChange={(n) => patch({ w: n })} /></Pair>
           <Pair label="Height"><NumberField value={item.h} min={0.01} onChange={(n) => patch({ h: n })} /></Pair>
+        </div>
+        <div className="rotation-row">
+          <Pair label="Rotation"><NumberField value={item.rotation ?? 0} min={-360} max={360} step={1} places={1} unit="°" onChange={(n) => patch({ rotation: n })} /></Pair>
+          <button title="Rotate 90° counter-clockwise" aria-label="Rotate 90° counter-clockwise" onClick={() => patch({ rotation: norm((item.rotation ?? 0) - 90) }, `rot:${item.id}`)}><RotateCcw size={16} /></button>
+          <button title="Rotate 90° clockwise" aria-label="Rotate 90° clockwise" onClick={() => patch({ rotation: norm((item.rotation ?? 0) + 90) }, `rot:${item.id}`)}><RotateCw size={16} /></button>
         </div>
       </Section>
 

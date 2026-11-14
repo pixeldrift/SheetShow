@@ -18,6 +18,11 @@ export type DesignItem = {
   lineHeight?: number;
   /** Wrap text to the box width (default true). */
   wrap?: boolean;
+  /** Degrees clockwise, about the item's centre. */
+  rotation?: number;
+  /** Text scaling: shrink to fit the box, or fit it exactly (grow or shrink). */
+  autoFit?: "off" | "shrink" | "fit";
+  imageFit?: "cover" | "contain";
   align?: "left" | "center" | "right";
   fill?: string;
   stroke?: string;

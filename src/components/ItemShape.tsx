@@ -1,7 +1,7 @@
 import type { DesignItem, RecordMeta, RecordRow } from "../types";
 import { PX_PER_IN, valueFor } from "../lib/data";
 import { fontStack } from "../lib/fonts";
-import { fontSizePx, layoutLines } from "../lib/text";
+import { fontSizePx, layoutLines, textHeight, withAutoFit } from "../lib/text";
 
 type Props = {
   item: DesignItem;
@@ -13,24 +13,30 @@ type Props = {
 };
 
 /** One design object as SVG, positioned in inches. Shared by the editor, page layout and print output. */
-export function ItemShape({ item, record, meta, selected, onPointerDown }: Props) {
-  const w = item.w * PX_PER_IN;
+export function ItemShape({ item: source, record, meta, selected, onPointerDown }: Props) {
+  const w = source.w * PX_PER_IN;
+  const boxH = source.h * PX_PER_IN;
+  const text = source.type === "text" ? valueFor(source, record, meta) : "";
+  // Auto-fit adjusts the font size so the text fills (or shrinks into) the box.
+  const item = withAutoFit(source, text, w, boxH);
   const fontSize = fontSizePx(item);
   const lineStep = fontSize * (item.lineHeight ?? 1.2);
-  const lines = item.type === "text" ? layoutLines(valueFor(item, record, meta), item, w) : [];
-  // Wrapped text can run past the box, so the outline and grab area grow to cover it.
-  const h = item.type === "text" ? Math.max(item.h * PX_PER_IN, fontSize * 1.4 + (lines.length - 1) * lineStep) : item.h * PX_PER_IN;
+  const lines = item.type === "text" ? layoutLines(text, item, w) : [];
+  const fitted = !!item.autoFit && item.autoFit !== "off";
+  // Without auto-fit, wrapped text can run past the box, so the outline and grab area grow to cover it.
+  const h = item.type === "text" && !fitted ? Math.max(boxH, textHeight(lines.length, fontSize, item.lineHeight ?? 1.2)) : boxH;
   const anchor = item.align === "center" ? "middle" : item.align === "right" ? "end" : "start";
   const textX = item.align === "center" ? w / 2 : item.align === "right" ? w : 0;
+  const rotate = item.rotation ? ` rotate(${item.rotation} ${w / 2} ${boxH / 2})` : "";
   return (
     <g
       data-item-id={item.id}
-      transform={`translate(${item.x * PX_PER_IN} ${item.y * PX_PER_IN})`}
+      transform={`translate(${item.x * PX_PER_IN} ${item.y * PX_PER_IN})${rotate}`}
       className={onPointerDown ? (item.locked ? "canvas-object locked" : "canvas-object") : undefined}
       onPointerDown={onPointerDown}
     >
-      {item.type === "rect" && <rect width={w} height={h} fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1" />}
-      {item.type === "image" && item.src && <image href={item.src} width={w} height={h} preserveAspectRatio="xMidYMid slice" />}
+      {item.type === "rect" && <rect width={w} height={boxH} fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1" />}
+      {item.type === "image" && item.src && <image href={item.src} width={w} height={boxH} preserveAspectRatio={item.imageFit === "contain" ? "xMidYMid meet" : "xMidYMid slice"} />}
       {item.type === "text" && (
         <>
           {/* Invisible hit area so thin text is easy to grab with a finger. */}

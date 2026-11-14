@@ -7,7 +7,7 @@ import type { DesignItem, Guide, LabelPreset, Project, RecordRow, Sheet, View, W
 import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid } from "./lib/data";
 import { useHistory } from "./hooks/useHistory";
 import { useFontLibrary } from "./hooks/useFontLibrary";
-import { alignItems, boundsOf, distributeItems, type AlignMode } from "./lib/align";
+import { aabb, alignItems, boundsOf, distributeItems, type AlignMode } from "./lib/align";
 import { downloadProject, loadProject, readProjectFile, saveProject } from "./lib/storage";
 import { Topbar } from "./components/Topbar";
 import { Toolbar } from "./components/Toolbar";
@@ -149,6 +149,7 @@ function App() {
     return list.map((item) => (byId.has(item.id) ? { ...item, x: byId.get(item.id)!.x, y: byId.get(item.id)!.y } : item));
   }, { coalesce: "drag" });
   const resizeItem = (id: string, box: { x: number; y: number; w: number; h: number }) => updateItem(id, box, `resize:${id}`);
+  const rotateItem = (id: string, rotation: number) => updateItem(id, { rotation }, `rotate:${id}`);
 
   const align = (mode: AlignMode) => {
     const within = selectedItems.length > 1 ? boundsOf(selectedItems) : { x: 0, y: 0, w: template.width, h: template.height };
@@ -158,7 +159,8 @@ function App() {
 
   const onMarquee = (box: { x: number; y: number; w: number; h: number }, additive: boolean) => {
     const hits = items
-      .filter((item) => item.visible !== false && item.x < box.x + box.w && item.x + item.w > box.x && item.y < box.y + box.h && item.y + item.h > box.y)
+      .filter((item) => item.visible !== false)
+      .filter((item) => { const b = aabb(item); return b.x < box.x + box.w && b.x + b.w > box.x && b.y < box.y + box.h && b.y + b.h > box.y; })
       .map((item) => item.id);
     setSelectedIds((current) => (additive ? [...new Set([...current, ...hits])] : hits));
   };
@@ -420,7 +422,7 @@ function App() {
                   <TemplateStage
                     items={items} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
                     selectedIds={selectedIds} showGrid={showGrid} snap={snap} guides={guides.template} multi={multiMode} preview={preview} svgRef={svgRef}
-                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onDragEnd={history.breakGroup}
+                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onDragEnd={history.breakGroup}
                   />
                 ) : (
                   <LayoutStage
