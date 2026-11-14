@@ -14,6 +14,10 @@ export type DesignItem = {
   fontFamily?: string;
   color?: string;
   weight?: number;
+  italic?: boolean;
+  lineHeight?: number;
+  /** Wrap text to the box width (default true). */
+  wrap?: boolean;
   align?: "left" | "center" | "right";
   fill?: string;
   stroke?: string;
@@ -38,6 +42,7 @@ export type Sheet = {
   marginX: number;
   marginY: number;
   repeatMode: "same" | "next";
+  cropMarks: boolean;
 };
 
 export type LabelPreset = {
@@ -46,3 +51,16 @@ export type LabelPreset = {
 };
 
 export type RecordMeta = { recordNumber: number; pageNumber: number; recordCount: number; pageCount: number };
+
+export type FontEntry = { family: string; source: "google" | "local" | "custom" };
+
+export type Project = {
+  version: 1;
+  name: string;
+  fileName: string;
+  records: RecordRow[];
+  items: DesignItem[];
+  template: { width: number; height: number };
+  sheet: Sheet;
+  fonts: FontEntry[];
+};

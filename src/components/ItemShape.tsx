@@ -1,5 +1,7 @@
 import type { DesignItem, RecordMeta, RecordRow } from "../types";
 import { PX_PER_IN, valueFor } from "../lib/data";
+import { fontStack } from "../lib/fonts";
+import { fontSizePx, layoutLines } from "../lib/text";
 
 type Props = {
   item: DesignItem;
@@ -13,8 +15,11 @@ type Props = {
 /** One design object as SVG, positioned in inches. Shared by the editor, page layout and print output. */
 export function ItemShape({ item, record, meta, selected, onPointerDown }: Props) {
   const w = item.w * PX_PER_IN;
-  const h = item.h * PX_PER_IN;
-  const fontSize = (item.fontSize ?? 12) * PX_PER_IN / 72;
+  const fontSize = fontSizePx(item);
+  const lineStep = fontSize * (item.lineHeight ?? 1.2);
+  const lines = item.type === "text" ? layoutLines(valueFor(item, record, meta), item, w) : [];
+  // Wrapped text can run past the box, so the outline and grab area grow to cover it.
+  const h = item.type === "text" ? Math.max(item.h * PX_PER_IN, fontSize * 1.4 + (lines.length - 1) * lineStep) : item.h * PX_PER_IN;
   const anchor = item.align === "center" ? "middle" : item.align === "right" ? "end" : "start";
   const textX = item.align === "center" ? w / 2 : item.align === "right" ? w : 0;
   return (
@@ -30,8 +35,8 @@ export function ItemShape({ item, record, meta, selected, onPointerDown }: Props
         <>
           {/* Invisible hit area so thin text is easy to grab with a finger. */}
           {onPointerDown && <rect width={w} height={h} fill="transparent" />}
-          <text x={textX} y={fontSize * 1.15} fontFamily={item.fontFamily ?? "Inter, Arial, sans-serif"} fontSize={fontSize} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={anchor}>
-            {valueFor(item, record, meta)}
+          <text x={textX} y={fontSize * 1.15} fontFamily={fontStack(item.fontFamily)} fontStyle={item.italic ? "italic" : "normal"} fontSize={fontSize} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={anchor}>
+            {lines.map((line, i) => <tspan key={i} x={textX} dy={i === 0 ? 0 : lineStep}>{line || "\u00a0"}</tspan>)}
           </text>
         </>
       )}

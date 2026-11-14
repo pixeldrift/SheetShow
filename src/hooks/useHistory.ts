@@ -32,5 +32,8 @@ export function useHistory<T>(initial: T) {
     setHistory((h) => h.future.length ? { past: [...h.past, h.present], present: h.future[0], future: h.future.slice(1) } : h);
   }, []);
 
-  return { value: history.present, set, undo, redo, breakGroup, canUndo: history.past.length > 0, canRedo: history.future.length > 0 };
+  /** Replaces the document and clears undo history (new / open). */
+  const reset = useCallback((value: T) => { last.current = null; setHistory({ past: [], present: value, future: [] }); }, []);
+
+  return { value: history.present, set, undo, redo, breakGroup, reset, canUndo: history.past.length > 0, canRedo: history.future.length > 0 };
 }

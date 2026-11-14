@@ -1,7 +1,16 @@
-import { CircleHelp, FileText, Printer } from "lucide-react";
+import { useRef, useState } from "react";
+import { CircleHelp, Download, FilePlus, FileText, FolderOpen, Printer } from "lucide-react";
 import type { Workspace } from "../types";
 
-export function Topbar({ workspace, onWorkspace, onPrint }: { workspace: Workspace; onWorkspace: (w: Workspace) => void; onPrint: () => void }) {
+type Props = {
+  workspace: Workspace; onWorkspace: (w: Workspace) => void; onPrint: () => void;
+  name: string; onName: (name: string) => void; saveState: "saved" | "error";
+  onNew: () => void; onOpen: (file: File) => void; onSave: () => void;
+};
+
+export function Topbar({ workspace, onWorkspace, onPrint, name, onName, saveState, onNew, onOpen, onSave }: Props) {
+  const [menu, setMenu] = useState(false);
+  const openRef = useRef<HTMLInputElement>(null);
   return (
     <header className="topbar">
       <div className="brand">
@@ -9,7 +18,22 @@ export function Topbar({ workspace, onWorkspace, onPrint }: { workspace: Workspa
         <div className="brand-name">Sheet<span>Show</span><small>WHERE DATA TAKES THE STAGE</small></div>
       </div>
       <div className="topbar-center">
-        <div className="document-title"><FileText size={15} /><span>Untitled bird card</span></div>
+        <div className="document-title">
+          <button className="icon-button small" aria-label="Project menu" title="Project" aria-expanded={menu} onClick={() => setMenu((m) => !m)}><FileText size={16} /></button>
+          <input className="title-input" value={name} onChange={(e) => onName(e.target.value)} aria-label="Project name" spellCheck={false} />
+          <span className={saveState === "saved" ? "save-dot" : "save-dot error"} title={saveState === "saved" ? "Saved in this browser" : "Couldn’t save in this browser — use Save to file"} />
+          {menu && (
+            <>
+              <div className="menu-scrim" onClick={() => setMenu(false)} />
+              <div className="menu" role="menu">
+                <button role="menuitem" onClick={() => { setMenu(false); if (window.confirm("Start a new project? Unsaved changes in this browser will be replaced.")) onNew(); }}><FilePlus size={15} /> New project</button>
+                <button role="menuitem" onClick={() => { setMenu(false); openRef.current?.click(); }}><FolderOpen size={15} /> Open from file…</button>
+                <button role="menuitem" onClick={() => { setMenu(false); onSave(); }}><Download size={15} /> Save to file</button>
+              </div>
+            </>
+          )}
+          <input ref={openRef} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onOpen(f); e.target.value = ""; }} />
+        </div>
         <div className="workspace-tabs" role="tablist">
           <button role="tab" aria-selected={workspace === "template"} className={workspace === "template" ? "active" : ""} onClick={() => onWorkspace("template")} title="Individual template">
             <svg className="template-tab-icon" viewBox="0 0 48 32" aria-hidden="true"><rect x="2.5" y="2.5" width="43" height="27" rx="2.5" /><path d="M9 2.5v5M39 2.5v5M9 24.5v5M39 24.5v5M2.5 10h5M2.5 22h5M40.5 10h5M40.5 22h5" /></svg>

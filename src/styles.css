@@ -225,7 +225,7 @@ button.preset-option:hover{background:#f8f5ef}
   .panel{position:absolute;top:0;bottom:0;z-index:50;box-shadow:0 4px 24px #1c2b2030}
   .left-panel{left:0;width:min(82vw,290px)}
   .right-panel{right:0;width:min(88vw,330px)}
-  .document-title{display:none}
+  .title-input,.save-dot{display:none}
   .topbar{gap:12px;padding:0 12px}
   .topbar-center{gap:8px}
   .workspace-tabs button{padding:0 9px}
@@ -258,3 +258,48 @@ button.preset-option:hover{background:#f8f5ef}
   .app-shell>:not(.print-root){display:none!important}
   .print-root{display:block}
 }
+
+/* ── Project menu, title, save state ───────────────────────────────────── */
+.document-title{position:relative}
+.icon-button.small{width:28px;height:28px}
+.title-input{border:1px solid transparent;border-radius:5px;background:transparent;font-size:12px;color:#55645b;padding:5px 6px;width:150px;min-width:0}
+.title-input:hover{border-color:#e6e7e0}.title-input:focus{outline:0;border-color:#d69a77;background:#fff}
+.save-dot{width:6px;height:6px;border-radius:50%;background:#77a58a;flex:none}
+.save-dot.error{background:#d0803f}
+.menu-scrim{position:fixed;inset:0;z-index:90}
+.menu{position:absolute;z-index:91;top:38px;left:0;min-width:190px;padding:5px;background:#fff;border:1px solid #e4e4dc;border-radius:9px;box-shadow:0 8px 28px #25352b25}
+.menu button{width:100%;display:flex;align-items:center;gap:9px;padding:9px 10px;border:0;border-radius:6px;background:transparent;font-size:12px;color:#4c5a51;text-align:left}
+.menu button:hover{background:#f6f3ee}
+
+/* ── Selection: marquee, drag ghost ────────────────────────────────────── */
+.marquee{position:absolute;z-index:8;border:1px solid #d77d4e;background:#d77d4e1f;pointer-events:none}
+.drag-ghost{position:fixed;z-index:200;transform:translate(10px,10px);padding:6px 11px;border-radius:7px;background:#cf7949;color:#fff;font-size:12px;font-weight:600;text-transform:capitalize;box-shadow:0 6px 18px #25352b40;pointer-events:none}
+.field-row{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+@media(max-width:850px){.panel.dragging{opacity:0;pointer-events:none}}
+
+/* ── Inspector additions ───────────────────────────────────────────────── */
+.icon-row{display:flex;flex-wrap:wrap;gap:5px}
+.icon-row button{width:34px;height:32px;border:1px solid #e3e5de;border-radius:6px;background:#fff;color:#7b867d;display:grid;place-items:center}
+.icon-row button:hover{background:#f8f3ed;color:#b76f46}
+.textarea{height:auto;padding:8px 9px;resize:vertical;line-height:1.4;font-family:inherit}
+.check-row{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:11px;color:#66736b}
+.check-row input{width:16px;height:16px;accent-color:var(--accent)}
+.hint.warn{color:#b0692f}
+.font-picker{position:relative}
+.font-trigger{display:flex;align-items:center;justify-content:space-between;text-align:left;cursor:pointer}
+.font-trigger span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.font-menu{margin-top:6px;border:1px solid #e3e5de;border-radius:8px;background:#fff;padding:0 8px 8px;box-shadow:0 6px 20px #25352b18}
+.font-menu .field-search{margin:8px 0}
+.font-list{max-height:230px;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y}
+.font-group{font-size:8px;font-weight:700;letter-spacing:.9px;color:#9ba39a;padding:9px 6px 4px}
+.font-row{width:100%;min-height:32px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:0;border-radius:5px;background:transparent;padding:0 7px;font-size:12px;color:#4c5a51;text-align:left}
+.font-row:hover{background:#f8f3ed;color:#b76f46}.font-row.selected{color:#b86e46;font-weight:600}
+.font-row em{font-style:normal;font-size:10px;color:#a0a69d}
+.font-access{width:100%;margin-top:8px;height:32px;border:1px dashed #d9b9a2;border-radius:6px;background:#fdf8f4;color:#a9613a;font-size:11px;font-weight:600}
+.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Crop marks ────────────────────────────────────────────────────────── */
+.crop-marks{position:absolute;left:0;top:0;pointer-events:none}
+.crop-marks line{stroke:#000;stroke-width:.007;stroke-linecap:butt}
+@media print{.crop-marks line{stroke:#000}}
+@media(max-width:620px){.title-input{width:110px}}

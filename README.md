@@ -16,7 +16,12 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Select a text object and click a field to bind or replace its data source
 - Live record preview and record navigation
 - Page layout with repeated-record and sequential-record modes
-- Browser print support
+- Resize handles, multi-select (shift-click or box-select), align and distribute
+- Multi-line, wrapping text with Google Fonts, installed fonts (Chromium) or any typed font name
+- Autosave in the browser, plus save/open project files
+- Drag fields onto the design with mouse, pen or touch (long-press)
+- Crop marks in the page margins and printing of every sheet
+- Browser print support (use “Save as PDF” in the print dialog for a PDF)
 
 ## Run locally
 

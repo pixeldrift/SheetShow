@@ -3,9 +3,12 @@ import { PanelLeft, PanelLeftClose, PanelRight, PanelRightClose } from "lucide-r
 import Papa from "papaparse";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import type { DesignItem, Guide, LabelPreset, RecordRow, Sheet, View, Workspace } from "./types";
+import type { DesignItem, Guide, LabelPreset, Project, RecordRow, Sheet, View, Workspace } from "./types";
 import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid } from "./lib/data";
 import { useHistory } from "./hooks/useHistory";
+import { useFontLibrary } from "./hooks/useFontLibrary";
+import { alignItems, boundsOf, distributeItems, type AlignMode } from "./lib/align";
+import { downloadProject, loadProject, readProjectFile, saveProject } from "./lib/storage";
 import { Topbar } from "./components/Topbar";
 import { Toolbar } from "./components/Toolbar";
 import { EditBar } from "./components/EditBar";
@@ -21,22 +24,30 @@ GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const WIDE_QUERY = "(min-width: 851px)";
 const freshView = (): View => ({ zoom: 1, pan: { x: 0, y: 0 }, fitted: false });
-const defaultSheet: Sheet = { pageWidth: 8.5, pageHeight: 11, columns: 2, rows: 4, gapX: 0.18, gapY: 0.18, marginX: 0.25, marginY: 0.25, repeatMode: "next" };
+const defaultSheet: Sheet = { pageWidth: 8.5, pageHeight: 11, columns: 2, rows: 4, gapX: 0.18, gapY: 0.18, marginX: 0.25, marginY: 0.25, repeatMode: "next", cropMarks: false };
+const DEFAULT_NAME = "Untitled bird card";
 
 function App() {
-  // ── Document ────────────────────────────────────────────────────────────
-  const [records, setRecords] = useState<RecordRow[]>(starterRecords);
-  const [fileName, setFileName] = useState("bird-records.csv");
-  const history = useHistory<DesignItem[]>(starterItems);
+  // ── Document (restored from this browser's last session when available) ──
+  const [initial] = useState(() => loadProject());
+  const [records, setRecords] = useState<RecordRow[]>(initial?.records ?? starterRecords);
+  const [fileName, setFileName] = useState(initial?.fileName ?? "bird-records.csv");
+  const [docName, setDocName] = useState(initial?.name ?? DEFAULT_NAME);
+  const history = useHistory<DesignItem[]>(initial?.items ?? starterItems);
   const items = history.value;
-  const [template, setTemplate] = useState({ width: 3.5, height: 2 });
-  const [sheet, setSheet] = useState<Sheet>(defaultSheet);
+  const [template, setTemplate] = useState(initial?.template ?? { width: 3.5, height: 2 });
+  const [sheet, setSheet] = useState<Sheet>(initial?.sheet ?? defaultSheet);
   const [recordIndex, setRecordIndex] = useState(0);
+  const fontLibrary = useFontLibrary(initial?.fonts ?? []);
 
   // ── UI state ────────────────────────────────────────────────────────────
   const [workspace, setWorkspace] = useState<Workspace>("template");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [clipboard, setClipboard] = useState<DesignItem | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [multiMode, setMultiMode] = useState(false);
+  const [clipboard, setClipboard] = useState<DesignItem[]>([]);
+  const [saveState, setSaveState] = useState<"saved" | "error">("saved");
+  const [fieldDrag, setFieldDrag] = useState<{ field: string; x: number; y: number } | null>(null);
+  const justDragged = useRef(false);
   const [dataOpen, setDataOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
   const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
   const [showGrid, setShowGrid] = useState(false);
@@ -57,7 +68,8 @@ function App() {
   // ── Derived ─────────────────────────────────────────────────────────────
   const fields = useMemo(() => Object.keys(records[0] ?? {}), [records]);
   const currentRecord = records[recordIndex] ?? {};
-  const selected = items.find((item) => item.id === selectedId) ?? null;
+  const selectedItems = useMemo(() => items.filter((item) => selectedIds.includes(item.id)), [items, selectedIds]);
+  const selected = selectedItems.length === 1 ? selectedItems[0] : null;
   const slots = sheet.columns * sheet.rows;
   const pageCount = sheet.repeatMode === "same" ? 1 : Math.max(1, Math.ceil(records.length / slots));
   const currentPage = sheet.repeatMode === "same" ? 0 : Math.floor(recordIndex / slots);
@@ -91,7 +103,7 @@ function App() {
 
   const switchWorkspace = (next: Workspace) => {
     setWorkspace(next);
-    setSelectedId(null);
+    setSelectedIds([]);
     setPreview(false);
   };
 
@@ -101,9 +113,13 @@ function App() {
 
   const addItem = (item: DesignItem) => {
     history.set((list) => [...list, item]);
-    setSelectedId(item.id);
+    setSelectedIds([item.id]);
     setWorkspace("template");
     setPreview(false);
+  };
+  const addItems = (added: DesignItem[]) => {
+    history.set((list) => [...list, ...added]);
+    setSelectedIds(added.map((item) => item.id));
   };
 
   const addText = (field?: string, x = 0.5, y = 0.5) =>
@@ -111,20 +127,42 @@ function App() {
 
   const addShape = () => addItem({ id: uid(), type: "rect", x: 0.35, y: 0.35, w: 1.1, h: 0.65, fill: "#e9eee9", stroke: "#cbd5cc", visible: true });
 
-  const removeItem = (id: string) => { history.set((list) => list.filter((item) => item.id !== id)); setSelectedId(null); };
-  const deleteSelected = () => { if (selected) removeItem(selected.id); };
-  const copySelected = () => { if (selected) setClipboard({ ...selected }); };
-  const cutSelected = () => { if (selected) { setClipboard({ ...selected }); removeItem(selected.id); } };
-  const pasteItem = () => {
-    if (!clipboard) return;
-    const next = { ...clipboard, id: uid(), x: clipboard.x + 0.12, y: clipboard.y + 0.12 };
-    setClipboard(next); // successive pastes cascade
-    addItem(next);
+  const deleteSelected = () => {
+    if (!selectedIds.length) return;
+    history.set((list) => list.filter((item) => !selectedIds.includes(item.id)));
+    setSelectedIds([]);
   };
-  const duplicateSelected = () => {
-    if (!selected) return;
-    addItem({ ...selected, id: uid(), x: selected.x + 0.12, y: selected.y + 0.12 });
+  const copySelected = () => { if (selectedItems.length) setClipboard(selectedItems.map((item) => ({ ...item }))); };
+  const cutSelected = () => { copySelected(); deleteSelected(); };
+  const cloneOffset = (list: DesignItem[]) => list.map((item) => ({ ...item, id: uid(), x: item.x + 0.12, y: item.y + 0.12 }));
+  const pasteItems = () => {
+    if (!clipboard.length) return;
+    const pasted = cloneOffset(clipboard);
+    setClipboard(pasted); // successive pastes cascade
+    addItems(pasted);
+    setWorkspace("template");
   };
+  const duplicateSelected = () => { if (selectedItems.length) addItems(cloneOffset(selectedItems)); };
+
+  const moveMany = (updates: { id: string; x: number; y: number }[]) => history.set((list) => {
+    const byId = new Map(updates.map((u) => [u.id, u]));
+    return list.map((item) => (byId.has(item.id) ? { ...item, x: byId.get(item.id)!.x, y: byId.get(item.id)!.y } : item));
+  }, { coalesce: "drag" });
+  const resizeItem = (id: string, box: { x: number; y: number; w: number; h: number }) => updateItem(id, box, `resize:${id}`);
+
+  const align = (mode: AlignMode) => {
+    const within = selectedItems.length > 1 ? boundsOf(selectedItems) : { x: 0, y: 0, w: template.width, h: template.height };
+    history.set((list) => alignItems(list, selectedIds, mode, within));
+  };
+  const distribute = (axis: "x" | "y") => history.set((list) => distributeItems(list, selectedIds, axis));
+
+  const onMarquee = (box: { x: number; y: number; w: number; h: number }, additive: boolean) => {
+    const hits = items
+      .filter((item) => item.visible !== false && item.x < box.x + box.w && item.x + item.w > box.x && item.y < box.y + box.h && item.y + item.h > box.y)
+      .map((item) => item.id);
+    setSelectedIds((current) => (additive ? [...new Set([...current, ...hits])] : hits));
+  };
+
   const moveLayer = (id: string, direction: -1 | 1) => history.set((list) => {
     const index = list.findIndex((item) => item.id === id);
     const target = index + direction;
@@ -135,6 +173,7 @@ function App() {
   });
 
   const bindField = (field: string) => {
+    if (justDragged.current) return;
     if (selected?.type === "text") updateItem(selected.id, { field, text: fieldDisplayName(field) });
     else addText(field);
     if (!window.matchMedia(WIDE_QUERY).matches) setDataOpen(false); // overlay drawer: reveal the result
@@ -207,6 +246,83 @@ function App() {
     setViews((v) => ({ template: { ...v.template, fitted: false }, layout: { ...v.layout, fitted: false } }));
   };
 
+  // ── Dragging a field from the drawer onto the canvas (mouse, touch long-press, pen) ──
+  const dropField = (field: string, clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    const element = document.elementFromPoint(clientX, clientY);
+    if (workspace !== "template" || !svg || !element?.closest(".viewport")) return;
+    const targetId = element.closest("[data-item-id]")?.getAttribute("data-item-id");
+    const target = items.find((item) => item.id === targetId);
+    if (target?.type === "text") { updateItem(target.id, { field, text: fieldDisplayName(field) }); setSelectedIds([target.id]); return; }
+    const rect = svg.getBoundingClientRect();
+    const scale = PX_PER_IN * view.zoom;
+    addText(field, Number(((clientX - rect.left) / scale).toFixed(2)), Number(((clientY - rect.top) / scale).toFixed(2)));
+  };
+
+  const startFieldDrag = (field: string, event: React.PointerEvent) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const { pointerId, clientX: startX, clientY: startY } = event;
+    const touch = event.pointerType !== "mouse";
+    let active = false;
+    const begin = () => { active = true; setFieldDrag({ field, x: startX, y: startY }); navigator.vibrate?.(8); };
+    const timer = touch ? window.setTimeout(begin, 260) : undefined;
+    const blockScroll = (e: TouchEvent) => { if (active) e.preventDefault(); };
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      window.removeEventListener("touchmove", blockScroll);
+      setFieldDrag(null);
+    };
+    function move(e: PointerEvent) {
+      if (e.pointerId !== pointerId) return;
+      if (!active && Math.hypot(e.clientX - startX, e.clientY - startY) > (touch ? 8 : 5)) {
+        if (touch) { cleanup(); return; } // finger moved first: the user is scrolling the list
+        begin();
+      }
+      if (active) setFieldDrag({ field, x: e.clientX, y: e.clientY });
+    }
+    function end(e: PointerEvent) {
+      if (e.pointerId !== pointerId) return;
+      const wasActive = active;
+      cleanup();
+      if (!wasActive) return;
+      if (e.type === "pointerup") {
+        dropField(field, e.clientX, e.clientY);
+        if (!window.matchMedia(WIDE_QUERY).matches) setDataOpen(false); // overlay drawer: reveal the result
+      }
+      justDragged.current = true; // swallow the click that follows a drag
+      window.setTimeout(() => { justDragged.current = false; }, 60);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    window.addEventListener("touchmove", blockScroll, { passive: false });
+  };
+
+  // ── Projects: autosave to this browser, plus save / open as a file ──
+  const snapshot = (): Project => ({ version: 1, name: docName, fileName, records, items, template, sheet, fonts: fontLibrary.fonts });
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSaveState(saveProject(snapshot()) ? "saved" : "error"), 600);
+    return () => window.clearTimeout(timer);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const applyProject = (project: Project) => {
+    history.reset(project.items);
+    setRecords(project.records); setFileName(project.fileName); setDocName(project.name);
+    setTemplate(project.template); setSheet(project.sheet);
+    fontLibrary.restore(project.fonts);
+    setSelectedIds([]); setRecordIndex(0);
+    setGuides({ template: [], layout: [] });
+    setViews({ template: freshView(), layout: freshView() });
+  };
+  const newProject = () => applyProject({ version: 1, name: DEFAULT_NAME, fileName: "bird-records.csv", records: starterRecords, items: starterItems, template: { width: 3.5, height: 2 }, sheet: defaultSheet, fonts: [] });
+  const openProject = async (file: File) => {
+    try { applyProject(await readProjectFile(file)); }
+    catch (error) { window.alert(error instanceof Error ? error.message : "That project file could not be opened."); }
+  };
+
   // ── Records ─────────────────────────────────────────────────────────────
   const stepRecord = (delta: number) => {
     if (pagedNav) setRecordIndex(clamp(currentPage + delta, 0, pageCount - 1) * slots);
@@ -233,21 +349,23 @@ function App() {
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       const mod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
+      const has = selectedItems.length > 0;
       if (mod && key === "z") { event.preventDefault(); event.shiftKey ? history.redo() : history.undo(); }
       else if (mod && key === "y") { event.preventDefault(); history.redo(); }
       else if (workspace !== "template") return;
-      else if (mod && key === "c") { if (selected) { event.preventDefault(); copySelected(); } }
-      else if (mod && key === "x") { if (selected) { event.preventDefault(); cutSelected(); } }
-      else if (mod && key === "v") { if (clipboard) { event.preventDefault(); pasteItem(); } }
-      else if (mod && key === "d") { if (selected) { event.preventDefault(); duplicateSelected(); } }
-      else if (key === "delete" || key === "backspace") { if (selected) { event.preventDefault(); deleteSelected(); } }
-      else if (key === "escape") setSelectedId(null);
-      else if (selected && !selected.locked && key.startsWith("arrow")) {
+      else if (mod && key === "a") { event.preventDefault(); setSelectedIds(items.filter((i) => i.visible !== false).map((i) => i.id)); }
+      else if (mod && key === "c") { if (has) { event.preventDefault(); copySelected(); } }
+      else if (mod && key === "x") { if (has) { event.preventDefault(); cutSelected(); } }
+      else if (mod && key === "v") { if (clipboard.length) { event.preventDefault(); pasteItems(); } }
+      else if (mod && key === "d") { if (has) { event.preventDefault(); duplicateSelected(); } }
+      else if (key === "delete" || key === "backspace") { if (has) { event.preventDefault(); deleteSelected(); } }
+      else if (key === "escape") setSelectedIds([]);
+      else if (has && key.startsWith("arrow")) {
         event.preventDefault();
         const step = event.shiftKey ? 0.1 : snap ? 0.05 : 0.01;
         const dx = key === "arrowleft" ? -step : key === "arrowright" ? step : 0;
         const dy = key === "arrowup" ? -step : key === "arrowdown" ? step : 0;
-        updateItem(selected.id, { x: Number((selected.x + dx).toFixed(3)), y: Number((selected.y + dy).toFixed(3)) }, `nudge:${selected.id}`);
+        moveMany(selectedItems.filter((i) => !i.locked).map((i) => ({ id: i.id, x: Number((i.x + dx).toFixed(3)), y: Number((i.y + dy).toFixed(3)) })));
       }
     };
     window.addEventListener("keydown", onKey);
@@ -262,7 +380,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Topbar workspace={workspace} onWorkspace={switchWorkspace} onPrint={printNow} />
+      <Topbar workspace={workspace} onWorkspace={switchWorkspace} onPrint={printNow} name={docName} onName={setDocName} saveState={saveState} onNew={newProject} onOpen={openProject} onSave={() => downloadProject(snapshot())} />
 
       <main className="workspace">
         <Toolbar
@@ -270,6 +388,7 @@ function App() {
           showRulers={showRulers} onRulers={() => setShowRulers((v) => !v)}
           snap={snap} onSnap={() => setSnap((v) => !v)}
           preview={preview} onPreview={() => setPreview((v) => !v)}
+          multi={multiMode} onMulti={() => setMultiMode((v) => !v)}
           zoom={view.zoom} onZoom={setZoom} onZoomPreset={toggleZoomPreset}
           onAddText={() => addText()} onAddShape={addShape} onAddImage={() => imageInputRef.current?.click()}
         />
@@ -277,7 +396,7 @@ function App() {
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
           {dataOpen && (
-            <DataPanel fileName={fileName} fields={fields} recordCount={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onClose={() => setDataOpen(false)} />
+            <DataPanel fileName={fileName} fields={fields} recordCount={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)} />
           )}
 
           <div className="editor-content">
@@ -291,19 +410,17 @@ function App() {
                 showRulers={showRulers}
                 guides={guides[workspace]}
                 onGuides={(update) => setGuides((g) => ({ ...g, [workspace]: update(g[workspace]) }))}
-                onRulerDoubleClick={() => { setSelectedId(null); setInspectorOpen(true); }}
-                onBackgroundClick={() => setSelectedId(null)}
+                onRulerDoubleClick={() => { setSelectedIds([]); setInspectorOpen(true); }}
+                onBackgroundClick={() => setSelectedIds([])}
+                marqueeMode={multiMode && workspace === "template"}
+                onMarquee={workspace === "template" ? onMarquee : undefined}
                 paperClassName={preview ? "preview" : ""}
               >
                 {workspace === "template" ? (
                   <TemplateStage
                     items={items} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
-                    selectedId={selectedId} showGrid={showGrid} snap={snap} guides={guides.template} preview={preview} svgRef={svgRef}
-                    onSelect={setSelectedId}
-                    onMove={(id, x, y) => updateItem(id, { x, y }, `drag:${id}`)}
-                    onDragEnd={history.breakGroup}
-                    onBind={(id, field) => { updateItem(id, { field, text: fieldDisplayName(field) }); setSelectedId(id); }}
-                    onDropField={(field, x, y) => addText(field, x, y)}
+                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} guides={guides.template} multi={multiMode} preview={preview} svgRef={svgRef}
+                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onDragEnd={history.breakGroup}
                   />
                 ) : (
                   <LayoutStage
@@ -325,8 +442,8 @@ function App() {
 
               {workspace === "template" && (
                 <EditBar
-                  hasSelection={!!selected} canPaste={!!clipboard} canUndo={history.canUndo} canRedo={history.canRedo}
-                  onUndo={history.undo} onRedo={history.redo} onDelete={deleteSelected} onCut={cutSelected} onCopy={copySelected} onPaste={pasteItem}
+                  hasSelection={selectedItems.length > 0} canPaste={clipboard.length > 0} canUndo={history.canUndo} canRedo={history.canRedo}
+                  onUndo={history.undo} onRedo={history.redo} onDelete={deleteSelected} onCut={cutSelected} onCopy={copySelected} onPaste={pasteItems}
                 />
               )}
             </div>
@@ -342,7 +459,8 @@ function App() {
 
           {inspectorOpen && (
             <Inspector
-              workspace={workspace} items={items} selected={selected} onSelect={setSelectedId} onUpdate={updateItem}
+              workspace={workspace} items={items} selectedItems={selectedItems} onSelect={setSelectedIds} onUpdate={updateItem}
+              fontLibrary={fontLibrary} onAlign={align} onDistribute={distribute}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onMoveLayer={moveLayer}
               templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate({ width, height })} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
@@ -351,6 +469,8 @@ function App() {
           )}
         </div>
       </main>
+
+      {fieldDrag && <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>}
 
       {printing && (
         <PrintSheets sheet={sheet} items={items} records={records} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} />

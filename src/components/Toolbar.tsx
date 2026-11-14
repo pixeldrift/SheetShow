@@ -1,4 +1,4 @@
-import { FileSearch, Grid2X2, ImagePlus, Magnet, Ruler, Shapes, Type, ZoomIn, ZoomOut } from "lucide-react";
+import { BoxSelect, FileSearch, Grid2X2, ImagePlus, Magnet, Ruler, Shapes, Type, ZoomIn, ZoomOut } from "lucide-react";
 import { MAX_ZOOM, MIN_ZOOM } from "./Viewport";
 
 type Props = {
@@ -7,6 +7,7 @@ type Props = {
   snap: boolean; onSnap: () => void;
   preview: boolean; onPreview: () => void;
   zoom: number; onZoom: (zoom: number) => void; onZoomPreset: () => void;
+  multi: boolean; onMulti: () => void;
   onAddText: () => void; onAddShape: () => void; onAddImage: () => void;
 };
 
@@ -23,6 +24,7 @@ export function Toolbar(p: Props) {
       </div>
       <div className="toolbar-divider" />
       <div className="tool-group">
+        {toggle(p.multi, "Multi-select (tap items to add, drag to box-select)", p.onMulti, <BoxSelect size={15} />)}
         {toggle(p.showGrid, "Show grid", p.onGrid, <Grid2X2 size={15} />)}
         {toggle(p.showRulers, "Show rulers", p.onRulers, <Ruler size={15} />)}
         {toggle(p.snap, "Snap to grid and guides", p.onSnap, <Magnet size={15} />)}

@@ -1,4 +1,4 @@
-import { PointerEvent as ReactPointerEvent, ReactNode, RefObject, useEffect, useRef } from "react";
+import { PointerEvent as ReactPointerEvent, ReactNode, RefObject, useEffect, useRef, useState } from "react";
 import type { Guide, View } from "../types";
 import { PX_PER_IN, clamp } from "../lib/data";
 import { Ruler } from "./Ruler";
@@ -17,6 +17,9 @@ type Props = {
   onGuides: (update: (guides: Guide[]) => Guide[]) => void;
   onRulerDoubleClick: () => void;
   onBackgroundClick: () => void;
+  /** Drag on empty space draws a selection box (otherwise it pans). Shift always does this. */
+  marqueeMode?: boolean;
+  onMarquee?: (box: { x: number; y: number; w: number; h: number }, additive: boolean) => void;
   /** Page content, laid out at 96px per inch. The viewport scales it. */
   children: ReactNode;
   /** Rendered in the page's coordinate space beneath the guides, e.g. for the edit SVG. */
@@ -25,13 +28,15 @@ type Props = {
 
 type Gesture =
   | { kind: "pan"; pointerId: number; startX: number; startY: number; panX: number; panY: number; moved: boolean }
+  | { kind: "marquee"; pointerId: number; startX: number; startY: number; additive: boolean; moved: boolean }
   | { kind: "pinch"; startDistance: number; startZoom: number };
 
 /**
  * Pan / zoom surface. The page is centred in the viewport and offset by `view.pan`,
  * so a pan of (0, 0) is always "centred" regardless of drawer state or zoom.
  */
-export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRulers, guides, onGuides, onRulerDoubleClick, onBackgroundClick, children, paperClassName }: Props) {
+export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRulers, guides, onGuides, onRulerDoubleClick, onBackgroundClick, marqueeMode, onMarquee, children, paperClassName }: Props) {
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<Gesture | null>(null);
   const paperRef = useRef<HTMLDivElement>(null);
@@ -67,6 +72,8 @@ export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRu
     const points = [...pointers.current.values()];
     if (points.length >= 2) {
       gesture.current = { kind: "pinch", startDistance: Math.max(1, Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y)), startZoom: view.zoom };
+    } else if ((marqueeMode || event.shiftKey) && onMarquee) {
+      gesture.current = { kind: "marquee", pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, additive: event.shiftKey || !!marqueeMode, moved: false };
     } else {
       gesture.current = { kind: "pan", pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, panX: view.pan.x, panY: view.pan.y, moved: false };
     }
@@ -81,6 +88,12 @@ export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRu
       const [a, b] = [...pointers.current.values()];
       if (!a || !b) return;
       onView({ zoom: clamp(g.startZoom * Math.hypot(a.x - b.x, a.y - b.y) / g.startDistance, MIN_ZOOM, MAX_ZOOM) });
+    } else if (g.kind === "marquee") {
+      if (g.pointerId !== event.pointerId) return;
+      if (!g.moved && Math.hypot(event.clientX - g.startX, event.clientY - g.startY) < 4) return;
+      g.moved = true;
+      const host = containerRef.current!.getBoundingClientRect();
+      setMarquee({ x: Math.min(g.startX, event.clientX) - host.left, y: Math.min(g.startY, event.clientY) - host.top, w: Math.abs(event.clientX - g.startX), h: Math.abs(event.clientY - g.startY) });
     } else if (g.pointerId === event.pointerId) {
       const dx = event.clientX - g.startX;
       const dy = event.clientY - g.startY;
@@ -94,7 +107,12 @@ export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRu
     if (!pointers.current.has(event.pointerId)) return;
     pointers.current.delete(event.pointerId);
     const g = gesture.current;
-    const wasTap = g?.kind === "pan" && !g.moved && event.type === "pointerup";
+    if (g?.kind === "marquee" && g.moved && event.type === "pointerup" && onMarquee) {
+      const a = pageInches(g.startX, g.startY), b = pageInches(event.clientX, event.clientY);
+      onMarquee({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) }, g.additive);
+    }
+    setMarquee(null);
+    const wasTap = (g?.kind === "pan" || g?.kind === "marquee") && !g.moved && event.type === "pointerup";
     const remaining = [...pointers.current.entries()];
     if (remaining.length === 1) {
       const [pointerId, point] = remaining[0];
@@ -149,6 +167,7 @@ export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRu
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
+      {marquee && <div className="marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}
       <div className="stage" style={{ transform: `translate(calc(-50% + ${view.pan.x}px), calc(-50% + ${view.pan.y}px))`, width: paperW, height: paperH }}>
         {showRulers && <div className="ruler-corner" />}
         {showRulers && <Ruler axis="x" lengthIn={widthIn} zoom={view.zoom} onPointerDown={(e) => startGuideFromRuler(e, "y")} onDoubleClick={onRulerDoubleClick} />}

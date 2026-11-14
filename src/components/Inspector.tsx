@@ -1,17 +1,25 @@
 import { useState } from "react";
 import {
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
-  Hash, Layers, Link2Off, ListFilter, Lock, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
+  Hash, Italic, Layers, Link2Off, ListFilter, Lock, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
+  AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
+  AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter,
 } from "lucide-react";
 import type { DesignItem, LabelPreset, Sheet } from "../types";
 import { averyPresets, fieldDisplayName } from "../lib/data";
+import type { AlignMode } from "../lib/align";
+import type { FontLibrary } from "../hooks/useFontLibrary";
 import { NumberField, Pair, Section } from "./Fields";
+import { FontPicker } from "./FontPicker";
 
 type Props = {
   workspace: "template" | "layout";
   items: DesignItem[];
-  selected: DesignItem | null;
-  onSelect: (id: string | null) => void;
+  selectedItems: DesignItem[];
+  onSelect: (ids: string[], additive?: boolean) => void;
+  fontLibrary: FontLibrary;
+  onAlign: (mode: AlignMode) => void;
+  onDistribute: (axis: "x" | "y") => void;
   onUpdate: (id: string, patch: Partial<DesignItem>, coalesce?: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -32,9 +40,10 @@ const kindIcon = (item: DesignItem, size = 14) =>
 const layerLabel = (item: DesignItem) => (item.field ? fieldDisplayName(item.field) : item.text || item.assetName || (item.type === "rect" ? "Shape" : "Item"));
 
 export function Inspector(props: Props) {
-  const { workspace, items, selected, onSelect, onUpdate, onClose } = props;
+  const { workspace, items, selectedItems, onSelect, onUpdate, onClose } = props;
+  const selected = selectedItems.length === 1 ? selectedItems[0] : null;
   const [tab, setTab] = useState<"properties" | "layers">("properties");
-  const title = tab === "layers" ? "Layers" : selected ? "Item properties" : workspace === "template" ? "Template setup" : "Page setup";
+  const title = tab === "layers" ? "Layers" : selectedItems.length > 1 ? `${selectedItems.length} items` : selected ? "Item properties" : workspace === "template" ? "Template setup" : "Page setup";
 
   return (
     <aside className="panel right-panel" aria-label="Properties and layers">
@@ -50,7 +59,7 @@ export function Inspector(props: Props) {
         {tab === "layers" ? (
           <div className="layer-list">
             {[...items].reverse().map((item) => (
-              <div key={item.id} className={selected?.id === item.id ? "layer-row selected" : "layer-row"} onClick={() => { onSelect(item.id); setTab("properties"); }}>
+              <div key={item.id} className={selectedItems.some((s) => s.id === item.id) ? "layer-row selected" : "layer-row"} onClick={(e) => { if (e.shiftKey || e.metaKey || e.ctrlKey) onSelect(selectedItems.some((s) => s.id === item.id) ? selectedItems.filter((s) => s.id !== item.id).map((s) => s.id) : [...selectedItems.map((s) => s.id), item.id]); else { onSelect([item.id]); setTab("properties"); } }}>
                 <span className="layer-kind">{kindIcon(item, 13)}</span>
                 <span className="layer-label">{layerLabel(item)}</span>
                 <button className="mini-button" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { visible: item.visible === false }); }}>{item.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}</button>
@@ -61,8 +70,10 @@ export function Inspector(props: Props) {
             ))}
             {!items.length && <p className="empty-note">Nothing on this template yet.</p>}
           </div>
+        ) : selectedItems.length > 1 ? (
+          <MultiProperties count={selectedItems.length} onAlign={props.onAlign} onDistribute={props.onDistribute} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
         ) : selected ? (
-          <ItemProperties item={selected} onUpdate={onUpdate} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
+          <ItemProperties item={selected} onUpdate={onUpdate} onDuplicate={props.onDuplicate} onDelete={props.onDelete} fontLibrary={props.fontLibrary} onAlign={props.onAlign} />
         ) : workspace === "template" ? (
           <TemplateSetup {...props} />
         ) : (
@@ -73,7 +84,37 @@ export function Inspector(props: Props) {
   );
 }
 
-function ItemProperties({ item, onUpdate, onDuplicate, onDelete }: { item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void }) {
+const ALIGN_BUTTONS: [AlignMode, string, typeof AlignStartVertical][] = [
+  ["left", "Align left", AlignStartVertical], ["center", "Align centre horizontally", AlignCenterVertical], ["right", "Align right", AlignEndVertical],
+  ["top", "Align top", AlignStartHorizontal], ["middle", "Align centre vertically", AlignCenterHorizontal], ["bottom", "Align bottom", AlignEndHorizontal],
+];
+
+function AlignRow({ onAlign, onDistribute, label }: { onAlign: (mode: AlignMode) => void; onDistribute?: (axis: "x" | "y") => void; label: string }) {
+  return (
+    <Section title="ALIGN" unit={label}>
+      <div className="icon-row">
+        {ALIGN_BUTTONS.map(([mode, title, Icon]) => <button key={mode} title={title} aria-label={title} onClick={() => onAlign(mode)}><Icon size={16} /></button>)}
+        {onDistribute && <>
+          <button title="Distribute horizontally" aria-label="Distribute horizontally" onClick={() => onDistribute("x")}><AlignHorizontalDistributeCenter size={16} /></button>
+          <button title="Distribute vertically" aria-label="Distribute vertically" onClick={() => onDistribute("y")}><AlignVerticalDistributeCenter size={16} /></button>
+        </>}
+      </div>
+    </Section>
+  );
+}
+
+function MultiProperties({ count, onAlign, onDistribute, onDuplicate, onDelete }: { count: number; onAlign: (m: AlignMode) => void; onDistribute: (a: "x" | "y") => void; onDuplicate: () => void; onDelete: () => void }) {
+  return (
+    <>
+      <div className="property-heading"><div className="property-icon"><Layers size={17} /></div><div><strong>{count} items selected</strong><span>Drag to move them together</span></div></div>
+      <AlignRow onAlign={onAlign} onDistribute={count >= 3 ? onDistribute : undefined} label="TO SELECTION" />
+      <p className="hint">Distribute needs three or more items. Shift-click items or layers to adjust the selection.</p>
+      <div className="property-actions"><button onClick={onDuplicate}><Copy size={14} /> Duplicate</button><button className="danger" onClick={onDelete}><Trash2 size={14} /> Delete</button></div>
+    </>
+  );
+}
+
+function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, onAlign }: { item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary; onAlign: (m: AlignMode) => void }) {
   const patch = (p: Partial<DesignItem>, key?: string) => onUpdate(item.id, p, key ?? `prop:${item.id}:${Object.keys(p).join()}`);
   return (
     <>
@@ -91,12 +132,14 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete }: { item: Desig
                 <button onClick={() => patch({ field: undefined, text: fieldDisplayName(item.field!) })} title="Unlink and keep as static text"><Link2Off size={13} /> Unlink</button>
               </div>
             ) : (
-              <input className="property-input" value={item.text ?? ""} onChange={(e) => patch({ text: e.target.value })} placeholder="Enter text…" />
+              <textarea className="property-input textarea" rows={3} value={item.text ?? ""} onChange={(e) => patch({ text: e.target.value })} placeholder="Enter text…" />
             )}
-            {!item.field && <p className="hint">Pick a field in the data drawer to link this text to your data.</p>}
+            {!item.field && <p className="hint">Press Enter for a new line. Pick a field in the data drawer to link this text to your data.</p>}
+            <label className="check-row"><input type="checkbox" checked={item.wrap !== false} onChange={(e) => patch({ wrap: e.target.checked })} /> Wrap text to the box width</label>
           </Section>
           <Section title="TYPOGRAPHY">
-            <div className="two-col">
+            <FontPicker value={item.fontFamily} library={fontLibrary} onPick={(family) => patch({ fontFamily: family })} />
+            <div className="two-col spaced">
               <Pair label="Font size"><NumberField value={item.fontSize ?? 12} min={4} max={200} step={1} unit="pt" onChange={(n) => patch({ fontSize: n })} /></Pair>
               <Pair label="Weight">
                 <select className="select" value={item.weight ?? 500} onChange={(e) => patch({ weight: Number(e.target.value) })}>
@@ -108,7 +151,9 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete }: { item: Desig
               {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([value, Icon]) => (
                 <button key={value} aria-label={`Align ${value}`} className={(item.align ?? "left") === value ? "active" : ""} onClick={() => patch({ align: value })}><Icon size={15} /></button>
               ))}
+              <button aria-label="Italic" aria-pressed={!!item.italic} className={item.italic ? "active" : ""} onClick={() => patch({ italic: !item.italic })}><Italic size={15} /></button>
             </div>
+            <div className="two-col spaced"><Pair label="Line height"><NumberField value={item.lineHeight ?? 1.2} min={0.6} max={4} step={0.05} places={2} onChange={(n) => patch({ lineHeight: n })} /></Pair></div>
             <div className="color-row"><span>Text color</span><input type="color" value={item.color ?? "#34443d"} onChange={(e) => patch({ color: e.target.value })} /></div>
           </Section>
         </>
@@ -129,6 +174,8 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete }: { item: Desig
           <Pair label="Height"><NumberField value={item.h} min={0.01} onChange={(n) => patch({ h: n })} /></Pair>
         </div>
       </Section>
+
+      <AlignRow onAlign={onAlign} label="TO TEMPLATE" />
 
       <div className="property-actions">
         <button onClick={onDuplicate}><Copy size={14} /> Duplicate</button>
@@ -203,6 +250,10 @@ function PageSetup({ sheet, onSheet, pageCount, overflow }: Props) {
           <Pair label="Horizontal"><NumberField value={sheet.gapX} min={0} unit="in" onChange={(n) => onSheet({ gapX: n })} /></Pair>
           <Pair label="Vertical"><NumberField value={sheet.gapY} min={0} unit="in" onChange={(n) => onSheet({ gapY: n })} /></Pair>
         </div>
+      </Section>
+      <Section title="PRINT OPTIONS">
+        <label className="check-row"><input type="checkbox" checked={sheet.cropMarks} onChange={(e) => onSheet({ cropMarks: e.target.checked })} /> Crop marks in the page margins</label>
+        <p className="hint">Shown in print preview and on printed sheets. They need roughly ¼″ of margin to appear.</p>
       </Section>
       <Section title="DATA ASSIGNMENT">
         <div className="mode-options">
