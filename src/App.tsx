@@ -88,6 +88,8 @@ function App() {
   const [showMobileLayers, setShowMobileLayers] = useState(false);
   const [dataDrawerOpen, setDataDrawerOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia("(min-width: 851px)").matches);
+  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
   const [presetSearch, setPresetSearch] = useState("");
   const [recordIndex, setRecordIndex] = useState(0);
   const [workspace, setWorkspace] = useState<"template" | "layout">("template");
@@ -290,8 +292,28 @@ function App() {
     updateItem(dragRef.current.id, { x: Math.max(0, Number(nextX.toFixed(3))), y: Math.max(0, Number(nextY.toFixed(3))) });
   };
 
+  const startPan = (event: PointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest(".canvas-object,button,input,select")) return;
+    if (event.button !== 0) return;
+    event.preventDefault();
+    panRef.current = { startX: event.clientX, startY: event.clientY, panX: viewPan.x, panY: viewPan.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const movePan = (event: PointerEvent<HTMLDivElement>) => {
+    if (!panRef.current) return;
+    setViewPan({ x: panRef.current.panX + event.clientX - panRef.current.startX, y: panRef.current.panY + event.clientY - panRef.current.startY });
+  };
+  const endPan = () => { panRef.current = null; };
+
   const addPageSlot = (slot: number) => repeatMode === "same" ? recordIndex : Math.min(records.length - 1, currentPage * totalSlots + slot);
-  const fitZoom = () => Math.max(0.25, Math.min(2, Math.min((window.innerWidth - 360) / (templateWidth * 96), (window.innerHeight - 250) / (templateHeight * 96))));
+  const fitZoom = () => {
+    const area = document.querySelector(".canvas-area");
+    const width = Math.max(160, (area?.clientWidth ?? window.innerWidth) - 72);
+    const height = Math.max(160, (area?.clientHeight ?? window.innerHeight) - 100);
+    const targetWidth = workspace === "layout" ? pageWidth * 96 : templateWidth * 96;
+    const targetHeight = workspace === "layout" ? pageHeight * 96 : templateHeight * 96;
+    return Math.max(0.15, Math.min(2, width / targetWidth, height / targetHeight));
+  };
   const toggleZoomPreset = () => setZoom((current) => Math.abs(current - 1) < 0.02 ? fitZoom() : 1);
   const printNow = () => {
     if (!showPrintPreview) setShowPrintPreview(true);
@@ -314,7 +336,7 @@ function App() {
         const isSelected = !mini && selectedId === item.id;
         return (
           <g key={item.id} data-item-id={item.id} transform={`translate(${item.x * 96} ${item.y * 96})`} onPointerDown={(event) => !mini && startMove(event, item)} onClick={(event) => { if (!mini) { event.stopPropagation(); setSelectedId(item.id); setShowMobileLayers(false); } }} className={!mini ? "canvas-object" : ""} style={{ cursor: mini ? "default" : "move" }}>
-            {item.type === "rect" && <rect width={item.w * 96} height={item.h * 96} rx="2" fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1"/>}
+            {item.type === "rect" && <rect width={item.w * 96} height={item.h * 96} rx="0" fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1"/>}
             {item.type === "image" && item.src && <image href={item.src} width={item.w * 96} height={item.h * 96} preserveAspectRatio="xMidYMid slice"/>}
             {item.type === "text" && <text x={item.align === "center" ? item.w * 48 : item.align === "right" ? item.w * 96 : 0} y={(item.fontSize ?? 12) * 1.15 * 96 / 72} fontFamily={item.fontFamily ?? "Inter, Arial, sans-serif"} fontSize={(item.fontSize ?? 12) * 96 / 72} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={item.align === "center" ? "middle" : item.align === "right" ? "end" : "start"}>{valueFor(item, record)}</text>}
             {isSelected && <rect x="-4" y="-4" width={item.w * 96 + 8} height={item.h * 96 + 8} fill="none" stroke="#d77d4e" strokeWidth="1.4" strokeDasharray="4 3" pointerEvents="none"/>}
@@ -334,14 +356,14 @@ function App() {
         <div className="topbar-center">
           <div className="document-title"><FileText size={15}/><span>Untitled bird card</span><span className="saved-dot"/></div>
           <div className="workspace-tabs">
-            <button className={workspace === "template" ? "active" : ""} onClick={() => { setWorkspace("template"); setSelectedId(null); setShowMobileLayers(false); setShowPrintPreview(false); }} title="Individual template"><Crop size={16}/> <span>Template</span></button>
-            <button className={workspace === "layout" ? "active" : ""} onClick={() => { setWorkspace("layout"); setSelectedId(null); setShowMobileLayers(false); setShowPrintPreview(false); }} title="Page layout"><FileStack size={16}/> <span>Page layout</span></button>
+            <button className={workspace === "template" ? "active" : ""} onClick={() => { setWorkspace("template"); setSelectedId(null); setShowMobileLayers(false); setShowPrintPreview(false); }} title="Individual template"><svg className="template-tab-icon" viewBox="0 0 48 32" aria-hidden="true"><rect x="2.5" y="2.5" width="43" height="27" rx="2.5"/><path d="M9 2.5v5M39 2.5v5M9 24.5v5M39 24.5v5M2.5 10h5M2.5 22h5M40.5 10h5M40.5 22h5"/></svg> <span>Template</span></button>
+            <button className={workspace === "layout" ? "active" : ""} onClick={() => { setWorkspace("layout"); setSelectedId(null); setShowMobileLayers(false); setShowPrintPreview(false); }} title="Page layout"><svg className="page-tab-icon" viewBox="0 0 32 40" aria-hidden="true"><rect x="2" y="1.5" width="28" height="37" rx="1.5"/><rect x="6" y="6" width="9" height="6"/><rect x="17" y="6" width="9" height="6"/><rect x="6" y="15" width="9" height="6"/><rect x="17" y="15" width="9" height="6"/><rect x="6" y="24" width="9" height="6"/><rect x="17" y="24" width="9" height="6"/></svg> <span>Page layout</span></button>
           </div>
         </div>
         <div className="top-actions">
           <button className="icon-button" title="Help"><CircleHelp size={17}/></button>
           <button className="button button-light" onClick={printNow}><Printer size={15}/> Print</button>
-          <button className="button button-primary" onClick={printNow}><Printer size={15}/> Make it</button>
+          <button className="button button-primary make-button" onClick={printNow} aria-label="Make it" title="Make it"><Printer size={17}/></button>
         </div>
       </header>
 
@@ -364,18 +386,13 @@ function App() {
               <button className={snapToGrid ? "tool-button active" : "tool-button"} title="Snap to 0.05 inch increments" onClick={() => setSnapToGrid(!snapToGrid)}><Magnet size={15}/></button>
               <button className={showPrintPreview ? "tool-button active" : "tool-button"} title="Toggle print preview" onClick={() => setShowPrintPreview(!showPrintPreview)}><FileSearch size={16}/></button>
             </div>
-            <div className="toolbar-divider drawer-divider"/>
-            <div className="tool-group drawer-toggles">
-              <button className={dataDrawerOpen ? "tool-button active" : "tool-button"} title={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-label={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-pressed={dataDrawerOpen} onClick={() => setDataDrawerOpen((open) => !open)}>{dataDrawerOpen ? <PanelLeftClose size={16}/> : <PanelLeft size={16}/>}</button>
-              <button className={inspectorOpen ? "tool-button active" : "tool-button"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>{inspectorOpen ? <PanelRightClose size={16}/> : <PanelRight size={16}/>}</button>
-            </div>
             <div className="toolbar-spacer"/>
             {workspace === "template" && <div className="dimension-chip"><span>{templateWidth.toFixed(2)}″</span><i>×</i><span>{templateHeight.toFixed(2)}″</span></div>}
             <div className="zoom-control"><button className="tool-button" title="Zoom out" onClick={() => setZoom(Math.max(0.25, Number((zoom - 0.1).toFixed(2))))}><ZoomOut size={15}/></button><input aria-label="Zoom level" className="zoom-slider" type="range" min="0.25" max="2" step="0.01" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}/><button className="zoom-percent" onClick={toggleZoomPreset} title="Toggle 100% / fit to screen">{Math.round(zoom * 100)}%</button><button className="tool-button" title="Zoom in" onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))}><ZoomIn size={15}/></button></div>
           </div>
           <div className={`content-frame ${dataDrawerOpen ? "with-data" : ""} ${inspectorOpen ? "with-inspector" : ""}`}>
         <aside className="left-panel">
-          <div className="panel-heading"><div><span className="eyebrow">YOUR PROJECT</span><h2>Studio</h2></div><button className="icon-button small"><ChevronDown size={15}/></button></div>
+          <div className="panel-heading"><h2>Data fields</h2><button className="drawer-collapse" title="Collapse data fields" aria-label="Collapse data fields" onClick={() => setDataDrawerOpen(false)}><ChevronLeft size={17}/></button></div>
           <div className="panel-section">
             <div className="section-title"><Database size={14}/> DATA SOURCE <button className="text-action" onClick={() => fileRef.current?.click()}>Change</button></div>
             <div className="source-card">
@@ -398,9 +415,11 @@ function App() {
                     <div className="left-footer"><div className="avatar">S</div><div><strong>Local project</strong><span>Saved in this session</span></div><Lock size={13}/></div>
         </aside>
             <div className="editor-content">
-          <div className="canvas-area">
+          <div className="canvas-area" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan}>
+            <button className={dataDrawerOpen ? "canvas-drawer-toggle left active" : "canvas-drawer-toggle left"} title={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-label={dataDrawerOpen ? "Hide data fields" : "Show data fields"} onClick={() => setDataDrawerOpen((open) => !open)}>{dataDrawerOpen ? <PanelLeftClose size={16}/> : <PanelLeft size={16}/>}</button>
+            <button className={inspectorOpen ? "canvas-drawer-toggle right active" : "canvas-drawer-toggle right"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} onClick={() => setInspectorOpen((open) => !open)}>{inspectorOpen ? <PanelRightClose size={16}/> : <PanelRight size={16}/>}</button>
             {workspace === "template" && (
-              <div className="canvas-wrap">
+              <div className="canvas-wrap" style={{ transform: `translate(${viewPan.x}px, ${viewPan.y}px)` }}>
                 <div className="canvas-caption"><span>INDIVIDUAL TEMPLATE</span><span>{templateWidth.toFixed(2)} × {templateHeight.toFixed(2)} in · {showPrintPreview ? "Preview" : "Editing"}</span></div>
                 <div className="ruler-stage">
                   {showRulers && <div className="ruler-corner"/>}
@@ -426,14 +445,14 @@ function App() {
             )}
 
             {workspace === "layout" && (
-              <div className="layout-editor">
+              <div className="layout-editor" style={{ transform: `translate(${viewPan.x}px, ${viewPan.y}px)` }}>
                 <div className="canvas-caption"><span>PAGE LAYOUT</span><span>{pageWidth} × {pageHeight} in · {totalSlots} items per sheet</span></div>
-                <div className="layout-paper-wrap">
-                  <div className={showPrintPreview ? "layout-paper preview-active" : "layout-paper"} style={{aspectRatio: `${pageWidth} / ${pageHeight}`, padding: `${marginY}in ${marginX}in`}}>
+                <div className="layout-paper-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}>
+                  <div className={showPrintPreview ? "layout-paper preview-active" : "layout-paper"} style={{width: `${pageWidth * 96}px`, height: `${pageHeight * 96}px`, padding: `${marginY * 96}px ${marginX * 96}px`, boxSizing: "border-box"}}>
                     <div className="layout-grid" style={{gridTemplateColumns: `repeat(${columns}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, gap: `${gapY * 7}px ${gapX * 7}px`}}>
                       {Array.from({length: totalSlots}, (_, slot) => {
                         const idx = addPageSlot(slot);
-                        return <div className="layout-cell" key={slot}>{idx < records.length ? renderTemplate(records[idx], true) : <div className="empty-slot">Empty</div>}<span className="slot-number">{repeatMode === "same" ? `#${recordIndex + 1}` : `#${idx + 1}`}</span></div>;
+                        return <div className={showGrid ? "layout-cell grid-visible" : "layout-cell"} key={slot}>{idx < records.length ? renderTemplate(records[idx], true) : <div className="empty-slot">Empty</div>}<span className="slot-number">{repeatMode === "same" ? `#${recordIndex + 1}` : `#${idx + 1}`}</span></div>;
                       })}
                     </div>
                   </div>
@@ -457,7 +476,7 @@ function App() {
 
             </div>
         <aside className="right-panel">
-          <div className="right-tabs"><button className={!showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(false)}><SlidersHorizontal size={14}/> Properties</button><button className={showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(true)}><Layers size={14}/> Layers <span className="count-pill">{items.length}</span></button></div>
+          <div className="inspector-heading"><span>{selected ? "Item properties" : workspace === "template" ? "Template setup" : "Page setup"}</span><button className="drawer-collapse" title="Collapse properties and layers" aria-label="Collapse properties and layers" onClick={() => setInspectorOpen(false)}><ChevronRight size={17}/></button></div><div className="right-tabs"><button className={!showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(false)}><SlidersHorizontal size={14}/> Properties</button><button className={showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(true)}><Layers size={14}/> Layers <span className="count-pill">{items.length}</span></button></div>
           {showMobileLayers ? (
             <div className="properties-content mobile-layer-list">
               <div className="section-title"><Layers size={14}/> STACK ORDER <span className="count-pill">{items.length}</span></div>
@@ -507,7 +526,6 @@ function App() {
               )}
             </div>
           )}
-          <div className="right-footer"><div className="tip-icon"><Sparkles size={14}/></div><p><strong>Little tip</strong> Select a text layer, then click any field in your data list to connect it.</p></div>
         </aside>
           </div>
         </section>
