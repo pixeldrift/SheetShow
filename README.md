@@ -19,6 +19,7 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Rotation (drag the handle, Shift or Snap for 15° steps) and auto-scaling text/images to their box
 - Resize handles, multi-select (shift-click or box-select), align and distribute
 - Multi-line, wrapping text with Google Fonts, installed fonts (Chromium) or any typed font name
+- Data table: edit cells in place, paste from a spreadsheet, add/rename/sort columns, and choose which records print (checkboxes, range select, “only these”)
 - Import a new CSV/TSV and auto-match its columns to the template's linked fields
 - Autosave in the browser, plus save/open project files
 - Drag fields onto the design with mouse, pen or touch (long-press)
@@ -66,12 +67,24 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
 - [x] CSV/TSV import and field binding
 - [x] Inch-based template canvas
 - [x] Record preview and page layout modes
-- [ ] Persistent projects and reusable templates
-- [ ] Rich typography and image handling
-- [ ] Print-ready PDF export and crop marks
-- [ ] Curved text (text on a path / arc)
-- [x] Column mapping when importing a new data file (auto-matched, confirm only when needed)
-- [ ] Hierarchical data adapters and BirdBox integration
+- [x] Editable data table with per-record include/exclude
+- [x] Column mapping when importing a new data file
+- [ ] **Variable images** — data-driven pictures (see design notes below)
+  - [ ] Image library (batch upload) and image objects bound to a column or a filename pattern
+  - [ ] Pattern builder: `{field}` variables with transforms (lower, slug, trim…) and fallbacks
+  - [ ] Exact → normalised → fuzzy filename matching with a match-review screen and manual overrides
+  - [ ] Web sources: URL patterns built from fields, with optional caching into the library
+  - [ ] Project bundle export that includes images
+- [ ] Scannable codes (QR, Code 128) generated from data fields
+- [ ] Printer calibration offset and smart guides
+- [ ] Persistent reusable template library
+- [ ] Print-ready PDF export with embedded fonts
+- [ ] Hierarchical data adapters and **BirdBox integration**
+  - Codes and special fields that deep-link to a specific BirdBox record, or trigger an action
+    (log a cage cleaning, a feeding, opening the last bag of pellets).
+  - Designed as a general “action code” concept — a code carries a record reference plus an optional
+    action — so the editor stays app-agnostic and BirdBox is one adapter among several.
+- [ ] Curved text (low priority)
 
 ## License
 

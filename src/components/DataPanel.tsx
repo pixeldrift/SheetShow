@@ -6,6 +6,7 @@ type Props = {
   fileName: string;
   fields: string[];
   recordCount: number;
+  totalRecords: number;
   hasTextSelected: boolean;
   onImport: (file: File) => void;
   onField: (field: string) => void;
@@ -15,7 +16,7 @@ type Props = {
   onClose: () => void;
 };
 
-export function DataPanel({ fileName, fields, recordCount, hasTextSelected, onImport, onField, onFieldPointerDown, dragging, onClose }: Props) {
+export function DataPanel({ fileName, fields, recordCount, totalRecords, hasTextSelected, onImport, onField, onFieldPointerDown, dragging, onClose }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
@@ -43,7 +44,7 @@ export function DataPanel({ fileName, fields, recordCount, hasTextSelected, onIm
         <div className="section-title"><Database size={14} /> DATA SOURCE <button className="text-action" onClick={() => fileRef.current?.click()}>Change</button></div>
         <div className="source-card">
           <div className="file-icon"><FileText size={17} /></div>
-          <div className="source-meta"><strong>{fileName}</strong><span>{recordCount} records · {fields.length} fields</span></div>
+          <div className="source-meta"><strong>{fileName}</strong><span>{recordCount === totalRecords ? `${recordCount} records` : `${recordCount} of ${totalRecords} records`} · {fields.length} fields</span></div>
           <BadgeCheck size={15} className="success-icon" />
         </div>
         <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" hidden onChange={(e) => { const file = e.target.files?.[0]; if (file) onImport(file); e.target.value = ""; }} />

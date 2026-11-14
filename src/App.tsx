@@ -21,6 +21,8 @@ import { MAX_ZOOM, MIN_ZOOM, Viewport } from "./components/Viewport";
 import { TemplateStage } from "./components/TemplateStage";
 import { LayoutStage } from "./components/LayoutStage";
 import { itemFrame } from "./components/ItemShape";
+import { DataTable } from "./components/DataTable";
+import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
 import { PrintSheets } from "./components/PrintSheets";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -33,18 +35,22 @@ const DEFAULT_NAME = "Untitled bird card";
 function App() {
   // ── Document (restored from this browser's last session when available) ──
   const [initial] = useState(() => loadProject());
-  const [records, setRecords] = useState<RecordRow[]>(initial?.records ?? starterRecords);
+  const recordHistory = useHistory<RecordRow[]>(withIds(initial?.records ?? starterRecords));
+  const records = recordHistory.value;
+  const setRecords = (next: RecordRow[]) => recordHistory.set(() => next);
+  const editRecords = (update: (rows: RecordRow[]) => RecordRow[], coalesce?: string) => recordHistory.set(update, { coalesce });
   const [fileName, setFileName] = useState(initial?.fileName ?? "bird-records.csv");
   const [docName, setDocName] = useState(initial?.name ?? DEFAULT_NAME);
   const history = useHistory<DesignItem[]>(initial?.items ?? starterItems);
   const items = history.value;
   const [template, setTemplate] = useState(initial?.template ?? { width: 3.5, height: 2 });
   const [sheet, setSheet] = useState<Sheet>(initial?.sheet ?? defaultSheet);
-  const [recordIndex, setRecordIndex] = useState(0);
+  const [rawRecordIndex, setRecordIndex] = useState(0);
   const fontLibrary = useFontLibrary(initial?.fonts ?? []);
 
   // ── UI state ────────────────────────────────────────────────────────────
   const [workspace, setWorkspace] = useState<Workspace>("template");
+  const [showData, setShowData] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [multiMode, setMultiMode] = useState(false);
   const [clipboard, setClipboard] = useState<DesignItem[]>([]);
@@ -71,12 +77,15 @@ function App() {
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   // ── Derived ─────────────────────────────────────────────────────────────
-  const fields = useMemo(() => Object.keys(records[0] ?? {}), [records]);
-  const currentRecord = records[recordIndex] ?? {};
+  const recordIndex = Math.min(rawRecordIndex, Math.max(0, records.filter(isIncluded).length - 1));
+  const fields = useMemo(() => columnsOf(records), [records]);
+  // Only records switched on in the Data table are previewed, laid out, counted and printed.
+  const activeRecords = useMemo(() => records.filter(isIncluded), [records]);
+  const currentRecord = activeRecords[recordIndex] ?? {};
   const selectedItems = useMemo(() => items.filter((item) => selectedIds.includes(item.id)), [items, selectedIds]);
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
   const slots = sheet.columns * sheet.rows;
-  const pageCount = sheet.repeatMode === "same" ? 1 : Math.max(1, Math.ceil(records.length / slots));
+  const pageCount = sheet.repeatMode === "same" ? 1 : Math.max(1, Math.ceil(activeRecords.length / slots));
   const currentPage = sheet.repeatMode === "same" ? 0 : Math.floor(recordIndex / slots);
   const overflow =
     sheet.marginX + sheet.columns * template.width + (sheet.columns - 1) * sheet.gapX > sheet.pageWidth + 0.005 ||
@@ -205,7 +214,7 @@ function App() {
   // ── Data import ─────────────────────────────────────────────────────────
   const adoptData = (next: RecordRow[], name: string, mapping?: Record<string, string | null>) => {
     if (mapping) history.set((list) => applyMapping(list, mapping));
-    setRecords(next);
+    setRecords(withIds(next));
     setRecordIndex(0);
     setFileName(name);
     setPendingImport(null);
@@ -343,7 +352,7 @@ function App() {
 
   const applyProject = (project: Project) => {
     history.reset(project.items);
-    setRecords(project.records); setFileName(project.fileName); setDocName(project.name);
+    recordHistory.reset(withIds(project.records)); setFileName(project.fileName); setDocName(project.name);
     setTemplate(project.template); setSheet(project.sheet);
     fontLibrary.restore(project.fonts);
     setSelectedIds([]); setRecordIndex(0);
@@ -356,10 +365,50 @@ function App() {
     catch (error) { window.alert(error instanceof Error ? error.message : "That project file could not be opened."); }
   };
 
+  // ── Data table edits (all undoable with the Data view's own undo) ──
+  const idSet = (ids: string[]) => new Set(ids);
+  const dataActions = {
+    onCell: (id: string, column: string, value: string) => editRecords((rows) => setCell(rows, id, column, value), `cell:${id}:${column}`),
+    onInclude: (ids: string[], included: boolean) => editRecords((rows) => setIncluded(rows, idSet(ids), included)),
+    onOnly: (ids: string[]) => editRecords((rows) => {
+      const keep = idSet(ids);
+      return setIncluded(setIncluded(rows, new Set(rows.filter((r) => !keep.has(r[ID])).map((r) => r[ID])), false), keep, true);
+    }),
+    onAddRow: () => editRecords((rows) => [...rows, blankRow(columnsOf(rows))]),
+    onDuplicate: (ids: string[]) => editRecords((rows) => duplicateRows(rows, idSet(ids))),
+    onDelete: (ids: string[]) => editRecords((rows) => keepOneRow(rows.filter((row) => !ids.includes(row[ID])), columnsOf(rows))),
+    onAddColumn: () => {
+      const name = window.prompt("New column name")?.trim();
+      if (!name) return;
+      if (fields.includes(name)) { window.alert(`There’s already a column called “${name}”.`); return; }
+      editRecords((rows) => addColumn(rows, name));
+    },
+    onRenameColumn: (column: string) => {
+      const name = window.prompt("Rename column", column)?.trim();
+      if (!name || name === column) return;
+      if (fields.includes(name)) { window.alert(`There’s already a column called “${name}”.`); return; }
+      editRecords((rows) => renameColumn(rows, column, name));
+      history.set((list) => applyMapping(list, { [column]: name })); // keep the template's linked text connected
+    },
+    onDeleteColumn: (column: string) => {
+      const used = items.some((item) => item.field === column);
+      if (window.confirm(`Delete the “${column}” column?${used ? " Text linked to it will show “—”." : ""}`)) editRecords((rows) => removeColumn(rows, column));
+    },
+    onSort: (column: string, direction: 1 | -1) => editRecords((rows) => sortRows(rows, column, direction)),
+    onPaste: (id: string, column: string, grid: string[][]) => editRecords((rows) => pasteGrid(rows, fields, id, column, grid)),
+    onExport: () => {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([toCsv(records, fields)], { type: "text/csv" }));
+      link.download = fileName.replace(/\.[^.]+$/, "") + "-edited.csv";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    },
+  };
+
   // ── Records ─────────────────────────────────────────────────────────────
   const stepRecord = (delta: number) => {
     if (pagedNav) setRecordIndex(clamp(currentPage + delta, 0, pageCount - 1) * slots);
-    else setRecordIndex((index) => clamp(index + delta, 0, records.length - 1));
+    else setRecordIndex((index) => clamp(index + delta, 0, Math.max(0, activeRecords.length - 1)));
   };
 
   // ── Print: mount every sheet, print, then unmount ───────────────────────
@@ -383,9 +432,10 @@ function App() {
       const mod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
       const has = selectedItems.length > 0;
-      if (mod && key === "z") { event.preventDefault(); event.shiftKey ? history.redo() : history.undo(); }
-      else if (mod && key === "y") { event.preventDefault(); history.redo(); }
-      else if (workspace !== "template") return;
+      const target = showData ? recordHistory : history; // each view undoes its own edits
+      if (mod && key === "z") { event.preventDefault(); event.shiftKey ? target.redo() : target.undo(); }
+      else if (mod && key === "y") { event.preventDefault(); target.redo(); }
+      else if (workspace !== "template" || showData) return;
       else if (mod && key === "a") { event.preventDefault(); setSelectedIds(items.filter((i) => i.visible !== false).map((i) => i.id)); }
       else if (mod && key === "c") { if (has) { event.preventDefault(); copySelected(); } }
       else if (mod && key === "x") { if (has) { event.preventDefault(); cutSelected(); } }
@@ -406,16 +456,26 @@ function App() {
   });
 
   // ── Render ──────────────────────────────────────────────────────────────
-  const meta = { recordNumber: recordIndex + 1, pageNumber: currentPage + 1, recordCount: records.length, pageCount };
+  const meta = { recordNumber: recordIndex + 1, pageNumber: currentPage + 1, recordCount: activeRecords.length, pageCount };
   const caption = workspace === "template"
     ? { title: "INDIVIDUAL TEMPLATE", detail: `${template.width.toFixed(2)} × ${template.height.toFixed(2)} in` }
     : { title: "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet` };
 
   return (
     <div className="app-shell">
-      <Topbar workspace={workspace} onWorkspace={switchWorkspace} onPrint={printNow} name={docName} onName={setDocName} saveState={saveState} onNew={newProject} onOpen={openProject} onSave={() => downloadProject(snapshot())} />
+      <Topbar workspace={showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(tab); } }} onPrint={printNow} name={docName} onName={setDocName} saveState={saveState} onNew={newProject} onOpen={openProject} onSave={() => downloadProject(snapshot())} />
 
-      <main className="workspace">
+      {showData && (
+        <main className="workspace">
+          <DataTable
+            rows={records} columns={fields} fileName={fileName}
+            canUndo={recordHistory.canUndo} canRedo={recordHistory.canRedo} onUndo={recordHistory.undo} onRedo={recordHistory.redo}
+            onImport={importData} {...dataActions}
+          />
+        </main>
+      )}
+
+      <main className="workspace" hidden={showData}>
         <Toolbar
           showGrid={showGrid} onGrid={() => setShowGrid((v) => !v)}
           showRulers={showRulers} onRulers={() => setShowRulers((v) => !v)}
@@ -429,7 +489,7 @@ function App() {
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
           {dataOpen && (
-            <DataPanel fileName={fileName} fields={fields} recordCount={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)} />
+            <DataPanel fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)} />
           )}
 
           <div className="editor-content">
@@ -457,7 +517,7 @@ function App() {
                   />
                 ) : (
                   <LayoutStage
-                    sheet={sheet} templateWidth={template.width} templateHeight={template.height} items={items} records={records}
+                    sheet={sheet} templateWidth={template.width} templateHeight={template.height} items={items} records={activeRecords}
                     slotRecord={(slot) => (sheet.repeatMode === "same" ? recordIndex : currentPage * slots + slot)}
                     pageNumber={currentPage + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
                   />
@@ -484,8 +544,8 @@ function App() {
             <RecordBar
               label={pagedNav ? "Sheet" : "Record"}
               position={pagedNav ? currentPage + 1 : recordIndex + 1}
-              total={pagedNav ? pageCount : records.length}
-              name={String(currentRecord.name ?? "") || `Record ${recordIndex + 1} of ${records.length}`}
+              total={pagedNav ? pageCount : activeRecords.length}
+              name={String(currentRecord.name ?? "") || `Record ${recordIndex + 1} of ${activeRecords.length}`}
               onStep={stepRecord}
             />
           </div>
@@ -514,7 +574,7 @@ function App() {
       {fieldDrag && <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>}
 
       {printing && (
-        <PrintSheets sheet={sheet} items={items} records={records} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} />
+        <PrintSheets sheet={sheet} items={items} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} />
       )}
     </div>
   );

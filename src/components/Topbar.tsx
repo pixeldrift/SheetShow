@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
-import { CircleHelp, Download, FilePlus, FileText, FolderOpen, Printer } from "lucide-react";
+import { CircleHelp, Download, FilePlus, FileText, FolderOpen, Printer, Table2 } from "lucide-react";
 import type { Workspace } from "../types";
 
 type Props = {
-  workspace: Workspace; onWorkspace: (w: Workspace) => void; onPrint: () => void;
+  workspace: Workspace | "data"; onWorkspace: (w: Workspace | "data") => void; onPrint: () => void;
   name: string; onName: (name: string) => void; saveState: "saved" | "error";
   onNew: () => void; onOpen: (file: File) => void; onSave: () => void;
 };
@@ -42,6 +42,10 @@ export function Topbar({ workspace, onWorkspace, onPrint, name, onName, saveStat
           <button role="tab" aria-selected={workspace === "layout"} className={workspace === "layout" ? "active" : ""} onClick={() => onWorkspace("layout")} title="Page layout">
             <svg className="page-tab-icon" viewBox="0 0 32 40" aria-hidden="true"><rect x="2" y="1.5" width="28" height="37" rx="1.5" /><rect x="6" y="6" width="9" height="6" /><rect x="17" y="6" width="9" height="6" /><rect x="6" y="15" width="9" height="6" /><rect x="17" y="15" width="9" height="6" /><rect x="6" y="24" width="9" height="6" /><rect x="17" y="24" width="9" height="6" /></svg>
             <span>Page layout</span>
+          </button>
+          <button role="tab" aria-selected={workspace === "data"} className={workspace === "data" ? "active" : ""} onClick={() => onWorkspace("data")} title="Edit your data as a table">
+            <Table2 size={19} />
+            <span>Data</span>
           </button>
         </div>
       </div>
