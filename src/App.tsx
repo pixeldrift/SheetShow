@@ -470,13 +470,7 @@ function App() {
               <input ref={imageRef} type="file" accept=".png,.jpg,.jpeg,.svg,.pdf,image/png,image/jpeg,image/svg+xml,application/pdf" hidden onChange={addImage}/>
             </div>
             <div className="toolbar-divider"/>
-            <div className="tool-group viewport-actions">
-              <button className="tool-button" title="Delete selected" disabled={!selected} onClick={deleteSelected}><Trash2 size={15}/></button>
-              <button className="tool-button" title="Cut" disabled={!selected} onClick={cutSelected}><Scissors size={15}/></button>
-              <button className="tool-button" title="Copy" disabled={!selected} onClick={copySelected}><Copy size={15}/></button>
-              <button className="tool-button" title="Paste" disabled={!clipboardItem} onClick={pasteItem}><ClipboardPaste size={15}/></button>
-            </div>
-            <button className="tool-button" title="Delete selected" disabled={!selected} onClick={deleteSelected}><Trash2 size={15}/></button>
+            
             <div className="toolbar-divider view-divider"/>
             <div className="tool-group">
               <button className={showGrid ? "tool-button active" : "tool-button"} title="Toggle grid" onClick={() => setShowGrid(!showGrid)}><Grid2X2 size={15}/></button>
@@ -522,6 +516,7 @@ function App() {
             <div className="editor-content">
           <div className="canvas-area" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onTouchStart={onCanvasTouchStart} onTouchMove={onCanvasTouchMove} onTouchEnd={onCanvasTouchEnd} onClick={(event) => { if (!(event.target as HTMLElement).closest(".canvas-object,button,input,select")) setSelectedId(null); }}>
           <div className="viewport-edit-actions" onPointerDown={(e) => e.stopPropagation()}>
+            <button className="tool-button" title="Delete selected" disabled={!selected} onClick={deleteSelected}><Trash2 size={16}/></button>
             <button className="tool-button" title="Cut" disabled={!selected} onClick={cutSelected}><Scissors size={16}/></button>
             <button className="tool-button" title="Copy" disabled={!selected} onClick={copySelected}><Copy size={16}/></button>
             <button className="tool-button glue-button" title="Paste" disabled={!clipboardItem} onClick={pasteItem}><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3h8v3l-1.5 2v2H9.5V8L8 6z"/><path d="M9.5 10h5v2.2l2.2 2.2V21H7.3v-6.6l2.2-2.2z"/><path d="M10 16h4M12 12.2v2"/></svg></button>
