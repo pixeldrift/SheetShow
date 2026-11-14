@@ -3,7 +3,7 @@ import {
   AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, BadgeCheck, ChevronDown,
   ChevronLeft, ChevronRight, CircleHelp, Copy, Crop, Database, Eye, FileImage,
   FileSearch, FileStack, FileText, Grid2X2, ImagePlus, Layers, Link2, ListFilter,
-  Lock, LockKeyhole, Magnet, Minus, MousePointer2, Plus, Printer, Ruler, Search,
+  Lock, LockKeyhole, Magnet, Minus, MousePointer2, PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, Plus, Printer, Ruler, Search,
   Settings2, Shapes, SlidersHorizontal, Sparkles, Square, Trash2, Type, Unlock, Upload,
   WandSparkles, ZoomIn, ZoomOut
 } from "lucide-react";
@@ -86,6 +86,8 @@ function App() {
   const [items, setItems] = useState<DesignItem[]>(starterItems);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMobileLayers, setShowMobileLayers] = useState(false);
+  const [dataDrawerOpen, setDataDrawerOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia("(min-width: 851px)").matches);
   const [presetSearch, setPresetSearch] = useState("");
   const [recordIndex, setRecordIndex] = useState(0);
   const [workspace, setWorkspace] = useState<"template" | "layout">("template");
@@ -344,6 +346,34 @@ function App() {
       </header>
 
       <main className="workspace">
+
+
+        <section className="center-panel">
+          <div className="canvas-toolbar">
+            <div className="tool-group">
+              <button className="tool-button active" title="Select"><MousePointer2 size={16}/></button>
+              <button className="tool-button" title="Add text" onClick={() => addText()}><Type size={16}/></button>
+              <button className="tool-button" title="Add shape" onClick={addShape}><Shapes size={16}/></button>
+              <button className="tool-button" title="Add image" onClick={() => imageRef.current?.click()}><ImagePlus size={16}/></button>
+              <input ref={imageRef} type="file" accept=".png,.jpg,.jpeg,.svg,.pdf,image/png,image/jpeg,image/svg+xml,application/pdf" hidden onChange={addImage}/>
+            </div>
+            <div className="toolbar-divider"/>
+            <div className="tool-group">
+              <button className={showGrid ? "tool-button active" : "tool-button"} title="Toggle grid" onClick={() => setShowGrid(!showGrid)}><Grid2X2 size={15}/></button>
+              <button className={showRulers ? "tool-button active" : "tool-button"} title="Toggle rulers" onClick={() => setShowRulers(!showRulers)}><Ruler size={15}/></button>
+              <button className={snapToGrid ? "tool-button active" : "tool-button"} title="Snap to 0.05 inch increments" onClick={() => setSnapToGrid(!snapToGrid)}><Magnet size={15}/></button>
+              <button className={showPrintPreview ? "tool-button active" : "tool-button"} title="Toggle print preview" onClick={() => setShowPrintPreview(!showPrintPreview)}><FileSearch size={16}/></button>
+            </div>
+            <div className="toolbar-divider drawer-divider"/>
+            <div className="tool-group drawer-toggles">
+              <button className={dataDrawerOpen ? "tool-button active" : "tool-button"} title={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-label={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-pressed={dataDrawerOpen} onClick={() => setDataDrawerOpen((open) => !open)}>{dataDrawerOpen ? <PanelLeftClose size={16}/> : <PanelLeft size={16}/>}</button>
+              <button className={inspectorOpen ? "tool-button active" : "tool-button"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>{inspectorOpen ? <PanelRightClose size={16}/> : <PanelRight size={16}/>}</button>
+            </div>
+            <div className="toolbar-spacer"/>
+            {workspace === "template" && <div className="dimension-chip"><span>{templateWidth.toFixed(2)}″</span><i>×</i><span>{templateHeight.toFixed(2)}″</span></div>}
+            <div className="zoom-control"><button className="tool-button" title="Zoom out" onClick={() => setZoom(Math.max(0.25, Number((zoom - 0.1).toFixed(2))))}><ZoomOut size={15}/></button><input aria-label="Zoom level" className="zoom-slider" type="range" min="0.25" max="2" step="0.01" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}/><button className="zoom-percent" onClick={toggleZoomPreset} title="Toggle 100% / fit to screen">{Math.round(zoom * 100)}%</button><button className="tool-button" title="Zoom in" onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))}><ZoomIn size={15}/></button></div>
+          </div>
+          <div className="content-frame${dataDrawerOpen ? " with-data" : ""}${inspectorOpen ? " with-inspector" : ""}">
         <aside className="left-panel">
           <div className="panel-heading"><div><span className="eyebrow">YOUR PROJECT</span><h2>Studio</h2></div><button className="icon-button small"><ChevronDown size={15}/></button></div>
           <div className="panel-section">
@@ -367,29 +397,7 @@ function App() {
           </div>
                     <div className="left-footer"><div className="avatar">S</div><div><strong>Local project</strong><span>Saved in this session</span></div><Lock size={13}/></div>
         </aside>
-
-        <section className="center-panel">
-          <div className="canvas-toolbar">
-            <div className="tool-group">
-              <button className="tool-button active" title="Select"><MousePointer2 size={16}/></button>
-              <button className="tool-button" title="Add text" onClick={() => addText()}><Type size={16}/></button>
-              <button className="tool-button" title="Add shape" onClick={addShape}><Shapes size={16}/></button>
-              <button className="tool-button" title="Add image" onClick={() => imageRef.current?.click()}><ImagePlus size={16}/></button>
-              <input ref={imageRef} type="file" accept=".png,.jpg,.jpeg,.svg,.pdf,image/png,image/jpeg,image/svg+xml,application/pdf" hidden onChange={addImage}/>
-            </div>
-            <div className="toolbar-divider"/>
-            <div className="tool-group">
-              <button className={showGrid ? "tool-button active" : "tool-button"} title="Toggle grid" onClick={() => setShowGrid(!showGrid)}><Grid2X2 size={15}/></button>
-              <button className={showRulers ? "tool-button active" : "tool-button"} title="Toggle rulers" onClick={() => setShowRulers(!showRulers)}><Ruler size={15}/></button>
-              <button className={snapToGrid ? "tool-button active" : "tool-button"} title="Snap to 0.05 inch increments" onClick={() => setSnapToGrid(!snapToGrid)}><Magnet size={15}/></button>
-              <button className={showPrintPreview ? "tool-button active" : "tool-button"} title="Toggle print preview" onClick={() => setShowPrintPreview(!showPrintPreview)}><FileSearch size={16}/></button>
-              <button className="tool-button mobile-data-button" title="Change data source" onClick={() => fileRef.current?.click()}><Database size={15}/></button>
-            </div>
-            <div className="toolbar-spacer"/>
-            {workspace === "template" && <div className="dimension-chip"><span>{templateWidth.toFixed(2)}″</span><i>×</i><span>{templateHeight.toFixed(2)}″</span></div>}
-            <div className="zoom-control"><button className="tool-button" title="Zoom out" onClick={() => setZoom(Math.max(0.25, Number((zoom - 0.1).toFixed(2))))}><ZoomOut size={15}/></button><input aria-label="Zoom level" className="zoom-slider" type="range" min="0.25" max="2" step="0.01" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}/><button className="zoom-percent" onClick={toggleZoomPreset} title="Toggle 100% / fit to screen">{Math.round(zoom * 100)}%</button><button className="tool-button" title="Zoom in" onClick={() => setZoom(Math.min(2, Number((zoom + 0.1).toFixed(2))))}><ZoomIn size={15}/></button></div>
-          </div>
-
+            <div className="editor-content">
           <div className="canvas-area">
             {workspace === "template" && (
               <div className="canvas-wrap">
@@ -446,8 +454,8 @@ function App() {
             </div>
             <div className="record-name"><span className="record-avatar">{String(currentRecord.name ?? "R").slice(0, 1).toUpperCase()}</span><strong>{currentRecord.name ?? "Current record"}</strong></div>
           </div>
-        </section>
 
+            </div>
         <aside className="right-panel">
           <div className="right-tabs"><button className={!showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(false)}><SlidersHorizontal size={14}/> Properties</button><button className={showMobileLayers ? "active" : ""} onClick={() => setShowMobileLayers(true)}><Layers size={14}/> Layers <span className="count-pill">{items.length}</span></button></div>
           {showMobileLayers ? (
@@ -501,6 +509,10 @@ function App() {
           )}
           <div className="right-footer"><div className="tip-icon"><Sparkles size={14}/></div><p><strong>Little tip</strong> Select a text layer, then click any field in your data list to connect it.</p></div>
         </aside>
+          </div>
+        </section>
+
+
       </main>
       <footer className="statusbar"><span><span className="status-dot"/> All changes in this session</span><span>SheetShow Studio <i>·</i> Prototype 0.1</span><span>Inches <i>·</i> 96 DPI canvas</span></footer>
     </div>
