@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { PanelLeft, PanelLeftClose, PanelRight, PanelRightClose } from "lucide-react";
+import { PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, Redo2, Undo2 } from "lucide-react";
 import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import type { DesignItem, Guide, LabelPreset, Project, RecordRow, Sheet, View, Workspace } from "./types";
-import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid } from "./lib/data";
+import type { DesignItem, Guide, InstanceOverride, ItemPatch, LabelPreset, Project, RecordRow, Sheet, Variant, VariantRule, View, Workspace } from "./types";
+import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid, valueFor } from "./lib/data";
+import { applyOverride, hasEdits, pickVariant, toItemPatch } from "./lib/instances";
+import { instanceIssues, itemLabel, recordLabel, type Issue } from "./lib/audit";
+import { checkImageUrls } from "./lib/webImages";
+import { layoutText } from "./lib/text";
+import { TextAuditDialog } from "./components/TextAuditDialog";
 import { useHistory } from "./hooks/useHistory";
 import { useFontLibrary } from "./hooks/useFontLibrary";
 import { aabb, alignItems, boundsOf, centerOf, distributeItems, rotateAbout, type AlignMode, type Transform } from "./lib/align";
@@ -25,7 +30,7 @@ import { Inspector } from "./components/Inspector";
 import { RecordBar } from "./components/RecordBar";
 import { MAX_ZOOM, MIN_ZOOM, Viewport } from "./components/Viewport";
 import { TemplateStage } from "./components/TemplateStage";
-import { LayoutStage } from "./components/LayoutStage";
+import { LayoutStage, type InstanceInfo, type InstanceSelection } from "./components/LayoutStage";
 import { itemFrame } from "./components/ItemShape";
 import { DataTable } from "./components/DataTable";
 import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
@@ -47,8 +52,23 @@ function App() {
   const editRecords = (update: (rows: RecordRow[]) => RecordRow[], coalesce?: string) => recordHistory.set(update, { coalesce });
   const [fileName, setFileName] = useState(initial?.fileName ?? "bird-records.csv");
   const [docName, setDocName] = useState(initial?.name ?? DEFAULT_NAME);
-  const history = useHistory<DesignItem[]>(initial?.items ?? starterItems);
-  const items = history.value;
+  // Several templates can be combined into one output; `itemsDoc` holds each template's items under one undo history.
+  const [startVariants] = useState(() => (initial?.variants?.length ? initial.variants : [{ id: "a", name: "Template A", items: initial?.items ?? starterItems }]));
+  const [variants, setVariants] = useState<Variant[]>(() => startVariants.map(({ id, name }) => ({ id, name })));
+  const [rules, setRules] = useState<VariantRule[]>(initial?.rules ?? []);
+  const itemsDoc = useHistory<Record<string, DesignItem[]>>(Object.fromEntries(startVariants.map((v) => [v.id, v.items])));
+  const [activeVariant, setActiveVariant] = useState(startVariants[0].id);
+  const variantId = itemsDoc.value[activeVariant] ? activeVariant : variants[0].id; // the template being edited
+  const items = itemsDoc.value[variantId] ?? [];
+  /** Edits the template being shown, so the rest of the editor keeps working with one plain list of items. */
+  const history = {
+    set: (update: (list: DesignItem[]) => DesignItem[], options?: { coalesce?: string }) =>
+      itemsDoc.set((map) => { const current = map[variantId] ?? []; const next = update(current); return next === current ? map : { ...map, [variantId]: next }; }, options),
+    undo: itemsDoc.undo, redo: itemsDoc.redo, breakGroup: itemsDoc.breakGroup, canUndo: itemsDoc.canUndo, canRedo: itemsDoc.canRedo,
+  };
+  // Hand edits to individual records' copies of the template (keyed by record id), with their own undo history.
+  const overrideDoc = useHistory<Record<string, InstanceOverride>>(initial?.overrides ?? {});
+  const instanceOverrides = overrideDoc.value;
   const [template, setTemplate] = useState(initial?.template ?? { width: 3.5, height: 2 });
   const [sheet, setSheet] = useState<Sheet>(initial?.sheet ?? defaultSheet);
   const [rawRecordIndex, setRecordIndex] = useState(0);
@@ -72,6 +92,11 @@ function App() {
   const [snap, setSnap] = useState(false);
   const [preview, setPreview] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [instanceMode, setInstanceMode] = useState(false);
+  const [instanceSel, setInstanceSel] = useState<InstanceSelection | null>(null);
+  const [editingText, setEditingText] = useState<InstanceSelection | null>(null);
+  const [auditDialog, setAuditDialog] = useState<null | { itemId?: string | null }>(null);
+  const [status, setStatus] = useState<null | { text: string; kind: "info" | "ok" | "warn"; busy?: boolean; detail?: string[] }>(null);
 
   // Each workspace remembers its own zoom, pan and guides.
   const [views, setViews] = useState<Record<Workspace, View>>({ template: freshView(), layout: freshView() });
@@ -89,7 +114,10 @@ function App() {
   const recordIndex = Math.min(rawRecordIndex, Math.max(0, records.filter(isIncluded).length - 1));
   const fields = useMemo(() => columnsOf(records), [records]);
   // Only records switched on in the Data table are previewed, laid out, counted and printed.
-  const activeRecords = useMemo(() => records.filter(isIncluded), [records]);
+  const activeRecords = useMemo(() => {
+    const included = records.filter(isIncluded);
+    return sheet.sortField ? sortRows(included, sheet.sortField, sheet.sortDir ?? 1) : included;
+  }, [records, sheet.sortField, sheet.sortDir]);
   const currentRecord = activeRecords[recordIndex] ?? {};
   const selectedItems = useMemo(() => items.filter((item) => selectedIds.includes(item.id)), [items, selectedIds]);
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
@@ -100,6 +128,65 @@ function App() {
     sheet.marginX + sheet.columns * template.width + (sheet.columns - 1) * sheet.gapX > sheet.pageWidth + 0.005 ||
     sheet.marginY + sheet.rows * template.height + (sheet.rows - 1) * sheet.gapY > sheet.pageHeight + 0.005;
   const pagedNav = workspace === "layout" && sheet.repeatMode === "next";
+
+  // ── Alternating templates + per-record edits ────────────────────────────
+  /** The items one record renders: its template (chosen by the rules) with that record's hand edits applied. */
+  const instanceFor = (record: RecordRow, index: number, slot: number): InstanceInfo => {
+    const id = pickVariant(rules, variants, record, index, slot, sheet.variantBasis ?? "record");
+    const base = itemsDoc.value[id] ?? itemsDoc.value[variants[0].id] ?? [];
+    const override = instanceOverrides[record[ID]];
+    return { variantId: id, items: applyOverride(base, override), override };
+  };
+  const metaFor = (index: number) => ({ recordNumber: index + 1, pageNumber: sheet.repeatMode === "same" ? 1 : Math.floor(index / slots) + 1, recordCount: activeRecords.length, pageCount });
+  const indexOfRecord = (recordId: string) => activeRecords.findIndex((r) => r[ID] === recordId);
+
+  const updateInstance = (recordId: string, change: (current: InstanceOverride) => InstanceOverride | null, coalesce?: string) =>
+    overrideDoc.set((map) => {
+      const next = change(map[recordId] ?? { items: {} });
+      if (!next || !Object.keys(next.items).length) { const { [recordId]: _gone, ...rest } = map; return rest; }
+      return { ...map, [recordId]: next };
+    }, { coalesce });
+  /** Edits one item on one record's copy. Editing while "off" switches the edits back on. */
+  const setInstanceItem = (recordId: string, itemId: string, patch: ItemPatch, coalesce?: string) =>
+    updateInstance(recordId, ({ off: _off, items: current }) => ({ items: { ...current, [itemId]: { ...(current[itemId] ?? {}), ...patch } } }), coalesce);
+  const revertInstanceItem = (recordId: string, itemId: string) =>
+    updateInstance(recordId, (o) => { const { [itemId]: _gone, ...rest } = o.items; return { ...o, items: rest }; });
+  const toggleInstanceOff = (recordId: string) => updateInstance(recordId, (o) => (o.off ? { items: o.items } : { ...o, off: true }));
+  const resetInstance = (recordId: string) => updateInstance(recordId, () => null);
+
+  const instRecord = instanceSel ? activeRecords.find((r) => r[ID] === instanceSel.recordId) : undefined;
+  const instIndex = instRecord ? activeRecords.indexOf(instRecord) : -1;
+  const instItems = instRecord ? instanceFor(instRecord, instIndex, instIndex % slots).items : [];
+  const instItem = instanceSel ? instItems.find((i) => i.id === instanceSel.itemId) : undefined;
+  const instOverride = instRecord ? instanceOverrides[instRecord[ID]] : undefined;
+  const inLayoutEdit = workspace === "layout" && !!instItem && !showData;
+
+  // ── Text-fit audit ──────────────────────────────────────────────────────
+  const computeIssues = (indices: number[]): Issue[] => {
+    const out: Issue[] = [];
+    for (const index of indices) {
+      const record = activeRecords[index];
+      if (!record) continue;
+      for (const { item, kind, atMin } of instanceIssues(instanceFor(record, index, index % slots).items, record, metaFor(index)))
+        out.push({ recordId: record[ID], recordIndex: index, recordLabel: recordLabel(record), itemId: item.id, itemLabel: itemLabel(item), kind, atMin });
+    }
+    return out;
+  };
+  const allIndices = () => (sheet.repeatMode === "same" ? [recordIndex] : activeRecords.map((_, i) => i));
+  const issues = useMemo(() => (auditDialog ? computeIssues(allIndices()) : []), [auditDialog, items, itemsDoc.value, instanceOverrides, activeRecords, rules, variants, sheet]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sheetIssueCount = workspace === "layout" && !preview
+    ? computeIssues(sheet.repeatMode === "same" ? [recordIndex] : Array.from({ length: slots }, (_, k) => currentPage * slots + k)).length : 0;
+  /** For the selected text in the template: does it fit for the records that use this template? */
+  const fitNote = (() => {
+    if (!selected || selected.type !== "text" || workspace !== "template") return null;
+    let bad = 0, total = 0;
+    for (let i = 0; i < Math.min(activeRecords.length, 1500); i++) {
+      if (pickVariant(rules, variants, activeRecords[i], i, i % slots, sheet.variantBasis ?? "record") !== variantId) continue;
+      total++;
+      if (layoutText(selected, valueFor(selected, activeRecords[i], metaFor(i)), selected.w * PX_PER_IN, selected.h * PX_PER_IN).issue) bad++;
+    }
+    return total ? { bad: bad > 0, text: bad ? `${bad} of ${total} record${total === 1 ? "" : "s"} ${bad === 1 ? "doesn’t" : "don’t"} fit this box.` : `All ${total} record${total === 1 ? "" : "s"} fit.` } : null;
+  })();
 
   // ── View: per-workspace zoom / pan / fit ───────────────────────────────
   const patchView = useCallback((patch: Partial<View>) => setViews((v) => ({ ...v, [workspace]: { ...v[workspace], ...patch } })), [workspace]);
@@ -127,7 +214,27 @@ function App() {
   const switchWorkspace = (next: Workspace) => {
     setWorkspace(next);
     setSelectedIds([]);
+    setInstanceSel(null);
+    setEditingText(null);
     setPreview(false);
+  };
+
+  // ── Alternating template management ─────────────────────────────────────
+  const addVariant = () => {
+    const id = uid();
+    const name = `Template ${String.fromCharCode(65 + variants.length)}`;
+    itemsDoc.set((map) => ({ ...map, [id]: (map[variantId] ?? []).map((item) => ({ ...item })) })); // same item ids, so hand edits carry over
+    setVariants((list) => [...list, { id, name }]);
+    setActiveVariant(id);
+    setSelectedIds([]);
+  };
+  const deleteVariant = (id: string) => {
+    if (variants.length < 2 || !window.confirm("Delete this template? Records that used it will fall back to the first template.")) return;
+    itemsDoc.set((map) => { const { [id]: _gone, ...rest } = map; return rest; });
+    setVariants((list) => list.filter((v) => v.id !== id));
+    setRules((list) => list.filter((r) => r.variantId !== id));
+    if (variantId === id) setActiveVariant(variants.find((v) => v.id !== id)!.id);
+    setSelectedIds([]);
   };
 
   // ── Items ───────────────────────────────────────────────────────────────
@@ -259,6 +366,11 @@ function App() {
     setLibraryDialog(null);
   };
   const choosePicture = (itemId: string, target: "asset" | "fallback", asset: Asset) => {
+    if (inLayoutEdit && instRecord) {
+      setInstanceItem(instRecord[ID], itemId, target === "fallback" ? { fallbackAssetId: asset.id } : { assetId: asset.id, assetName: asset.name, imageSource: null, src: null });
+      setLibraryDialog(null);
+      return;
+    }
     const item = items.find((i) => i.id === itemId);
     if (!item) return;
     if (target === "fallback") updateItem(itemId, { fallbackAssetId: asset.id });
@@ -276,7 +388,35 @@ function App() {
       for (const [recordId, assetId] of Object.entries(changes)) { if (assetId) next[recordId] = assetId; else delete next[recordId]; }
       return { ...item, overrides: next };
     }));
-  const imageTools = { library, columns: fields, record: currentRecord, records: activeRecords, onChoose: (itemId: string, target: "asset" | "fallback") => setLibraryDialog({ kind: "pick", itemId, target }), onReview: (itemId: string) => setReviewItemId(itemId) };
+  /** Distinct web addresses a data-driven picture would fetch, not yet saved in the library. */
+  const webUrlsFor = (item: DesignItem) => {
+    const urls = new Set<string>();
+    for (const record of activeRecords) { const m = library.resolver.resolve(item, record); for (const x of [m, ...m.alternates]) if (x.url && isWebUrl(x.url)) urls.add(x.url); }
+    return [...urls];
+  };
+  const cacheWebPictures = async (itemId: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    const urls = webUrlsFor(item);
+    if (!urls.length) { setStatus({ text: "Everything from the web is already saved in the library.", kind: "ok" }); return; }
+    setStatus({ text: `Saving ${urls.length} web picture${urls.length === 1 ? "" : "s"} to the library…`, kind: "info", busy: true });
+    const result = await library.addRemote(urls, (done, total) => setStatus({ text: `Saving web pictures… ${done} of ${total}`, kind: "info", busy: true }));
+    setStatus(result.failed.length
+      ? { text: `Saved ${result.added} of ${urls.length}. ${result.failed.length} couldn’t be downloaded; they’ll still load from the web when printing.`, kind: "warn", detail: [...new Set(result.failed.map((f) => f.reason))] }
+      : { text: `Saved ${result.added} picture${result.added === 1 ? "" : "s"} to the library. They now work offline and travel with the project.`, kind: "ok" });
+  };
+  const checkWebPictures = async (itemId: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    const urls = webUrlsFor(item);
+    if (!urls.length) { setStatus({ text: "No web pictures to check (they’re all saved in the library or the rule has none).", kind: "ok" }); return; }
+    setStatus({ text: `Checking ${urls.length} web address${urls.length === 1 ? "" : "es"}…`, kind: "info", busy: true });
+    const result = await checkImageUrls(urls, (done, total) => setStatus({ text: `Checking web pictures… ${done} of ${total}`, kind: "info", busy: true }));
+    setStatus(result.failed.size
+      ? { text: `${result.loaded.size} loaded, ${result.failed.size} didn’t.`, kind: "warn", detail: [...result.failed].slice(0, 5) }
+      : { text: `All ${result.loaded.size} web pictures loaded.`, kind: "ok" });
+  };
+  const imageTools = { webCount: (item: DesignItem) => webUrlsFor(item).length, onCacheWeb: cacheWebPictures, onCheckWeb: checkWebPictures, library, columns: fields, record: currentRecord, records: activeRecords, onChoose: (itemId: string, target: "asset" | "fallback") => setLibraryDialog({ kind: "pick", itemId, target }), onReview: (itemId: string) => setReviewItemId(itemId) };
 
   // ── Template / page setup ───────────────────────────────────────────────
   const applyPreset = (preset: LabelPreset) => {
@@ -341,7 +481,10 @@ function App() {
   };
 
   // ── Projects: autosave to this browser, plus save / open as a file ──
-  const snapshot = (): Project => ({ version: 1, name: docName, fileName, records, items, template, sheet, fonts: fontLibrary.fonts });
+  const snapshot = (): Project => ({
+    version: 1, name: docName, fileName, records, items: itemsDoc.value[variants[0].id] ?? [], template, sheet, fonts: fontLibrary.fonts,
+    variants: variants.map((v) => ({ ...v, items: itemsDoc.value[v.id] ?? [] })), rules, overrides: instanceOverrides,
+  });
   useEffect(() => {
     const timer = window.setTimeout(() => setSaveState(saveProject(snapshot()) ? "saved" : "error"), 600);
     return () => window.clearTimeout(timer);
@@ -349,7 +492,10 @@ function App() {
 
   const applyProject = async (project: Project, images?: { asset: Asset; blob: Blob }[]) => {
     if (images) await library.replaceAll(images);
-    history.reset(project.items);
+    const vs = project.variants?.length ? project.variants : [{ id: "a", name: "Template A", items: project.items }];
+    itemsDoc.reset(Object.fromEntries(vs.map((v) => [v.id, v.items])));
+    setVariants(vs.map(({ id, name }) => ({ id, name }))); setActiveVariant(vs[0].id); setRules(project.rules ?? []);
+    overrideDoc.reset(project.overrides ?? {}); setInstanceSel(null); setEditingText(null);
     recordHistory.reset(withIds(project.records)); setFileName(project.fileName); setDocName(project.name);
     setTemplate(project.template); setSheet(project.sheet);
     fontLibrary.restore(project.fonts);
@@ -412,6 +558,47 @@ function App() {
     },
   };
 
+  // ── Page layout: editing one record's copy ──────────────────────────────
+  const commitInstanceText = (value: string) => {
+    if (editingText) { setInstanceItem(editingText.recordId, editingText.itemId, { field: null, text: value }); setInstanceSel(editingText); }
+    setEditingText(null);
+  };
+  const dropPictureOnSlot = async (recordId: string, itemId: string | null, files: Parameters<typeof library.addFiles>[0]) => {
+    const index = indexOfRecord(recordId);
+    const list = index >= 0 ? instanceFor(activeRecords[index], index, index % slots).items : [];
+    let target = list.find((i) => i.id === itemId && i.type === "image");
+    if (!target) { const pictures = list.filter((i) => i.type === "image" && i.visible !== false); if (pictures.length === 1) target = pictures[0]; }
+    if (!target) { setStatus({ text: "Drop the picture onto a picture box.", kind: "warn" }); return; }
+    const result = await library.addFiles(files);
+    const asset = result.assets[0];
+    if (!asset) { setStatus({ text: "That file couldn’t be used as a picture.", kind: "warn", detail: result.skipped.map((s) => `${s.name}: ${s.reason}`).slice(0, 3) }); return; }
+    setInstanceItem(recordId, target.id, { assetId: asset.id, assetName: asset.name, imageSource: null, src: null });
+    setInstanceSel({ recordId, itemId: target.id });
+  };
+  /** From the text audit (or a badge): go to that record's sheet with the text selected, ready to fix. */
+  const fixOnPage = (recordId: string, itemId: string) => {
+    const index = indexOfRecord(recordId);
+    if (index < 0) return;
+    setAuditDialog(null); setShowData(false); setWorkspace("layout"); setPreview(false); setSelectedIds([]);
+    setRecordIndex(index); setInstanceMode(true); setInstanceSel({ recordId, itemId }); setInspectorOpen(true);
+  };
+  const jumpToInstance = (recordId: string) => {
+    const index = indexOfRecord(recordId);
+    if (index >= 0) { setRecordIndex(index); setInstanceMode(true); setInstanceSel(null); }
+  };
+  const editedList = Object.entries(instanceOverrides).filter(([, o]) => hasEdits(o)).flatMap(([recordId, o]) => {
+    const record = activeRecords.find((r) => r[ID] === recordId);
+    return record ? [{ recordId, label: recordLabel(record), off: !!o.off }] : [];
+  });
+  const instanceBanner = inLayoutEdit && instRecord && instanceSel ? {
+    recordLabel: recordLabel(instRecord),
+    itemEdited: !!instOverride?.items[instanceSel.itemId],
+    off: !!instOverride?.off,
+    onRevertItem: () => revertInstanceItem(instRecord[ID], instanceSel.itemId),
+    onToggleOff: () => toggleInstanceOff(instRecord[ID]),
+    onResetInstance: () => { resetInstance(instRecord[ID]); setInstanceSel(null); },
+  } : null;
+
   // ── Records ─────────────────────────────────────────────────────────────
   const stepRecord = (delta: number) => {
     if (pagedNav) setRecordIndex(clamp(currentPage + delta, 0, pageCount - 1) * slots);
@@ -419,30 +606,40 @@ function App() {
   };
 
   // ── Print: mount every sheet, print, then unmount ───────────────────────
-  /** Picture rules that resolved to nothing, plus web pictures that must be fetched before the sheets can print. */
-  const checkPictures = () => {
-    let missing = 0;
-    const web = new Set<string>();
-    for (const item of items.filter((i) => i.type === "image" && i.imageSource && i.visible !== false)) {
-      for (const record of activeRecords) {
-        const match = library.resolver.resolve(item, record);
-        if (match.kind === "none" && !item.fallbackAssetId) missing++;
-        for (const m of [match, ...match.alternates]) if (m.url && isWebUrl(m.url)) web.add(m.url);
-      }
-    }
-    return { missing, web: [...web] };
-  };
+  /**
+   * Nothing prints until pictures and text have been checked: web pictures are actually loaded, picture rules that
+   * match nothing are counted, and text that doesn't fit is counted. Problems need a confirmation.
+   */
   const printNow = async () => {
     if (printing) { window.print(); return; }
-    const { missing, web } = checkPictures();
-    if (missing && !window.confirm(`${missing} picture${missing === 1 ? " has" : "s have"} no match and will print blank. Print anyway?\n\nTip: open the picture’s “Review matches” to fix them.`)) return;
-    if (web.length) {
-      // Give web pictures a chance to load so they aren't missing from the printout.
-      await Promise.race([
-        Promise.allSettled(web.map((url) => new Promise<void>((resolve) => { const img = new Image(); img.onload = img.onerror = () => resolve(); img.src = url; }))),
-        new Promise((resolve) => window.setTimeout(resolve, 20000)),
-      ]);
+    setStatus({ text: "Checking pictures and text before printing…", kind: "info", busy: true });
+    const indices = allIndices();
+    const urls = new Set<string>();
+    const chains: { web: string[]; local: boolean; empty: boolean }[] = [];
+    let textProblems = 0;
+    for (const index of indices) {
+      const record = activeRecords[index];
+      const inst = instanceFor(record, index, index % slots);
+      textProblems += instanceIssues(inst.items, record, metaFor(index)).length;
+      for (const item of inst.items) {
+        if (item.type !== "image" || item.visible === false || !item.imageSource) continue;
+        const match = library.resolver.resolve(item, record);
+        const chain = [match, ...match.alternates].filter((m) => m.kind !== "none");
+        const web = chain.filter((m) => m.url && isWebUrl(m.url)).map((m) => m.url!);
+        web.forEach((u) => urls.add(u));
+        chains.push({ web, local: chain.some((m) => m.asset) || !!item.fallbackAssetId, empty: chain.length === 0 });
+      }
     }
+    const check = await checkImageUrls([...urls], (done, total) => setStatus({ text: `Checking web pictures… ${done} of ${total}`, kind: "info", busy: true }));
+    const noMatch = chains.filter((c) => c.empty && !c.local).length;
+    const brokenWeb = chains.filter((c) => !c.local && c.web.length > 0 && c.web.every((u) => check.failed.has(u))).length;
+    const problems = [
+      brokenWeb && `${brokenWeb} web picture${brokenWeb === 1 ? "" : "s"} couldn’t be loaded`,
+      noMatch && `${noMatch} picture${noMatch === 1 ? "" : "s"} ${noMatch === 1 ? "has" : "have"} no match`,
+      textProblems && `${textProblems} text${textProblems === 1 ? "" : "s"} ${textProblems === 1 ? "doesn’t" : "don’t"} fit ${textProblems === 1 ? "its" : "their"} box`,
+    ].filter(Boolean) as string[];
+    setStatus(null);
+    if (problems.length && !window.confirm(`Before printing:\n\n• ${problems.join("\n• ")}\n\nAffected pictures will print blank (or show the placeholder) and long text will spill or be cut off.\n\nPrint anyway?\n(Cancel, then use “Review matches”, “Check text fit” or “Save web pictures to the library”.)`)) return;
     setPrinting(true);
   };
   useEffect(() => {
@@ -461,9 +658,10 @@ function App() {
       const mod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
       const has = selectedItems.length > 0;
-      const target = showData ? recordHistory : history; // each view undoes its own edits
+      const target = showData ? recordHistory : workspace === "layout" ? overrideDoc : history; // each view undoes its own edits
       if (mod && key === "z") { event.preventDefault(); event.shiftKey ? target.redo() : target.undo(); }
       else if (mod && key === "y") { event.preventDefault(); target.redo(); }
+      else if (workspace === "layout" && !showData) { if (key === "escape") { setInstanceSel(null); setEditingText(null); } }
       else if (workspace !== "template" || showData) return;
       else if (mod && key === "a") { event.preventDefault(); setSelectedIds(items.filter((i) => i.visible !== false).map((i) => i.id)); }
       else if (mod && key === "c") { if (has) { event.preventDefault(); copySelected(); } }
@@ -487,7 +685,7 @@ function App() {
   // ── Render ──────────────────────────────────────────────────────────────
   const meta = { recordNumber: recordIndex + 1, pageNumber: currentPage + 1, recordCount: activeRecords.length, pageCount };
   const caption = workspace === "template"
-    ? { title: "INDIVIDUAL TEMPLATE", detail: `${template.width.toFixed(2)} × ${template.height.toFixed(2)} in` }
+    ? { title: variants.length > 1 ? `INDIVIDUAL TEMPLATE · ${variants.find((v) => v.id === variantId)?.name.toUpperCase()}` : "INDIVIDUAL TEMPLATE", detail: `${template.width.toFixed(2)} × ${template.height.toFixed(2)} in` }
     : { title: "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet` };
 
   return (
@@ -507,6 +705,7 @@ function App() {
 
       <main className="workspace" hidden={showData}>
         <Toolbar
+          workspace={workspace} instanceMode={instanceMode} onInstanceMode={() => { setInstanceMode((v) => !v); setInstanceSel(null); setEditingText(null); }}
           showGrid={showGrid} onGrid={() => setShowGrid((v) => !v)}
           showRulers={showRulers} onRulers={() => setShowRulers((v) => !v)}
           snap={snap} onSnap={() => setSnap((v) => !v)}
@@ -533,7 +732,7 @@ function App() {
                 guides={guides[workspace]}
                 onGuides={(update) => setGuides((g) => ({ ...g, [workspace]: update(g[workspace]) }))}
                 onRulerDoubleClick={() => { setSelectedIds([]); setInspectorOpen(true); }}
-                onBackgroundClick={() => setSelectedIds([])}
+                onBackgroundClick={() => { setSelectedIds([]); setInstanceSel(null); }}
                 marqueeMode={multiMode && workspace === "template"}
                 onMarquee={workspace === "template" ? onMarquee : undefined}
                 paperClassName={preview ? "preview" : ""}
@@ -546,13 +745,24 @@ function App() {
                   />
                 ) : (
                   <LayoutStage
-                    sheet={sheet} templateWidth={template.width} templateHeight={template.height} items={items} records={activeRecords}
+                    sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
                     slotRecord={(slot) => (sheet.repeatMode === "same" ? recordIndex : currentPage * slots + slot)}
                     pageNumber={currentPage + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
+                    edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
+                    onSelect={(sel) => { setInstanceSel(sel); setEditingText(null); if (sel) setInspectorOpen(true); }}
+                    onStartEdit={(sel) => { const item = instanceFor(activeRecords[indexOfRecord(sel.recordId)], indexOfRecord(sel.recordId), 0).items.find((i) => i.id === sel.itemId); if (item?.type === "text") { setInstanceSel(sel); setEditingText(sel); } else if (item?.type === "image") { setInstanceSel(sel); setLibraryDialog({ kind: "pick", itemId: sel.itemId, target: "asset" }); } }}
+                    onCommitText={commitInstanceText} onCancelEdit={() => setEditingText(null)}
+                    onDropFiles={dropPictureOnSlot} onToggleOff={toggleInstanceOff} onResetInstance={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
                   />
                 )}
               </Viewport>
 
+              {workspace === "template" && !preview && (
+                <div className="variant-bar" data-no-pan role="tablist" aria-label="Templates">
+                  {variants.map((v, i) => <button key={v.id} role="tab" aria-selected={v.id === variantId} className={v.id === variantId ? "variant-chip active" : "variant-chip"} onClick={() => { setActiveVariant(v.id); setSelectedIds([]); }} title={`Edit ${v.name}`}>{variants.length > 1 ? `${String.fromCharCode(65 + i)} · ${v.name}` : v.name}</button>)}
+                  <button className="variant-chip" onClick={addVariant} title="Add another template, e.g. to alternate colours between records" aria-label="Add a template">+</button>
+                </div>
+              )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
               <button className={dataOpen ? "drawer-toggle left active" : "drawer-toggle left"} title={dataOpen ? "Hide data fields" : "Show data fields"} aria-label={dataOpen ? "Hide data fields" : "Show data fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
@@ -562,6 +772,14 @@ function App() {
                 {inspectorOpen ? <PanelRightClose size={16} /> : <PanelRight size={16} />}
               </button>
 
+              {workspace === "layout" && instanceMode && (
+                <div className="edit-bar" data-no-pan>
+                  <button className="tool-button" title="Undo (Ctrl+Z)" aria-label="Undo (Ctrl+Z)" disabled={!overrideDoc.canUndo} onClick={overrideDoc.undo}><Undo2 size={16} /></button>
+                  <button className="tool-button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo (Ctrl+Shift+Z)" disabled={!overrideDoc.canRedo} onClick={overrideDoc.redo}><Redo2 size={16} /></button>
+                  <span className="edit-divider" />
+                  <span className="edit-hint">Click to select · double-click to edit · drop a photo on a picture</span>
+                </div>
+              )}
               {workspace === "template" && (
                 <EditBar
                   hasSelection={selectedItems.length > 0} canPaste={clipboard.length > 0} canUndo={history.canUndo} canRedo={history.canRedo}
@@ -581,11 +799,25 @@ function App() {
 
           {inspectorOpen && (
             <Inspector
-              workspace={workspace} items={items} selectedItems={selectedItems} onSelect={setSelectedIds} onUpdate={updateItem}
+              workspace={workspace}
+              items={inLayoutEdit ? instItems : items}
+              selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems}
+              onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
+              onUpdate={inLayoutEdit && instRecord ? (id, patch, coalesce) => setInstanceItem(instRecord[ID], id, toItemPatch(patch), coalesce) : updateItem}
+              instance={instanceBanner}
+              fitNote={inLayoutEdit && instItem?.type === "text" && instRecord ? (() => { const l = layoutText(instItem, valueFor(instItem, instRecord, metaFor(instIndex)), instItem.w * PX_PER_IN, instItem.h * PX_PER_IN); return l.issue ? { bad: true, text: l.issue === "truncated" ? "This text is being cut off." : "This text runs past its box." } : { bad: false, text: "This text fits." }; })() : fitNote}
               fontLibrary={fontLibrary} onAlign={align} onDistribute={distribute} onRotateBy={rotateSelectionBy} imageTools={imageTools}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onMoveLayer={moveLayer}
               templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate({ width, height })} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
+              fields={fields} editedList={editedList} onJumpInstance={jumpToInstance} onResetInstanceById={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
+              onAudit={(itemId) => setAuditDialog({ itemId })} auditCount={sheetIssueCount}
+              variants={{
+                variants, activeId: variantId, rules, fields, records: activeRecords, basis: sheet.variantBasis ?? "record",
+                onActivate: (id) => { setActiveVariant(id); setSelectedIds([]); }, onAdd: addVariant,
+                onRename: (id, name) => setVariants((list) => list.map((v) => (v.id === id ? { ...v, name } : v))),
+                onDelete: deleteVariant, onRules: setRules, onBasis: (variantBasis) => setSheet((sh) => ({ ...sh, variantBasis })),
+              }}
               onClose={() => setInspectorOpen(false)}
             />
           )}
@@ -605,6 +837,15 @@ function App() {
         <MatchReviewDialog item={items.find((i) => i.id === reviewItemId)!} records={activeRecords} library={library} onOverrides={(changes) => setOverrides(reviewItemId, changes)} onClose={() => setReviewItemId(null)} />
       )}
 
+      {auditDialog && <TextAuditDialog issues={issues} itemId={auditDialog.itemId} onFix={(issue) => fixOnPage(issue.recordId, issue.itemId)} onClose={() => setAuditDialog(null)} />}
+
+      {status && (
+        <div className={`toast ${status.kind}`} role="status">
+          <div><span>{status.text}</span>{status.detail && <ul>{status.detail.map((d, i) => <li key={i}>{d}</li>)}</ul>}</div>
+          {!status.busy && <button onClick={() => setStatus(null)} aria-label="Dismiss">Dismiss</button>}
+        </div>
+      )}
+
       {pendingImport && (
         <MappingDialog
           fileName={pendingImport.fileName} records={pendingImport.records} templateFields={boundFields(items)}
@@ -616,7 +857,7 @@ function App() {
       {fieldDrag && <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>}
 
       {printing && (
-        <PrintSheets sheet={sheet} items={items} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} />
+        <PrintSheets sheet={sheet} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} instanceFor={instanceFor} />
       )}
     </div>
     </ImageContext.Provider>

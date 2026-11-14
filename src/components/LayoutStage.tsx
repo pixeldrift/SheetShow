@@ -1,47 +1,127 @@
-import type { DesignItem, RecordMeta, RecordRow, Sheet } from "../types";
-import { PX_PER_IN } from "../lib/data";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, PencilLine, RotateCcw, Undo2 } from "lucide-react";
+import type { DesignItem, InstanceOverride, RecordMeta, RecordRow, Sheet } from "../types";
+import { PX_PER_IN, valueFor } from "../lib/data";
+import { ID } from "../lib/records";
+import { hasEdits } from "../lib/instances";
+import { instanceIssues, recordLabel } from "../lib/audit";
+import { fontStack } from "../lib/fonts";
+import { fontSizePx } from "../lib/text";
+import { incomingFromDrop, type Incoming } from "../lib/importImages";
 import { TemplateThumbnail } from "./ItemShape";
+
+export type InstanceInfo = { variantId: string; items: DesignItem[]; override?: InstanceOverride };
+export type InstanceSelection = { recordId: string; itemId: string };
 
 type Props = {
   sheet: Sheet;
   templateWidth: number;
   templateHeight: number;
-  items: DesignItem[];
   records: RecordRow[];
   /** Index into `records` for each slot on this sheet. */
   slotRecord: (slot: number) => number;
+  /** The items one record actually renders: its template (chosen by the alternating rules) plus any hand edits. */
+  instanceFor: (record: RecordRow, index: number, slot: number) => InstanceInfo;
   pageNumber: number;
   pageCount: number;
   showGrid: boolean;
+  /** Preview / print: no flags, outlines or editing. */
   preview: boolean;
+  /** Edit mode: pick items inside a slot, double-click to edit, drop pictures onto picture boxes. */
+  edit?: boolean;
+  zoom?: number;
+  selected?: InstanceSelection | null;
+  editing?: InstanceSelection | null;
+  onSelect?: (selection: InstanceSelection | null) => void;
+  onStartEdit?: (selection: InstanceSelection) => void;
+  onCommitText?: (value: string) => void;
+  onCancelEdit?: () => void;
+  onDropFiles?: (recordId: string, itemId: string | null, files: Incoming[]) => void;
+  onToggleOff?: (recordId: string) => void;
+  onResetInstance?: (recordId: string) => void;
 };
 
 /** Slots are placed at their true physical positions (margin + column × (size + gap)) in inches. */
-export function LayoutStage({ sheet, templateWidth, templateHeight, items, records, slotRecord, pageNumber, pageCount, showGrid, preview }: Props) {
+export function LayoutStage(p: Props) {
+  const { sheet, templateWidth, templateHeight, records, preview } = p;
   const slots = sheet.columns * sheet.rows;
   const marks = sheet.cropMarks && preview ? cropMarks(sheet, templateWidth, templateHeight) : [];
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [dropOver, setDropOver] = useState<string | null>(null);
+  useEffect(() => { if (preview) setMenuFor(null); }, [preview]);
+
   return (
     <div className="layout-page" style={{ width: sheet.pageWidth * PX_PER_IN, height: sheet.pageHeight * PX_PER_IN }}>
       {Array.from({ length: slots }, (_, slot) => {
         const col = slot % sheet.columns;
         const row = Math.floor(slot / sheet.columns);
-        const index = slotRecord(slot);
+        const index = p.slotRecord(slot);
         const record = records[index];
+        const meta: RecordMeta | null = record ? { recordNumber: index + 1, pageNumber: p.pageNumber, recordCount: records.length, pageCount: p.pageCount } : null;
+        const info = record ? p.instanceFor(record, index, slot) : null;
+        const id = record?.[ID] as string | undefined;
+        const edited = !preview && hasEdits(info?.override);
+        const reverted = edited && !!info?.override?.off;
+        const issues = !preview && info && record && meta ? instanceIssues(info.items, record, meta) : [];
+        const overriddenIds = edited && !reverted ? new Set(Object.keys(info!.override!.items)) : undefined;
+        const sel = p.selected && p.selected.recordId === id ? p.selected.itemId : null;
+        const editingHere = p.editing && p.editing.recordId === id ? info?.items.find((i) => i.id === p.editing!.itemId) : undefined;
+
+        const itemAt = (target: EventTarget | null) => (target as Element | null)?.closest?.("[data-item-id]")?.getAttribute("data-item-id") ?? null;
+        const classes = ["layout-slot"];
+        if (showOutline(p, preview)) classes.push("outlined");
+        if (edited) classes.push(reverted ? "reverted" : "edited");
+        if (dropOver === id && id) classes.push("drop-target");
+
         return (
           <div
             key={slot}
-            className={showGrid && !preview ? "layout-slot outlined" : "layout-slot"}
-            style={{
-              left: (sheet.marginX + col * (templateWidth + sheet.gapX)) * PX_PER_IN,
-              top: (sheet.marginY + row * (templateHeight + sheet.gapY)) * PX_PER_IN,
-              width: templateWidth * PX_PER_IN,
-              height: templateHeight * PX_PER_IN,
-            }}
+            className={classes.join(" ")}
+            data-no-pan={p.edit ? "" : undefined}
+            style={{ left: (sheet.marginX + col * (templateWidth + sheet.gapX)) * PX_PER_IN, top: (sheet.marginY + row * (templateHeight + sheet.gapY)) * PX_PER_IN, width: templateWidth * PX_PER_IN, height: templateHeight * PX_PER_IN }}
+            onClick={p.edit && id ? (e) => { const itemId = itemAt(e.target); p.onSelect?.(itemId ? { recordId: id, itemId } : null); } : undefined}
+            onDoubleClick={p.edit && id ? (e) => { const itemId = itemAt(e.target); if (itemId) p.onStartEdit?.({ recordId: id, itemId }); } : undefined}
+            onDragOver={p.edit && id ? (e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDropOver(id); } } : undefined}
+            onDragLeave={p.edit ? () => setDropOver(null) : undefined}
+            onDrop={p.edit && id ? async (e) => {
+              e.preventDefault(); setDropOver(null);
+              const target = itemAt(e.target);
+              const files = await incomingFromDrop(e.dataTransfer);
+              if (files.length) p.onDropFiles?.(id, target, files);
+            } : undefined}
           >
-            {record
-              ? <TemplateThumbnail items={items} record={record} width={templateWidth} height={templateHeight} meta={{ recordNumber: index + 1, pageNumber, recordCount: records.length, pageCount }} />
+            {record && meta && info
+              ? <TemplateThumbnail items={info.items} record={record} width={templateWidth} height={templateHeight} meta={meta} interactive={p.edit && !preview} selectedItemId={sel} overriddenIds={overriddenIds} zoom={p.zoom} />
               : <span className="empty-slot">Empty</span>}
             {!preview && <span className="slot-number">#{index + 1}</span>}
+
+            {edited && id && (
+              <>
+                <button className={reverted ? "slot-badge reverted" : "slot-badge"} data-no-pan
+                  title={reverted ? "Hand edits are switched off for this record — click for options" : "This record has hand edits — click for options"}
+                  onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === id ? null : id); }}>
+                  {reverted ? <Undo2 size={12} /> : <PencilLine size={12} />}
+                </button>
+                {menuFor === id && (
+                  <>
+                    <div className="menu-scrim" onClick={(e) => { e.stopPropagation(); setMenuFor(null); }} />
+                    <div className="menu slot-menu" role="menu" data-no-pan onClick={(e) => e.stopPropagation()}>
+                      <strong>{recordLabel(record!)}</strong>
+                      <button role="menuitem" onClick={() => { p.onToggleOff?.(id); setMenuFor(null); }}>{reverted ? <><PencilLine size={14} /> Use my edits again</> : <><Undo2 size={14} /> Show the template version</>}</button>
+                      <button role="menuitem" className="danger" onClick={() => { p.onResetInstance?.(id); setMenuFor(null); }}><RotateCcw size={14} /> Discard these edits</button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+            {issues.length > 0 && id && (
+              <button className="slot-warning" data-no-pan title={issues.map((i) => `${i.kind === "truncated" ? "Cut off" : "Doesn’t fit"}: ${i.item.field ?? i.item.text ?? "text"}`).join("\n")}
+                onClick={(e) => { e.stopPropagation(); p.onSelect?.({ recordId: id, itemId: issues[0].item.id }); }}>
+                <AlertTriangle size={12} /> {issues.length}
+              </button>
+            )}
+
+            {editingHere && record && meta && id && <InlineTextEditor item={editingHere} initial={valueFor(editingHere, record, meta)} onCommit={(v) => p.onCommitText?.(v)} onCancel={() => p.onCancelEdit?.()} />}
           </div>
         );
       })}
@@ -51,6 +131,29 @@ export function LayoutStage({ sheet, templateWidth, templateHeight, items, recor
         </svg>
       )}
     </div>
+  );
+}
+
+const showOutline = (p: Props, preview: boolean) => p.showGrid && !preview;
+
+/** A text box laid over the item so a name can be typed directly on the page. */
+function InlineTextEditor({ item, initial, onCommit, onCancel }: { item: DesignItem; initial: string; onCommit: (value: string) => void; onCancel: () => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const done = useRef(false);
+  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  const finish = (save: boolean) => { if (done.current) return; done.current = true; if (save) onCommit(ref.current?.value ?? initial); else onCancel(); };
+  return (
+    <textarea
+      ref={ref} className="inline-editor" defaultValue={initial} data-no-pan aria-label="Edit text for this record"
+      style={{
+        left: item.x * PX_PER_IN, top: item.y * PX_PER_IN, width: item.w * PX_PER_IN, minHeight: item.h * PX_PER_IN,
+        fontFamily: fontStack(item.fontFamily), fontSize: fontSizePx(item), fontWeight: item.weight ?? 500, fontStyle: item.italic ? "italic" : "normal",
+        textAlign: item.align ?? "left", lineHeight: item.lineHeight ?? 1.2, color: item.color ?? "#34443d",
+        transform: item.rotation ? `rotate(${item.rotation}deg)` : undefined,
+      }}
+      onBlur={() => finish(true)}
+      onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); finish(false); } else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); finish(true); } e.stopPropagation(); }}
+    />
   );
 }
 

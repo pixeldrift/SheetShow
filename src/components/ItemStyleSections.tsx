@@ -16,6 +16,10 @@ export type ImageTools = {
   records: RecordRow[];
   onChoose: (itemId: string, target: "asset" | "fallback") => void;
   onReview: (itemId: string) => void;
+  /** Web addresses this picture would load that aren't saved in the library yet. */
+  webCount: (item: DesignItem) => number;
+  onCacheWeb: (itemId: string) => void;
+  onCheckWeb: (itemId: string) => void;
 };
 
 /** Where a picture comes from: one library image, or a rule that finds each record's own image. */
@@ -24,6 +28,7 @@ export function PictureSection({ item, patch, tools }: { item: DesignItem; patch
   const source = item.imageSource;
   const asset = library.resolver.assetById(item.assetId);
   const match = source ? library.resolver.resolve(item, record) : null;
+  const webCount = useMemo(() => (source ? tools.webCount(item) : 0), [source, item, tools.records, library.resolver]); // eslint-disable-line react-hooks/exhaustive-deps
   // "Needs attention" count across all included records (cached by the resolver, so this is cheap after the first pass).
   const attention = useMemo(() => (source ? tools.records.filter((r) => needsReview(library.resolver.resolve(item, r))).length : 0), [source, item, tools.records, library.resolver]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -75,6 +80,15 @@ export function PictureSection({ item, patch, tools }: { item: DesignItem; patch
             </div>
           )}
           <button className="button wide" onClick={() => tools.onReview(item.id)}>Review matches{attention ? ` (${attention} need attention)` : ""}…</button>
+          {webCount > 0 && (
+            <div className="web-block">
+              <p className="hint first"><strong>{webCount}</strong> picture{webCount === 1 ? "" : "s"} load{webCount === 1 ? "s" : ""} from the web. Printing checks that they all load first.</p>
+              <div className="icon-row">
+                <button className="wide-icon" onClick={() => tools.onCheckWeb(item.id)}>Check links</button>
+                <button className="wide-icon" onClick={() => tools.onCacheWeb(item.id)} title="Download them into the library so the project works offline">Save to library</button>
+              </div>
+            </div>
+          )}
 
           <div className="picture-row spaced-block">
             <div className="picture-thumb small">{item.fallbackAssetId ? <img src={library.urlFor(item.fallbackAssetId)} alt="" /> : null}</div>
@@ -127,9 +141,25 @@ const GLOW: Shadow = { x: 0, y: 0, blur: 10, color: "#ffb347", opacity: 0.95 };
 /** Opacity plus a drop shadow / glow (a glow is just a shadow with no offset). */
 export function EffectsSection({ item, patch }: { item: DesignItem; patch: Patch }) {
   const shadow = item.shadow;
+  const stroke = item.textStroke;
   const set = (change: Partial<Shadow>) => patch({ shadow: { ...(shadow ?? SHADOW), ...change } });
   return (
     <Section title="EFFECTS">
+      {item.type === "text" && (
+        <div className="outline-block">
+          <div className="color-row first"><span>Text outline</span>
+            <span className="inline-controls">
+              {stroke && <button className="mini-button" title="Remove outline" aria-label="Remove outline" onClick={() => patch({ textStroke: undefined })}><X size={13} /></button>}
+              <input type="color" aria-label="Outline color" value={stroke?.color ?? "#ffffff"} onChange={(e) => patch({ textStroke: { color: e.target.value, width: stroke?.width ?? 1.5 } })} />
+            </span>
+          </div>
+          {stroke && <div className="spaced-block"><Pair label="Outline thickness"><NumberField value={stroke.width} min={0.25} max={20} step={0.25} places={2} unit="pt" onChange={(n) => patch({ textStroke: { color: stroke.color, width: n } })} /></Pair></div>}
+          <div className="icon-row spaced-block">
+            <button className="wide-icon" title="White outline: readable on dark pictures" onClick={() => patch({ textStroke: { color: "#ffffff", width: 2 } })}><span className="swatch" style={{ background: "#fff" }} /> White</button>
+            <button className="wide-icon" title="Black outline: readable on light pictures" onClick={() => patch({ textStroke: { color: "#000000", width: 2 } })}><span className="swatch" style={{ background: "#000" }} /> Black</button>
+          </div>
+        </div>
+      )}
       <div className="slider-row">
         <span>Opacity</span>
         <input type="range" min="0" max="100" step="1" value={Math.round((item.opacity ?? 1) * 100)} aria-label="Opacity" onChange={(e) => patch({ opacity: Number(e.target.value) / 100 })} />

@@ -30,35 +30,88 @@ export function layoutLines(text: string, item: DesignItem, maxWidth: number): s
 const widest = (lines: string[], item: DesignItem) => {
   const ctx = measure();
   ctx.font = cssFont(item);
-  return Math.max(...lines.map((line) => ctx.measureText(line).width));
+  return Math.max(0, ...lines.map((line) => ctx.measureText(line).width));
 };
 
-/** Height (px) the given lines need: first baseline, line steps, and room for descenders. */
-export const textHeight = (lineCount: number, fontPx: number, lineHeight = 1.2) => fontPx * 1.4 + (lineCount - 1) * fontPx * lineHeight;
+/** Height (px) the given lines need, measured the way CSS does: lines × font size × line height. */
+export const textHeight = (lineCount: number, fontPx: number, lineHeight = 1.2) => lineCount * fontPx * lineHeight;
 
-const fitCache = new Map<string, number>();
+export type TextIssue = "spill" | "truncated";
+export type TextLayout = {
+  /** The item with its final font size (after any auto-fit). */
+  item: DesignItem;
+  lines: string[];
+  fontPx: number;
+  /** Height the text wants, px. */
+  needH: number;
+  /** null when it fits. "spill" runs past the box; "truncated" was cut off with an ellipsis. */
+  issue: TextIssue | null;
+  /** A shrinking mode reached its minimum size and the text still doesn't fit. */
+  atMin: boolean;
+};
+
+const TOL = 0.5;
+const sizeCache = new Map<string, { size: number; atMin: boolean }>();
+
+/** Shortens text to the box: as many lines as fit, with the last one ending in "…"; over-wide lines are trimmed too. */
+function truncate(lines: string[], item: DesignItem, w: number, h: number, ignoreHeight: boolean): string[] {
+  const fontPx = fontSizePx(item), lh = item.lineHeight ?? 1.2;
+  let keep = lines.length;
+  if (!ignoreHeight) while (keep > 1 && textHeight(keep, fontPx, lh) > h + TOL) keep--;
+  const ctx = measure();
+  ctx.font = cssFont(item);
+  const ellipsize = (line: string) => {
+    if (ctx.measureText(line).width <= w + TOL) return line;
+    let text = line.trimEnd();
+    while (text.length > 1 && ctx.measureText(text + "…").width > w) text = text.slice(0, -1).trimEnd();
+    return text + "…";
+  };
+  const out = lines.slice(0, keep).map((line, i) => (i === keep - 1 && keep < lines.length ? ellipsize(line + " …") : ellipsize(line)));
+  return out;
+}
 
 /**
- * Returns the item with its font size adjusted to fit a w × h (px) box when auto-fit is on.
- * "shrink" never exceeds the size set in the inspector; "fit" also grows text to fill the box.
+ * Lays text out in a w × h (px) box and decides what happens when it doesn't fit.
+ * Auto-fit modes pick the largest size that fits (never below the minimum); "overflow" decides what to do if it still won't.
  */
-export function withAutoFit(item: DesignItem, text: string, w: number, h: number): DesignItem {
-  if (item.type !== "text" || !item.autoFit || item.autoFit === "off") return item;
-  const max = item.autoFit === "shrink" ? (item.fontSize ?? 12) : 300;
-  const key = [text, item.autoFit, max, item.fontFamily, item.weight, item.italic, item.lineHeight, item.wrap, Math.round(w), Math.round(h)].join("|");
-  let size = fitCache.get(key);
-  if (size === undefined) {
-    const fits = (pt: number) => {
-      const trial = { ...item, fontSize: pt };
-      const lines = layoutLines(text, trial, w);
-      return textHeight(lines.length, fontSizePx(trial), item.lineHeight ?? 1.2) <= h && widest(lines, trial) <= w + 0.5;
-    };
-    let lo = 4, hi = Math.max(4, max);
-    if (fits(hi)) size = hi;
-    else { for (let i = 0; i < 14; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; } size = lo; }
-    size = Math.round(size * 10) / 10;
-    if (fitCache.size > 3000) fitCache.clear();
-    fitCache.set(key, size);
+export function layoutText(source: DesignItem, text: string, w: number, h: number): TextLayout {
+  const mode = source.autoFit ?? "off";
+  const lh = source.lineHeight ?? 1.2;
+  let item: DesignItem = mode === "width" ? { ...source, wrap: false } : source;
+  let atMin = false;
+  if (mode !== "off") {
+    const min = Math.max(2, source.minFontSize ?? 4);
+    const max = Math.max(min, mode === "fit" ? 300 : (source.fontSize ?? 12));
+    const key = [text, mode, min, max, item.fontFamily, item.weight, item.italic, lh, Math.round(w), Math.round(h)].join("|");
+    let found = sizeCache.get(key);
+    if (!found) {
+      const fits = (pt: number) => {
+        const trial = { ...item, fontSize: pt };
+        const lines = layoutLines(text, trial, w);
+        const wideEnough = widest(lines, trial) <= w + TOL;
+        return mode === "width" ? wideEnough : wideEnough && textHeight(lines.length, fontSizePx(trial), lh) <= h + TOL;
+      };
+      let size: number;
+      if (fits(max)) size = max;
+      else if (!fits(min)) { size = min; atMin = true; }
+      else { let lo = min, hi = max; for (let i = 0; i < 14; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; } size = lo; }
+      // Round down: rounding up could push a snug fit a pixel or two past the box and report a false overflow.
+      found = { size: Math.max(min, Math.floor(size * 10) / 10), atMin: size === min && atMin };
+      if (sizeCache.size > 4000) sizeCache.clear();
+      sizeCache.set(key, found);
+    }
+    item = { ...item, fontSize: found.size };
+    atMin = found.atMin;
   }
-  return { ...item, fontSize: size };
+  let lines = layoutLines(text, item, w);
+  const fontPx = fontSizePx(item);
+  const needH = textHeight(lines.length, fontPx, lh);
+  const tooWide = widest(lines, item) > w + TOL;
+  const tooTall = mode !== "width" && needH > h + TOL;
+  let issue: TextIssue | null = null;
+  if (tooWide || tooTall) {
+    if (source.overflow === "truncate") { lines = truncate(lines, item, w, h, mode === "width"); issue = "truncated"; }
+    else issue = "spill";
+  }
+  return { item, lines, fontPx, needH, issue, atMin };
 }

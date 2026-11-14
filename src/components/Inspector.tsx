@@ -3,15 +3,16 @@ import {
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
   Hash, Italic, Layers, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
-  AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter,
+  AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, X,
 } from "lucide-react";
 import type { DesignItem, LabelPreset, Sheet } from "../types";
-import { averyPresets, fieldDisplayName } from "../lib/data";
+import { averyPresets, fieldDisplayName, prettyField } from "../lib/data";
 import type { AlignMode } from "../lib/align";
 import type { FontLibrary } from "../hooks/useFontLibrary";
 import { NumberField, Pair, Section } from "./Fields";
 import { FontPicker } from "./FontPicker";
 import { EffectsSection, PictureSection, ShapeStyleSection, type ImageTools } from "./ItemStyleSections";
+import { VariantsSection } from "./VariantSections";
 
 type Props = {
   workspace: "template" | "layout";
@@ -23,6 +24,19 @@ type Props = {
   onDistribute: (axis: "x" | "y") => void;
   onRotateBy: (degrees: number) => void;
   imageTools: ImageTools;
+  /** Alternating templates editor. */
+  variants: React.ComponentProps<typeof VariantsSection>;
+  fields: string[];
+  /** Set while editing one record's copy of the template in page layout. */
+  instance?: { recordLabel: string; itemEdited: boolean; off: boolean; onRevertItem: () => void; onToggleOff: () => void; onResetInstance: () => void } | null;
+  editedList: { recordId: string; label: string; off: boolean }[];
+  onJumpInstance: (recordId: string) => void;
+  onResetInstanceById: (recordId: string) => void;
+  onAudit: (itemId?: string | null) => void;
+  /** Text-fit problems on the sheet being shown. */
+  auditCount: number;
+  /** For the selected text: whether it fits, across the records being printed. */
+  fitNote?: { text: string; bad: boolean } | null;
   onUpdate: (id: string, patch: Partial<DesignItem>, coalesce?: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -76,7 +90,19 @@ export function Inspector(props: Props) {
         ) : selectedItems.length > 1 ? (
           <MultiProperties count={selectedItems.length} onRotateBy={props.onRotateBy} onAlign={props.onAlign} onDistribute={props.onDistribute} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
         ) : selected ? (
-          <ItemProperties item={selected} onUpdate={onUpdate} onDuplicate={props.onDuplicate} onDelete={props.onDelete} fontLibrary={props.fontLibrary} onAlign={props.onAlign} imageTools={props.imageTools} />
+          <>
+            {props.instance && (
+              <div className="banner">
+                <span><strong>Editing {props.instance.recordLabel}’s copy.</strong> Changes here affect only this record; everyone else keeps the template.</span>
+                <div className="banner-actions">
+                  <button className="button" disabled={!props.instance.itemEdited} onClick={props.instance.onRevertItem}>Revert this item</button>
+                  <button className="button" onClick={props.instance.onToggleOff}>{props.instance.off ? "Use my edits again" : "Show template version"}</button>
+                  <button className="button" onClick={props.instance.onResetInstance}>Discard all edits</button>
+                </div>
+              </div>
+            )}
+          <ItemProperties item={selected} onUpdate={onUpdate} onDuplicate={props.onDuplicate} onDelete={props.onDelete} fontLibrary={props.fontLibrary} onAlign={props.onAlign} imageTools={props.imageTools} fitNote={props.fitNote} instanceMode={!!props.instance} onFitReview={() => props.onAudit(selected!.id)} />
+          </>
         ) : workspace === "template" ? (
           <TemplateSetup {...props} />
         ) : (
@@ -127,7 +153,7 @@ function MultiProperties({ count, onAlign, onDistribute, onRotateBy, onDuplicate
   );
 }
 
-function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, onAlign, imageTools }: { imageTools: ImageTools; item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary; onAlign: (m: AlignMode) => void }) {
+function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, onAlign, imageTools, fitNote, instanceMode, onFitReview }: { instanceMode?: boolean; onFitReview?: () => void; fitNote?: { text: string; bad: boolean } | null; imageTools: ImageTools; item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary; onAlign: (m: AlignMode) => void }) {
   const patch = (p: Partial<DesignItem>, key?: string) => onUpdate(item.id, p, key ?? `prop:${item.id}:${Object.keys(p).join()}`);
   return (
     <>
@@ -163,11 +189,28 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
             <div className="two-col spaced">
               <Pair label="Auto scale">
                 <select className="select" value={item.autoFit ?? "off"} onChange={(e) => patch({ autoFit: e.target.value as DesignItem["autoFit"] })}>
-                  <option value="off">Fixed size</option><option value="shrink">Shrink to fit</option><option value="fit">Fit to box</option>
+                  <option value="off">Fixed size</option>
+                  <option value="shrink">Shrink to fit box</option>
+                  <option value="width">Shrink to fit width (one line)</option>
+                  <option value="fit">Fit to box (grow or shrink)</option>
                 </select>
               </Pair>
             </div>
-            {item.autoFit && item.autoFit !== "off" && <p className="hint">{item.autoFit === "shrink" ? "Text shrinks below the size above when it doesn’t fit the box." : "Text is sized to fill the box. Resize the box to change it."}</p>}
+            {item.autoFit && item.autoFit !== "off" && (
+              <>
+                <p className="hint">{item.autoFit === "shrink" ? "Text shrinks below the size above until it fits the box." : item.autoFit === "width" ? "Stays on one line and shrinks until it fits the width. Good for names." : "Text is sized to fill the box. Resize the box to change it."}</p>
+                <div className="two-col spaced"><Pair label="Never smaller than"><NumberField value={item.minFontSize ?? 4} min={2} max={200} step={0.5} places={1} unit="pt" onChange={(n) => patch({ minFontSize: n })} /></Pair></div>
+              </>
+            )}
+            <div className="two-col spaced">
+              <Pair label="If it still doesn’t fit">
+                <select className="select" value={item.overflow ?? "spill"} onChange={(e) => patch({ overflow: e.target.value as DesignItem["overflow"] })}>
+                  <option value="spill">Let it spill past the box</option>
+                  <option value="truncate">Cut off with “…”</option>
+                </select>
+              </Pair>
+            </div>
+            {fitNote && <p className={`hint ${fitNote.bad ? "warn" : ""}`}>{fitNote.text}{fitNote.bad && !instanceMode && <> <button className="link-button" onClick={onFitReview}>Review…</button></>}</p>}
             <div className="align-buttons">
               {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([value, Icon]) => (
                 <button key={value} aria-label={`Align ${value}`} className={(item.align ?? "left") === value ? "active" : ""} onClick={() => patch({ align: value })}><Icon size={15} /></button>
@@ -198,18 +241,18 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, on
         </div>
       </Section>
 
-      <AlignRow onAlign={onAlign} label="TO TEMPLATE" />
+      {!instanceMode && <AlignRow onAlign={onAlign} label="TO TEMPLATE" />}
 
-      <div className="property-actions">
+      {!instanceMode && <div className="property-actions">
         <button onClick={onDuplicate}><Copy size={14} /> Duplicate</button>
         <button onClick={() => onUpdate(item.id, { locked: !item.locked })}>{item.locked ? <Unlock size={14} /> : <Lock size={14} />} {item.locked ? "Unlock" : "Lock"}</button>
         <button className="danger" onClick={onDelete}><Trash2 size={14} /> Delete</button>
-      </div>
+      </div>}
     </>
   );
 }
 
-function TemplateSetup({ templateWidth, templateHeight, onTemplateSize, onPreset }: Props) {
+function TemplateSetup({ templateWidth, templateHeight, onTemplateSize, onPreset, variants }: Props) {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const matches = averyPresets
@@ -219,6 +262,7 @@ function TemplateSetup({ templateWidth, templateHeight, onTemplateSize, onPreset
     .slice(0, 8);
   return (
     <>
+      <VariantsSection {...variants} />
       <Section title="TEMPLATE SIZE" unit="INCHES">
         <div className="two-col">
           <Pair label="Width"><NumberField value={templateWidth} min={0.1} unit="in" onChange={(n) => onTemplateSize(n, templateHeight)} /></Pair>
@@ -240,7 +284,7 @@ function TemplateSetup({ templateWidth, templateHeight, onTemplateSize, onPreset
   );
 }
 
-function PageSetup({ sheet, onSheet, pageCount, overflow }: Props) {
+function PageSetup({ sheet, onSheet, pageCount, overflow, fields, onAudit, auditCount, editedList, onJumpInstance, onResetInstanceById }: Props) {
   const size = sheet.pageWidth === 8.5 && sheet.pageHeight === 11 ? "letter" : sheet.pageWidth === 8.27 && sheet.pageHeight === 11.69 ? "a4" : "custom";
   return (
     <>
@@ -273,6 +317,37 @@ function PageSetup({ sheet, onSheet, pageCount, overflow }: Props) {
           <Pair label="Horizontal"><NumberField value={sheet.gapX} min={0} unit="in" onChange={(n) => onSheet({ gapX: n })} /></Pair>
           <Pair label="Vertical"><NumberField value={sheet.gapY} min={0} unit="in" onChange={(n) => onSheet({ gapY: n })} /></Pair>
         </div>
+      </Section>
+      <Section title="RECORD ORDER">
+        <Pair label="Sort the sheets by">
+          <select className="select" value={sheet.sortField ?? ""} onChange={(e) => onSheet({ sortField: e.target.value || undefined })}>
+            <option value="">The order in the data table</option>
+            {fields.map((f) => <option key={f} value={f}>{prettyField(f)}</option>)}
+          </select>
+        </Pair>
+        {sheet.sortField && (
+          <div className="segmented spaced-block">
+            <button className={(sheet.sortDir ?? 1) === 1 ? "active" : ""} onClick={() => onSheet({ sortDir: 1 })}>A → Z</button>
+            <button className={sheet.sortDir === -1 ? "active" : ""} onClick={() => onSheet({ sortDir: -1 })}>Z → A</button>
+          </div>
+        )}
+        <p className="hint">Only changes the printed and previewed order. Numbers sort as numbers.</p>
+      </Section>
+      <Section title="TEXT FIT">
+        <button className="button wide first" onClick={() => onAudit(null)}><AlertTriangle size={14} /> Check text fit across all records</button>
+        <p className="hint">{auditCount ? `${auditCount} text${auditCount === 1 ? "" : "s"} on this sheet ${auditCount === 1 ? "doesn’t" : "don’t"} fit — look for the orange badges.` : "Nothing on this sheet is too long for its box."}</p>
+      </Section>
+      <Section title="HAND-EDITED RECORDS" unit={editedList.length ? String(editedList.length) : undefined}>
+        {editedList.length === 0 ? <p className="hint first">Turn on <strong>Edit individual records</strong> in the toolbar, then click or double-click anything on a sheet to change just that record — a name, a photo, a colour.</p> : (
+          <div className="edited-list">
+            {editedList.slice(0, 40).map((e) => (
+              <div key={e.recordId} className="edited-row">
+                <button className="edited-jump" onClick={() => onJumpInstance(e.recordId)} title="Show on the sheet">{e.label}{e.off && <em> · switched off</em>}</button>
+                <button className="mini-button" aria-label={`Discard edits for ${e.label}`} title="Discard these edits" onClick={() => onResetInstanceById(e.recordId)}><X size={13} /></button>
+              </div>
+            ))}
+          </div>
+        )}
       </Section>
       <Section title="PRINT OPTIONS">
         <label className="check-row"><input type="checkbox" checked={sheet.cropMarks} onChange={(e) => onSheet({ cropMarks: e.target.checked })} /> Crop marks in the page margins</label>

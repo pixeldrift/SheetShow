@@ -20,6 +20,10 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Resize handles, multi-select (shift-click or box-select), align and distribute
 - Multi-line, wrapping text with Google Fonts, installed fonts (Chromium) or any typed font name
 - Data table: edit cells in place, paste from a spreadsheet, add/rename/sort columns, and choose which records print (checkboxes, range select, “only these”)
+- Text that stays readable and fits: outline, shrink-to-fit (box or one line) with a minimum size, truncate with “…”, and a text-fit audit
+- Alternating templates (“odd/even”, every n-th, or by a field’s value) combined into one output, with output sorting by any field
+- Edit individual records on the printed sheets: change a name, drop in a different photo or restyle one item. Hand-edited records are flagged and can be switched back to the template
+- Web pictures are checked before printing and can be saved into the library
 - Picture library with drag-and-drop, folder and zip import; data-driven pictures matched from a column or filename pattern
 - Import a new CSV/TSV and auto-match its columns to the template's linked fields
 - Autosave in the browser, plus save/open project files
@@ -76,9 +80,12 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
   - [x] Exact → normalised → fuzzy matching, a match-review screen with manual overrides, placeholder picture
   - [x] Web sources via URL patterns (hotlinked, falling back to library pictures if a download fails)
   - [x] Project bundle (.zip) that carries the pictures; pre-print warning for pictures with no match
-  - [ ] Optional “download web pictures into the library” (needs CORS; hotlinking works without it)
+  - [x] Download web pictures into the library (when the site allows it) and a print-time check that every web picture loads
   - [ ] Focus-point cropping, picture thumbnails in the data table
 - [x] Corner radius (circles), frames, opacity, drop shadow and glow on pictures and shapes (shadow and opacity on text too)
+- [x] Text outline, overflow policies (shrink / truncate), and a text-fit audit
+- [x] Alternating templates and rule-based assignment; sort output by a field
+- [x] Per-record overrides on the page layout, with flags and revert
 - [ ] Scannable codes (QR, Code 128) generated from data fields
 - [ ] Printer calibration offset and smart guides
 - [ ] Persistent reusable template library

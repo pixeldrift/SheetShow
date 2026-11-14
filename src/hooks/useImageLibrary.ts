@@ -3,6 +3,7 @@ import type { Asset } from "../types";
 import { createResolver } from "../lib/images";
 import { expandIncoming, prepareImage, zipFiles, type Incoming, type Skipped } from "../lib/importImages";
 import { storeAll, storeClear, storeDelete, storePut } from "../lib/imageStore";
+import { pathForUrl } from "../lib/webImages";
 
 export type ImportReport = { added: number; replaced: number; skipped: Skipped[] };
 
@@ -57,6 +58,41 @@ export function useImageLibrary() {
     return { added: added.length - replaced, replaced, skipped, assets: added };
   }, [assets]);
 
+  /**
+   * Downloads web pictures into the library so the project works offline and prints reliably.
+   * Only works when the website allows it (CORS); the rest keep loading from the web as before.
+   */
+  const addRemote = useCallback(async (urls: string[], onProgress?: (done: number, total: number) => void) => {
+    const known = new Set(assets.map((a) => a.sourceUrl).filter(Boolean));
+    const todo = [...new Set(urls)].filter((u) => !known.has(u));
+    const failed: { url: string; reason: string }[] = [];
+    const added: Asset[] = [];
+    let next = 0, done = 0;
+    const worker = async () => {
+      while (next < todo.length) {
+        const url = todo[next++];
+        try {
+          const response = await fetch(url, { mode: "cors" });
+          if (!response.ok) throw new Error(`the site answered ${response.status}`);
+          const blob = await response.blob();
+          const path = pathForUrl(url, blob.type);
+          const prepared = await prepareImage({ blob, name: path.split("/").pop()!, path });
+          if ("reason" in prepared) throw new Error("not a picture this browser can read");
+          const asset: Asset = { ...prepared.asset, sourceUrl: url };
+          blobs.current.set(asset.id, prepared.blob);
+          try { await storePut(asset, prepared.blob); } catch { /* keep it in memory for this session */ }
+          added.push(asset);
+        } catch (error) {
+          failed.push({ url, reason: error instanceof TypeError ? "the website doesn’t allow downloads from other sites (or you’re offline)" : (error as Error).message });
+        }
+        onProgress?.(++done, todo.length);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, todo.length) }, worker));
+    if (added.length) setAssets((list) => [...list, ...added].sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true })));
+    return { added: added.length, failed, skipped: urls.length - todo.length };
+  }, [assets]);
+
   const remove = useCallback(async (id: string) => {
     forget(id);
     setAssets((list) => list.filter((a) => a.id !== id));
@@ -86,7 +122,7 @@ export function useImageLibrary() {
   const blobOf = useCallback((id: string) => blobs.current.get(id), []);
   const resolver = useMemo(() => createResolver(assets), [assets]);
 
-  return { assets, ready, progress, urlFor, blobOf, addFiles, remove, clear, exportZip, replaceAll, resolver };
+  return { assets, ready, progress, urlFor, blobOf, addFiles, addRemote, remove, clear, exportZip, replaceAll, resolver };
 }
 
 export type ImageLibrary = ReturnType<typeof useImageLibrary>;

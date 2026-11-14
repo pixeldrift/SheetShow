@@ -81,10 +81,12 @@ export function createResolver(assets: Asset[]) {
     pathKeys.push({ key: normalizeKey(asset.path), asset });
     bases.push({ key: stripExt(baseName(asset.path)), asset });
   }
+  const byUrl = new Map<string, Asset>();
+  for (const asset of assets) if (asset.sourceUrl) byUrl.set(asset.sourceUrl, asset);
   const cache = new Map<string, Omit<Match, "alternates">>();
 
   const single = (candidate: string): Omit<Match, "alternates"> => {
-    if (isWebUrl(candidate)) return { kind: "web", url: candidate, score: 1, candidate };
+    if (isWebUrl(candidate)) { const saved = byUrl.get(candidate); return saved ? { kind: "web", asset: saved, score: 1, candidate } : { kind: "web", url: candidate, score: 1, candidate }; }
     const hit = cache.get(candidate);
     if (hit) return hit;
     const lower = candidate.toLowerCase();

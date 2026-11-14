@@ -1,7 +1,9 @@
-import { BoxSelect, FileSearch, Grid2X2, ImagePlus, Magnet, Ruler, Shapes, Type, ZoomIn, ZoomOut } from "lucide-react";
+import { BoxSelect, FileSearch, PencilLine, Grid2X2, ImagePlus, Magnet, Ruler, Shapes, Type, ZoomIn, ZoomOut } from "lucide-react";
 import { MAX_ZOOM, MIN_ZOOM } from "./Viewport";
 
 type Props = {
+  workspace: "template" | "layout";
+  instanceMode: boolean; onInstanceMode: () => void;
   showGrid: boolean; onGrid: () => void;
   showRulers: boolean; onRulers: () => void;
   snap: boolean; onSnap: () => void;
@@ -17,14 +19,26 @@ export function Toolbar(p: Props) {
   );
   return (
     <div className="canvas-toolbar">
+      {p.workspace === "template" && (
+        <>
+          <div className="tool-group">
+            <button className="tool-button" title="Add text" aria-label="Add text" onClick={p.onAddText}><Type size={16} /></button>
+            <button className="tool-button" title="Add shape" aria-label="Add shape" onClick={p.onAddShape}><Shapes size={16} /></button>
+            <button className="tool-button" title="Add image or PDF" aria-label="Add image or PDF" onClick={p.onAddImage}><ImagePlus size={16} /></button>
+          </div>
+          <div className="toolbar-divider" />
+        </>
+      )}
+      {p.workspace === "layout" && (
+        <>
+          <button className={p.instanceMode ? "button mode-button active" : "button mode-button"} aria-pressed={p.instanceMode} onClick={p.onInstanceMode} title="Click or double-click anything on a sheet to change just that record: edit a name, drop in a different photo, tweak a colour">
+            <PencilLine size={15} /> Edit individual records
+          </button>
+          <div className="toolbar-divider" />
+        </>
+      )}
       <div className="tool-group">
-        <button className="tool-button" title="Add text" aria-label="Add text" onClick={p.onAddText}><Type size={16} /></button>
-        <button className="tool-button" title="Add shape" aria-label="Add shape" onClick={p.onAddShape}><Shapes size={16} /></button>
-        <button className="tool-button" title="Add image or PDF" aria-label="Add image or PDF" onClick={p.onAddImage}><ImagePlus size={16} /></button>
-      </div>
-      <div className="toolbar-divider" />
-      <div className="tool-group">
-        {toggle(p.multi, "Multi-select (tap items to add, drag to box-select)", p.onMulti, <BoxSelect size={15} />)}
+        {p.workspace === "template" && toggle(p.multi, "Multi-select (tap items to add, drag to box-select)", p.onMulti, <BoxSelect size={15} />)}
         {toggle(p.showGrid, "Show grid", p.onGrid, <Grid2X2 size={15} />)}
         {toggle(p.showRulers, "Show rulers", p.onRulers, <Ruler size={15} />)}
         {toggle(p.snap, "Snap to grid and guides", p.onSnap, <Magnet size={15} />)}

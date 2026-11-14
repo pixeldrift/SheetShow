@@ -3,7 +3,7 @@ import type { DesignItem, RecordMeta, RecordRow } from "../types";
 import { useImages } from "./ImageContext";
 import { PX_PER_IN, valueFor } from "../lib/data";
 import { fontStack } from "../lib/fonts";
-import { fontSizePx, layoutLines, textHeight, withAutoFit } from "../lib/text";
+import { layoutText, type TextLayout } from "../lib/text";
 
 type Props = {
   item: DesignItem;
@@ -13,6 +13,10 @@ type Props = {
   outline?: "primary" | "member";
   /** Editor zoom, so outlines keep a constant on-screen thickness. */
   zoom?: number;
+  /** Page layout's edit mode: the item can be clicked (via its slot) even though it has no pointer handler. */
+  interactive?: boolean;
+  /** This item has hand edits on this record's copy. */
+  overridden?: boolean;
   /** Set for the editable canvas; omitted for thumbnails and print output. */
   onPointerDown?: (event: React.PointerEvent<SVGGElement>) => void;
 };
@@ -24,13 +28,12 @@ type Props = {
 function layoutItem(source: DesignItem, record: RecordRow, meta: RecordMeta) {
   const w = source.w * PX_PER_IN;
   const boxH = source.h * PX_PER_IN;
-  const text = source.type === "text" ? valueFor(source, record, meta) : "";
-  const item = withAutoFit(source, text, w, boxH);
-  const fontSize = fontSizePx(item);
-  const lines = item.type === "text" ? layoutLines(text, item, w) : [];
-  const fitted = !!item.autoFit && item.autoFit !== "off";
-  const h = item.type === "text" && !fitted ? Math.max(boxH, textHeight(lines.length, fontSize, item.lineHeight ?? 1.2)) : boxH;
-  return { item, w, boxH, h, fontSize, lines };
+  if (source.type !== "text") return { item: source, w, boxH, h: boxH, fontSize: 0, lines: [] as string[], issue: null as TextLayout["issue"] };
+  const layout = layoutText(source, valueFor(source, record, meta), w, boxH);
+  // Without auto-fit or truncation, wrapped text can run past the box, so the frame grows to cover it.
+  const expands = (source.autoFit ?? "off") === "off" && source.overflow !== "truncate";
+  const h = expands ? Math.max(boxH, layout.needH) : boxH;
+  return { item: layout.item, w, boxH, h, fontSize: layout.fontPx, lines: layout.lines, issue: layout.issue };
 }
 
 /** The frame (px) the editor should draw handles and outlines on. */
@@ -40,6 +43,7 @@ export const itemFrame = (item: DesignItem, record: RecordRow, meta: RecordMeta)
 };
 
 const ACCENT = "#d77d4e";
+export const OVERRIDE = "#7c5cdb"; // violet marks anything that has been hand-edited on one record
 const PT = 96 / 72; // CSS px per point
 
 /** Tries each URL in turn (a web source can fail, leaving a library fallback). */
@@ -60,7 +64,7 @@ function ImageLayer({ urls, w, h, fit, editor, label }: { urls: string[]; w: num
 }
 
 /** One design object as SVG, positioned in inches. Shared by the editor, page layout and print output. */
-export function ItemShape({ item: source, record, meta, outline, zoom = 1, onPointerDown }: Props) {
+export function ItemShape({ item: source, record, meta, outline, zoom = 1, interactive, overridden, onPointerDown }: Props) {
   const images = useImages();
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const { item, w, boxH, h, fontSize, lines } = layoutItem(source, record, meta);
@@ -68,7 +72,7 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, onPoi
   const anchor = item.align === "center" ? "middle" : item.align === "right" ? "end" : "start";
   const textX = item.align === "center" ? w / 2 : item.align === "right" ? w : 0;
   const rotate = item.rotation ? ` rotate(${item.rotation} ${w / 2} ${h / 2})` : "";
-  const editor = !!onPointerDown;
+  const editor = !!onPointerDown || !!interactive;
 
   // Frame: drawn inside the box so it never pushes past the item's edges. Rectangles keep their legacy 1px outline.
   const hasStroke = !!item.stroke && item.stroke !== "none";
@@ -92,7 +96,7 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, onPoi
     <g
       data-item-id={item.id}
       transform={`translate(${item.x * PX_PER_IN} ${item.y * PX_PER_IN})${rotate}`}
-      className={onPointerDown ? (item.locked ? "canvas-object locked" : "canvas-object") : undefined}
+      className={editor ? (item.locked ? "canvas-object locked" : "canvas-object") : undefined}
       onPointerDown={onPointerDown}
     >
       {(shadow || item.type === "image") && (
@@ -113,7 +117,8 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, onPoi
           <>
             {/* Invisible hit area so thin text is easy to grab with a finger. */}
             {editor && <rect width={w} height={h} fill="transparent" />}
-            <text x={textX} y={fontSize * 1.15} fontFamily={fontStack(item.fontFamily)} fontStyle={item.italic ? "italic" : "normal"} fontSize={fontSize} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={anchor}>
+            <text x={textX} y={fontSize * 1.15} fontFamily={fontStack(item.fontFamily)} fontStyle={item.italic ? "italic" : "normal"} fontSize={fontSize} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={anchor}
+              {...(item.textStroke ? { stroke: item.textStroke.color, strokeWidth: item.textStroke.width * 2 * PT, paintOrder: "stroke", strokeLinejoin: "round" as const } : {})}>
               {lines.map((line, i) => <tspan key={i} x={textX} dy={i === 0 ? 0 : lineStep}>{line || "\u00a0"}</tspan>)}
             </text>
           </>
@@ -121,16 +126,23 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, onPoi
       </g>
       {/* Outline sits exactly on the frame edge, so the resize handles (centred on the same edge) attach to it. */}
       {editor && !outline && <rect className="hover-outline" width={w} height={h} fill="none" stroke={ACCENT} strokeWidth={1 / zoom} pointerEvents="none" />}
-      {outline && <rect width={w} height={h} fill="none" stroke={ACCENT} strokeWidth={(outline === "primary" ? 1.5 : 1) / zoom} strokeOpacity={outline === "primary" ? 1 : 0.7} pointerEvents="none" />}
+      {overridden && !outline && <rect width={w} height={h} fill="none" stroke={OVERRIDE} strokeWidth={1.5 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} pointerEvents="none" />}
+      {outline && <rect width={w} height={h} fill="none" stroke={outline === "primary" && overridden ? OVERRIDE : ACCENT} strokeWidth={(outline === "primary" ? 1.5 : 1) / zoom} strokeOpacity={outline === "primary" ? 1 : 0.7} pointerEvents="none" />}
     </g>
   );
 }
 
-/** A full template rendered at natural size, clipped to its bounds. */
-export function TemplateThumbnail({ items, record, meta, width, height }: { items: DesignItem[]; record: RecordRow; meta: RecordMeta; width: number; height: number }) {
+/** A full template rendered at natural size, clipped to its bounds. In page edit mode its items can be picked. */
+export function TemplateThumbnail({ items, record, meta, width, height, interactive, selectedItemId, overriddenIds, zoom }: {
+  items: DesignItem[]; record: RecordRow; meta: RecordMeta; width: number; height: number;
+  interactive?: boolean; selectedItemId?: string | null; overriddenIds?: Set<string>; zoom?: number;
+}) {
   return (
     <svg className="template-thumb" width={width * PX_PER_IN} height={height * PX_PER_IN} viewBox={`0 0 ${width * PX_PER_IN} ${height * PX_PER_IN}`}>
-      {items.filter((item) => item.visible !== false).map((item) => <ItemShape key={item.id} item={item} record={record} meta={meta} />)}
+      {items.filter((item) => item.visible !== false).map((item) => (
+        <ItemShape key={item.id} item={item} record={record} meta={meta} interactive={interactive} zoom={zoom}
+          outline={interactive && selectedItemId === item.id ? "primary" : undefined} overridden={overriddenIds?.has(item.id)} />
+      ))}
     </svg>
   );
 }

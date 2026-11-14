@@ -20,8 +20,14 @@ export type DesignItem = {
   wrap?: boolean;
   /** Degrees clockwise, about the item's centre. */
   rotation?: number;
-  /** Text scaling: shrink to fit the box, or fit it exactly (grow or shrink). */
-  autoFit?: "off" | "shrink" | "fit";
+  /** Text scaling: shrink to fit the box, shrink to fit one line's width, or fit exactly (grow or shrink). */
+  autoFit?: "off" | "shrink" | "width" | "fit";
+  /** What happens to text that still doesn't fit: spill past the box (default) or cut off with an ellipsis. */
+  overflow?: "spill" | "truncate";
+  /** Floor (pt) for the shrinking modes. */
+  minFontSize?: number;
+  /** Outline around the letters, in points, drawn outside the fill so text stays readable on busy backgrounds. */
+  textStroke?: { color: string; width: number };
   imageFit?: "cover" | "contain";
   /** A picture from the image library. */
   assetId?: string;
@@ -62,6 +68,11 @@ export type Sheet = {
   marginY: number;
   repeatMode: "same" | "next";
   cropMarks: boolean;
+  /** Output order: sort records by this field (unset = the data table's order). */
+  sortField?: string;
+  sortDir?: 1 | -1;
+  /** Alternating-template rules count by record order (default) or by position on each sheet. */
+  variantBasis?: "record" | "slot";
 };
 
 export type LabelPreset = {
@@ -82,6 +93,10 @@ export type Project = {
   template: { width: number; height: number };
   sheet: Sheet;
   fonts: FontEntry[];
+  /** Extra templates that rules can assign to records. `items` stays the first template for older files. */
+  variants?: { id: string; name: string; items: DesignItem[] }[];
+  rules?: VariantRule[];
+  overrides?: Record<string, InstanceOverride>;
 };
 
 export type ImageSource = { mode: "column"; column: string } | { mode: "pattern"; pattern: string };
@@ -89,4 +104,17 @@ export type ImageSource = { mode: "column"; column: string } | { mode: "pattern"
 export type Shadow = { x: number; y: number; blur: number; color: string; opacity: number };
 
 /** Image library entry. The pixels live in IndexedDB. */
-export type Asset = { id: string; name: string; path: string; width: number; height: number; bytes: number };
+export type Asset = { id: string; name: string; path: string; width: number; height: number; bytes: number; /** Where a downloaded web picture came from. */ sourceUrl?: string };
+
+/** One of several templates that can be combined into a single output (e.g. alternating colours). */
+export type Variant = { id: string; name: string };
+/** Which template a record uses: every n-th record starting at `start` (CSS-style 2n+1), or when a field equals a value. First match wins. */
+export type VariantRule = { id: string; variantId: string } & (
+  | { kind: "nth"; every: number; start: number }
+  | { kind: "field"; field: string; equals: string }
+);
+
+/** A patch where `null` means "remove this property" (so it survives being saved as JSON). */
+export type ItemPatch = { [K in keyof DesignItem]?: DesignItem[K] | null };
+/** Hand edits to one record's copy of the template. `off` keeps them but shows the template version. */
+export type InstanceOverride = { off?: boolean; items: Record<string, ItemPatch> };
