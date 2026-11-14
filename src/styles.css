@@ -446,3 +446,22 @@ button:disabled{opacity:.35;cursor:not-allowed}
  .viewport-edit-actions .tool-button{width:32px;height:30px}
  .content-frame.with-inspector>.right-panel{width:min(88vw,330px)!important}
 }
+
+
+/* Compact toolbar controls and consistent rounded action surfaces */
+.content-frame.with-data{grid-template-columns:232px minmax(0,1fr)}
+.content-frame.with-data.with-inspector{grid-template-columns:232px minmax(0,1fr) 286px}
+.drawer-toggles{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.drawer-toggles .tool-button{width:30px;height:30px;border-radius:7px}
+.drawer-toggles .tool-button.active{background:#f8eee7;color:#bd7147}
+.viewport-edit-actions{border-radius:8px}
+.viewport-edit-actions .tool-button{border-radius:7px}
+@media(max-width:1100px) and (min-width:851px){
+ .content-frame.with-data{grid-template-columns:210px minmax(0,1fr)}
+ .content-frame.with-data.with-inspector{grid-template-columns:210px minmax(0,1fr) 255px}
+}
+@media(max-width:850px){
+ .content-frame.with-data,.content-frame.with-data.with-inspector{grid-template-columns:minmax(0,1fr)}
+ .content-frame.with-inspector>.right-panel{display:flex!important;visibility:visible!important;opacity:1!important}
+ .content-frame:not(.with-inspector)>.right-panel{display:none!important}
+}
