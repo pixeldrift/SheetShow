@@ -5,7 +5,7 @@ import {
   FileSearch, FileStack, FileText, Grid2X2, ImagePlus, Layers, Link2, ListFilter,
   Lock, LockKeyhole, Magnet, Minus, MousePointer2, PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, Plus, Printer, Ruler, Search,
   Settings2, Shapes, SlidersHorizontal, Sparkles, Square, Trash2, Type, Unlock, Upload,
-  WandSparkles, ZoomIn, ZoomOut
+  WandSparkles, X, ZoomIn, ZoomOut
 } from "lucide-react";
 import Papa from "papaparse";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
@@ -308,7 +308,8 @@ function App() {
   };
   const endPan = () => { panRef.current = null; };
 
-  const startGuide = (event: React.PointerEvent<HTMLDivElement>, axis: "x" | "y") => {
+  const startGuide = (event: PointerEvent<HTMLDivElement>, axis: "x" | "y") => {
+    if (event.detail > 1) return;
     event.preventDefault();
     event.stopPropagation();
     const rect = event.currentTarget.closest(".ruler-stage")?.querySelector(".paper-shadow")?.getBoundingClientRect();
@@ -319,7 +320,7 @@ function App() {
     guideDragRef.current = { id, axis, rect };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
-  const moveGuide = (event: React.PointerEvent<HTMLDivElement>) => {
+  const moveGuide = (event: PointerEvent<HTMLDivElement>) => {
     if (!guideDragRef.current) return;
     const { id, axis, rect } = guideDragRef.current;
     const raw = axis === "x" ? (event.clientX - rect.left) / (96 * zoom) : (event.clientY - rect.top) / (96 * zoom);
@@ -462,7 +463,7 @@ function App() {
                         </g>
                       ))}
                     </svg>
-                    {guides.map((guide) => <div key={guide.id} className={`snap-guide ${guide.axis}`} style={guide.axis === "x" ? { left: guide.position * 96 * zoom } : { top: guide.position * 96 * zoom }} onPointerDown={(e) => { e.stopPropagation(); const rect = e.currentTarget.parentElement!.getBoundingClientRect(); guideDragRef.current = { id: guide.id, axis: guide.axis, rect }; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (guideDragRef.current?.id === guide.id) moveGuide(e as unknown as React.PointerEvent<HTMLDivElement>); }} onPointerUp={endGuide} onDoubleClick={() => setGuides((current) => current.filter((g) => g.id !== guide.id))} title="Drag to reposition · double-click to remove"/> )}
+                    {guides.map((guide) => <div key={guide.id} className={`snap-guide ${guide.axis}`} style={guide.axis === "x" ? { left: guide.position * 96 * zoom } : { top: guide.position * 96 * zoom }} onPointerDown={(e) => { e.stopPropagation(); const rect = e.currentTarget.parentElement!.getBoundingClientRect(); guideDragRef.current = { id: guide.id, axis: guide.axis, rect }; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (guideDragRef.current?.id === guide.id) moveGuide(e as unknown as PointerEvent<HTMLDivElement>); }} onPointerUp={endGuide} onDoubleClick={() => setGuides((current) => current.filter((g) => g.id !== guide.id))} title="Drag to reposition · double-click to remove"/> )}
                   </div>
                 </div>
                 {rulerSettingsOpen && <div className="ruler-settings-popover" role="dialog" aria-label="Template size and margins">
