@@ -20,7 +20,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
     <div className="dialog-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="dialog help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-title">
         <div className="dialog-head">
-          <div className="help-brand"><Logo size={34} /><div><h2 id="help-title">SheetShow Help</h2><p>Where data takes the stage</p></div></div>
+          <div className="help-brand"><Logo size={34} /><div><h2 id="help-title">SheetShow Help</h2></div></div>
           <button className="icon-button" aria-label="Close help" onClick={onClose}><X size={17} /></button>
         </div>
         <div className="help-layout">

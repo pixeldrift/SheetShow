@@ -20,7 +20,7 @@ export function Topbar({ workspace, onWorkspace, onPrint, onHelp, name, onName, 
     <header className="topbar">
       <div className="brand">
         <Logo size={36} />
-        <div className="brand-name">Sheet<span>Show</span><small>WHERE DATA TAKES THE STAGE</small></div>
+        <div className="brand-name">Sheet<span>Show</span></div>
       </div>
       <div className="topbar-center">
         {/* The project is a menu (New, Open, Save…), so it looks like one and sits apart from the three views. */}

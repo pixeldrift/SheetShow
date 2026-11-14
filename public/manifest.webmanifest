@@ -1,7 +1,7 @@
 {
   "name": "SheetShow",
   "short_name": "SheetShow",
-  "description": "Where data takes the stage — design labels, cards and badges from a spreadsheet.",
+  "description": "Design labels, cards and badges from a spreadsheet.",
   "start_url": "/SheetShow/",
   "scope": "/SheetShow/",
   "display": "standalone",

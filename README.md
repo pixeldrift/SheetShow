@@ -1,7 +1,5 @@
 # SheetShow
 
-**Where data takes the stage.**
-
 SheetShow is a browser-based variable-data design and print tool. Create an individual item, connect its content to spreadsheet fields, arrange copies on a physical page, and preview the result across records.
 
 ## Current foundation
