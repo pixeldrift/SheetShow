@@ -26,6 +26,7 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Web pictures are checked before printing and can be saved into the library
 - Printer calibration: nudge the whole page in thousandths of an inch, save named printer settings on this device, and print a calibration sheet
 - Template gallery (File menu → New from template…) with live thumbnails; drop your own `.json` projects into `src/templates/` to add more
+- Groups: select several objects and group them (Ctrl/⌘+G). A group moves, turns, resizes (text included), aligns and copies as one; Alt-click or double-click picks a single member; collapsible rows in Layers
 - Conditional objects: show, hide or restyle any object by rule (e.g. a ribbon only for VIPs, a symbol by meal choice), with AND / OR / NOT conditions
 - Merge fields inside text, e.g. `{city}, {state} {zip}` or `${price}`
 - Picture library with drag-and-drop, folder and zip import; data-driven pictures matched from a column or filename pattern
@@ -101,6 +102,8 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
   - [x] A hand edit on one record beats a rule; renaming or re-mapping a column keeps rules connected
   - [ ] Rules that swap a picture, or compare one field to another
   - [ ] Conditions on a whole layer or group (when groups exist)
+- [x] Group and ungroup objects (single-level groups; resize scales text proportionally)
+  - [ ] Nested groups, and conditional rules that apply to a whole group
 - [ ] Smart guides (snap to other items' edges)
 - [ ] “My templates”: save your own designs into the gallery from inside the app
 - [ ] Print-ready PDF export with embedded fonts

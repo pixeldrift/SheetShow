@@ -43,6 +43,9 @@ export type DesignItem = {
   strokeWidth?: number;
   opacity?: number;
   shadow?: Shadow;
+  /** Objects sharing a groupId move, rotate and scale together. The name is repeated on every member. */
+  groupId?: string;
+  groupName?: string;
   /** Conditional formatting: show/hide this object or restyle it depending on a record's values. */
   rules?: ConditionalRule[];
   /** When several rules match: apply only the first (default) or all of them, later ones winning. */

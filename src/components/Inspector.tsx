@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  ChevronDown, Group, Ungroup,
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
   Hash, Italic, Layers, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
@@ -27,6 +28,11 @@ type Props = {
   onDistribute: (axis: "x" | "y") => void;
   onRotateBy: (degrees: number) => void;
   imageTools: ImageTools;
+  /** Grouping: the selection is exactly one group / could be grouped, plus the actions. */
+  groups: {
+    wholeGroup: boolean; canGroup: boolean; onGroup: () => void; onUngroup: () => void;
+    onRename: (groupId: string, name: string) => void; onUpdateMany: (ids: string[], patch: Partial<DesignItem>) => void; onSelectGroupOf: (id: string) => void;
+  };
   /** Alternating templates editor. */
   variants: React.ComponentProps<typeof VariantsSection>;
   fields: string[];
@@ -45,7 +51,7 @@ type Props = {
   onUpdate: (id: string, patch: Partial<DesignItem>, coalesce?: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  onMoveLayer: (id: string, direction: -1 | 1) => void;
+  onMoveLayer: (id: string, direction: -1 | 1, asGroup?: boolean) => void;
   templateWidth: number;
   templateHeight: number;
   onTemplateSize: (width: number, height: number) => void;
@@ -65,7 +71,9 @@ export function Inspector(props: Props) {
   const { workspace, items, selectedItems, onSelect, onUpdate, onClose } = props;
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
   const [tab, setTab] = useState<"properties" | "layers">("properties");
-  const title = tab === "layers" ? "Layers" : selectedItems.length > 1 ? `${selectedItems.length} items` : selected ? "Item properties" : workspace === "template" ? "Template setup" : "Page setup";
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const flatLayers = !!props.instance; // hand-editing one record: groups aren't offered
+  const title = tab === "layers" ? "Layers" : selectedItems.length > 1 ? (props.groups.wholeGroup ? `Group · ${selectedItems[0].groupName ?? ""}` : `${selectedItems.length} items`) : selected ? "Item properties" : workspace === "template" ? "Template setup" : "Page setup";
 
   return (
     <aside className="panel right-panel" aria-label="Properties and layers">
@@ -80,22 +88,58 @@ export function Inspector(props: Props) {
       <div className="panel-body" data-scroll>
         {tab === "layers" ? (
           <div className="layer-list">
-            {[...items].reverse().map((item) => (
-              <div key={item.id} className={selectedItems.some((s) => s.id === item.id) ? "layer-row selected" : "layer-row"} onClick={(e) => { if (e.shiftKey || e.metaKey || e.ctrlKey) onSelect(selectedItems.some((s) => s.id === item.id) ? selectedItems.filter((s) => s.id !== item.id).map((s) => s.id) : [...selectedItems.map((s) => s.id), item.id]); else { onSelect([item.id]); setTab("properties"); } }}>
-                <span className="layer-kind">{kindIcon(item, 13)}</span>
-                <span className="layer-label">{layerLabel(item)}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
-                <button className="mini-button" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { visible: item.visible === false }); }}>{item.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}</button>
-                <button className="mini-button" title={item.locked ? "Unlock" : "Lock"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { locked: !item.locked }); }}>{item.locked ? <Lock size={13} /> : <Unlock size={13} />}</button>
-                <button className="mini-button" title="Bring forward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(item.id, 1); }}><ArrowUp size={13} /></button>
-                <button className="mini-button" title="Send backward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(item.id, -1); }}><ArrowDown size={13} /></button>
-              </div>
-            ))}
+            {(() => {
+              const pick = (ids: string[], e: React.MouseEvent) => { if (e.shiftKey || e.metaKey || e.ctrlKey) { const have = selectedItems.map((x) => x.id); onSelect(ids.every((id) => have.includes(id)) ? have.filter((id) => !ids.includes(id)) : [...new Set([...have, ...ids])]); } else { onSelect(ids); setTab("properties"); } };
+              const itemRow = (item: DesignItem, indented: boolean) => (
+                <div key={item.id} className={`${selectedItems.some((x) => x.id === item.id) ? "layer-row selected" : "layer-row"}${indented ? " nested" : ""}`} onClick={(e) => pick([item.id], e)}>
+                  <span className="layer-kind">{kindIcon(item, 13)}</span>
+                  <span className="layer-label">{layerLabel(item)}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
+                  <button className="mini-button" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { visible: item.visible === false }); }}>{item.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+                  <button className="mini-button" title={item.locked ? "Unlock" : "Lock"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { locked: !item.locked }); }}>{item.locked ? <Lock size={13} /> : <Unlock size={13} />}</button>
+                  <button className="mini-button" title="Bring forward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(item.id, 1); }}><ArrowUp size={13} /></button>
+                  <button className="mini-button" title="Send backward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(item.id, -1); }}><ArrowDown size={13} /></button>
+                </div>
+              );
+              const rows: React.ReactNode[] = [];
+              const seen = new Set<string>();
+              for (const item of [...items].reverse()) {
+                if (!item.groupId || flatLayers) { rows.push(itemRow(item, false)); continue; }
+                if (seen.has(item.groupId)) continue;
+                seen.add(item.groupId);
+                const members = [...items].reverse().filter((m) => m.groupId === item.groupId);
+                const ids = members.map((m) => m.id);
+                const open = !collapsed.has(item.groupId);
+                const allHidden = members.every((m) => m.visible === false), allLocked = members.every((m) => m.locked);
+                rows.push(
+                  <div key={`g-${item.groupId}`} className={ids.every((id) => selectedItems.some((x) => x.id === id)) ? "layer-row group selected" : "layer-row group"} onClick={(e) => pick(ids, e)}>
+                    <button className="mini-button chev" aria-label={open ? "Collapse group" : "Expand group"} onClick={(e) => { e.stopPropagation(); setCollapsed((c) => { const n = new Set(c); if (n.has(item.groupId!)) n.delete(item.groupId!); else n.add(item.groupId!); return n; }); }}><ChevronDown size={13} style={{ transform: open ? undefined : "rotate(-90deg)" }} /></button>
+                    <span className="layer-kind"><Group size={13} /></span>
+                    <span className="layer-label">{item.groupName ?? "Group"} <em>{members.length}</em></span>
+                    <button className="mini-button" title={allHidden ? "Show group" : "Hide group"} onClick={(e) => { e.stopPropagation(); props.groups.onUpdateMany(ids, { visible: allHidden }); }}>{allHidden ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+                    <button className="mini-button" title={allLocked ? "Unlock group" : "Lock group"} onClick={(e) => { e.stopPropagation(); props.groups.onUpdateMany(ids, { locked: !allLocked }); }}>{allLocked ? <Lock size={13} /> : <Unlock size={13} />}</button>
+                    <button className="mini-button" title="Bring group forward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(ids[0], 1, true); }}><ArrowUp size={13} /></button>
+                    <button className="mini-button" title="Send group backward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(ids[0], -1, true); }}><ArrowDown size={13} /></button>
+                  </div>,
+                );
+                if (open) members.forEach((m) => rows.push(itemRow(m, true)));
+              }
+              return rows;
+            })()}
             {!items.length && <p className="empty-note">Nothing on this template yet.</p>}
           </div>
         ) : selectedItems.length > 1 ? (
-          <MultiProperties count={selectedItems.length} onRotateBy={props.onRotateBy} onAlign={props.onAlign} onDistribute={props.onDistribute} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
+          <MultiProperties group={props.groups.wholeGroup ? { id: selectedItems[0].groupId!, name: selectedItems[0].groupName ?? "" } : null} groups={props.groups} count={selectedItems.length} onRotateBy={props.onRotateBy} onAlign={props.onAlign} onDistribute={props.onDistribute} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
         ) : selected ? (
           <>
+            {selected.groupId && !props.instance && (
+              <div className="banner group-note">
+                <span>Part of <strong>{selected.groupName ?? "a group"}</strong>.</span>
+                <div className="banner-actions">
+                  <button className="button" onClick={() => props.groups.onSelectGroupOf(selected.id)}>Select the whole group</button>
+                  <button className="button" onClick={props.groups.onUngroup}>Ungroup</button>
+                </div>
+              </div>
+            )}
             {props.instance && (
               <div className="banner">
                 <span><strong>Editing {props.instance.recordLabel}’s copy.</strong> Changes here affect only this record; everyone else keeps the template.</span>
@@ -140,10 +184,22 @@ function AlignRow({ onAlign, onDistribute, label }: { onAlign: (mode: AlignMode)
   );
 }
 
-function MultiProperties({ count, onAlign, onDistribute, onRotateBy, onDuplicate, onDelete }: { count: number; onRotateBy: (deg: number) => void; onAlign: (m: AlignMode) => void; onDistribute: (a: "x" | "y") => void; onDuplicate: () => void; onDelete: () => void }) {
+function MultiProperties({ count, onAlign, onDistribute, onRotateBy, onDuplicate, onDelete, group, groups }: { group: { id: string; name: string } | null; groups: Props["groups"]; count: number; onRotateBy: (deg: number) => void; onAlign: (m: AlignMode) => void; onDistribute: (a: "x" | "y") => void; onDuplicate: () => void; onDelete: () => void }) {
   return (
     <>
-      <div className="property-heading"><div className="property-icon"><Layers size={17} /></div><div><strong>{count} items selected</strong><span>Drag to move them together</span></div></div>
+      <div className="property-heading"><div className="property-icon">{group ? <Group size={17} /> : <Layers size={17} />}</div><div><strong>{group ? "Group" : `${count} items selected`}</strong><span>{group ? `${count} items move, turn and resize together` : "Drag to move them together"}</span></div></div>
+      {group ? (
+        <Section title="GROUP">
+          <input className="property-input" value={group.name} aria-label="Group name" onChange={(e) => groups.onRename(group.id, e.target.value)} />
+          <button className="button wide" onClick={groups.onUngroup}><Ungroup size={14} /> Ungroup</button>
+          <p className="hint">Click a group to select all of it. <strong>Alt/Option-click</strong> or <strong>double-click</strong> an item to pick just that one. Drag the handles to resize the whole group, text included.</p>
+        </Section>
+      ) : groups.canGroup && (
+        <Section title="GROUP">
+          <button className="button wide first" onClick={groups.onGroup}><Group size={14} /> Group these {count} items</button>
+          <p className="hint">A group moves, turns, scales, aligns and copies as one object. Shortcut: Ctrl/⌘+G.</p>
+        </Section>
+      )}
       <Section title="ROTATE AS GROUP">
         <div className="icon-row">
           <button title="Rotate group 90° counter-clockwise" aria-label="Rotate group 90° counter-clockwise" onClick={() => onRotateBy(-90)}><RotateCcw size={16} /></button>

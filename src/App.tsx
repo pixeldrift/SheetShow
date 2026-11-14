@@ -7,6 +7,7 @@ import type { DesignItem, Guide, InstanceOverride, ItemPatch, LabelPreset, Proje
 import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid, valueFor } from "./lib/data";
 import { applyOverride, hasEdits, pickVariant, toItemPatch } from "./lib/instances";
 import { applyConditions } from "./lib/conditions";
+import { cloneItems, expandToGroups, groupItems, moveLayer as moveLayerIn, nextGroupName, renameGroup as renameGroupIn, ungroupItems, unitsOf } from "./lib/groups";
 import { instanceIssues, itemLabel, recordLabel, type Issue } from "./lib/audit";
 import { checkImageUrls } from "./lib/webImages";
 import { layoutText } from "./lib/text";
@@ -270,7 +271,7 @@ function App() {
   };
   const copySelected = () => { if (selectedItems.length) setClipboard(selectedItems.map((item) => ({ ...item }))); };
   const cutSelected = () => { copySelected(); deleteSelected(); };
-  const cloneOffset = (list: DesignItem[]) => list.map((item) => ({ ...item, id: uid(), x: item.x + 0.12, y: item.y + 0.12 }));
+  const cloneOffset = (list: DesignItem[]) => cloneItems(list, 0.12, 0.12); // each copied group becomes its own new group
   const pasteItems = () => {
     if (!clipboard.length) return;
     const pasted = cloneOffset(clipboard);
@@ -284,6 +285,22 @@ function App() {
     const byId = new Map(updates.map((u) => [u.id, u]));
     return list.map((item) => (byId.has(item.id) ? { ...item, x: byId.get(item.id)!.x, y: byId.get(item.id)!.y } : item));
   }, { coalesce: "drag" });
+  // ── Groups ──────────────────────────────────────────────────────────────
+  const selectedGroupIds = [...new Set(selectedItems.flatMap((i) => (i.groupId ? [i.groupId] : [])))];
+  /** The selection is exactly one whole group. */
+  const wholeGroup = selectedGroupIds.length === 1 && selectedItems.length > 1 && items.filter((i) => i.groupId === selectedGroupIds[0]).length === selectedItems.length;
+  const canGroup = selectedItems.length > 1 && !wholeGroup;
+  const canUngroup = selectedGroupIds.length > 0;
+  const groupSelected = () => { if (selectedItems.length > 1) history.set((list) => groupItems(list, selectedIds, nextGroupName(list))); };
+  const ungroupSelected = () => history.set((list) => ungroupItems(list, selectedIds));
+  const renameGroup = (groupId: string, name: string) => history.set((list) => renameGroupIn(list, groupId, name), { coalesce: `rename-group:${groupId}` });
+  const updateMany = (ids: string[], patch: Partial<DesignItem>) => history.set((list) => list.map((item) => (ids.includes(item.id) ? { ...item, ...patch } : item)));
+  const selectGroupOf = (id: string) => { const item = items.find((i) => i.id === id); if (item) setSelectedIds(item.groupId ? items.filter((i) => i.groupId === item.groupId).map((i) => i.id) : [id]); };
+  const scaleGroup = (updates: { id: string; x: number; y: number; w: number; h: number; fontSize?: number }[]) => history.set((list) => {
+    const byId = new Map(updates.map((u) => [u.id, u]));
+    return list.map((item) => { const u = byId.get(item.id); return u ? { ...item, x: u.x, y: u.y, w: u.w, h: u.h, ...(u.fontSize !== undefined ? { fontSize: u.fontSize } : {}) } : item; });
+  }, { coalesce: "scale-group" });
+
   const resizeItem = (id: string, box: { x: number; y: number; w: number; h: number }) => updateItem(id, box, `resize:${id}`);
   const applyTransforms = (updates: Transform[], coalesce: string) => history.set((list) => {
     const byId = new Map(updates.map((u) => [u.id, u]));
@@ -303,28 +320,39 @@ function App() {
   const keepPositions = (original: DesignItem[], moved: DesignItem[]) =>
     original.map((item, i) => (moved[i].x === item.x && moved[i].y === item.y ? item : { ...item, x: moved[i].x, y: moved[i].y }));
 
-  const align = (mode: AlignMode) => {
-    const within = selectedItems.length > 1 ? boundsOf(framed(selectedItems)) : { x: 0, y: 0, w: template.width, h: template.height };
-    history.set((list) => keepPositions(list, alignItems(framed(list), selectedIds, mode, within)));
+  /**
+   * Alignment and distribution work on units: a group is one box, every other object its own. A single unit
+   * aligns to the template; several align to each other. Only positions change.
+   */
+  const alignUnits = (arrange: (boxes: DesignItem[], keys: string[]) => DesignItem[], boxesWithin: "selection" | "template") => {
+    history.set((list) => {
+      const framedList = framed(list);
+      const units = unitsOf(framedList, selectedIds);
+      if (!units.length) return list;
+      const boxes: DesignItem[] = units.map((u) => { const b = boundsOf(u.members); return { id: u.key, type: "rect", x: b.x, y: b.y, w: b.w, h: b.h, locked: u.members.every((m) => m.locked) } as DesignItem; });
+      void boxesWithin;
+      const moved = arrange(boxes, units.map((u) => u.key));
+      const shift = new Map(units.map((u, i) => [u.key, { dx: moved[i].x - boxes[i].x, dy: moved[i].y - boxes[i].y }]));
+      return list.map((item) => { const d = shift.get(item.groupId ?? item.id); return d && !item.locked && (d.dx || d.dy) ? { ...item, x: Number((item.x + d.dx).toFixed(3)), y: Number((item.y + d.dy).toFixed(3)) } : item; });
+    });
   };
-  const distribute = (axis: "x" | "y") => history.set((list) => keepPositions(list, distributeItems(framed(list), selectedIds, axis)));
+  const align = (mode: AlignMode) => {
+    const unitCount = unitsOf(items, selectedIds).length;
+    const within = unitCount > 1 ? boundsOf(framed(selectedItems)) : { x: 0, y: 0, w: template.width, h: template.height };
+    alignUnits((boxes, keys) => alignItems(boxes, keys, mode, within), "selection");
+  };
+  const distribute = (axis: "x" | "y") => alignUnits((boxes, keys) => distributeItems(boxes, keys, axis), "selection");
 
   const onMarquee = (box: { x: number; y: number; w: number; h: number }, additive: boolean) => {
     const hits = framed(items)
       .filter((item) => item.visible !== false)
       .filter((item) => { const b = aabb(item); return b.x < box.x + box.w && b.x + b.w > box.x && b.y < box.y + box.h && b.y + b.h > box.y; })
       .map((item) => item.id);
-    setSelectedIds((current) => (additive ? [...new Set([...current, ...hits])] : hits));
+    const withGroups = expandToGroups(items, hits);
+    setSelectedIds((current) => (additive ? [...new Set([...current, ...withGroups])] : withGroups));
   };
 
-  const moveLayer = (id: string, direction: -1 | 1) => history.set((list) => {
-    const index = list.findIndex((item) => item.id === id);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= list.length) return list;
-    const next = [...list];
-    [next[index], next[target]] = [next[target], next[index]];
-    return next;
-  });
+  const moveLayer = (id: string, direction: -1 | 1, asGroup = false) => history.set((list) => moveLayerIn(list, id, direction, asGroup));
 
   const bindField = (field: string) => {
     if (justDragged.current) return;
@@ -682,6 +710,7 @@ function App() {
       else if (mod && key === "x") { if (has) { event.preventDefault(); cutSelected(); } }
       else if (mod && key === "v") { if (clipboard.length) { event.preventDefault(); pasteItems(); } }
       else if (mod && key === "d") { if (has) { event.preventDefault(); duplicateSelected(); } }
+      else if (mod && key === "g") { event.preventDefault(); if (event.shiftKey) ungroupSelected(); else groupSelected(); }
       else if (key === "delete" || key === "backspace") { if (has) { event.preventDefault(); deleteSelected(); } }
       else if (key === "escape") setSelectedIds([]);
       else if (has && key.startsWith("arrow")) {
@@ -757,7 +786,7 @@ function App() {
                   <TemplateStage
                     items={displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
                     selectedIds={selectedIds} showGrid={showGrid} snap={snap} guides={guides.template} multi={multiMode} preview={preview} svgRef={svgRef}
-                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onDragEnd={history.breakGroup}
+                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup}
                   />
                 ) : (
                   <LayoutStage
@@ -798,6 +827,7 @@ function App() {
               )}
               {workspace === "template" && (
                 <EditBar
+                  canGroup={canGroup} canUngroup={canUngroup} onGroup={groupSelected} onUngroup={ungroupSelected}
                   hasSelection={selectedItems.length > 0} canPaste={clipboard.length > 0} canUndo={history.canUndo} canRedo={history.canRedo}
                   onUndo={history.undo} onRedo={history.redo} onDelete={deleteSelected} onCut={cutSelected} onCopy={copySelected} onPaste={pasteItems}
                 />
@@ -824,6 +854,7 @@ function App() {
               fitNote={inLayoutEdit && instItem?.type === "text" && instRecord ? (() => { const l = layoutText(instItem, valueFor(instItem, instRecord, metaFor(instIndex)), instItem.w * PX_PER_IN, instItem.h * PX_PER_IN); return l.issue ? { bad: true, text: l.issue === "truncated" ? "This text is being cut off." : "This text runs past its box." } : { bad: false, text: "This text fits." }; })() : fitNote}
               fontLibrary={fontLibrary} onAlign={align} onDistribute={distribute} onRotateBy={rotateSelectionBy} imageTools={imageTools}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onMoveLayer={moveLayer}
+              groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
               templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate({ width, height })} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
               printer={printer} onCalibrationSheet={printCalibration}

@@ -32,6 +32,8 @@ type Props = {
   onResize: (id: string, box: Box) => void;
   onRotate: (id: string, degrees: number) => void;
   onRotateGroup: (updates: Transform[]) => void;
+  /** Resizing a selection of several objects (or a group): new boxes, and font sizes when scaling proportionally. */
+  onScaleGroup: (updates: { id: string; x: number; y: number; w: number; h: number; fontSize?: number }[]) => void;
   onDragEnd: () => void;
 };
 
@@ -39,6 +41,7 @@ type Drag =
   | { kind: "move"; primary: string; startX: number; startY: number; origins: Map<string, { x: number; y: number }>; w: number; h: number }
   | { kind: "resize"; id: string; handle: Handle; startX: number; startY: number; box: Box; rotation: number; keepAspect: boolean }
   | { kind: "rotate"; id: string }
+  | { kind: "scale-group"; handle: Handle; startX: number; startY: number; box: Box; origins: DesignItem[]; keepAspect: boolean }
   | { kind: "rotate-group"; origins: DesignItem[]; center: { x: number; y: number }; startAngle: number };
 
 /** Pointer-down handlers call preventDefault (to avoid text selection and scrolling), which also stops the browser
@@ -53,8 +56,11 @@ const GUIDE_REACH = 0.08;
 const MIN_SIZE = 0.05;
 
 /** Editable template canvas. Items may be dragged anywhere, including past the template edge and over the rulers. */
-export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, guides, multi, preview, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onDragEnd }: Props) {
+export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, guides, multi, preview, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd }: Props) {
   const drag = useRef<Drag | null>(null);
+  const lastTap = useRef<{ id: string; at: number } | null>(null);
+  /** A double-click on a grouped object picks just that object, but only once the pointer is released without having moved (otherwise it was a quick click-and-drag of the group). */
+  const pendingSingle = useRef<string | null>(null);
   const scale = PX_PER_IN * zoom;
 
   const snapAxis = (value: number, size: number, axis: "x" | "y") => {
@@ -72,11 +78,18 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     event.stopPropagation();
     releaseFocus();
     const toggle = multi || event.shiftKey || event.metaKey || event.ctrlKey;
+    // Clicking a grouped object selects its whole group; Alt-click, or a double-click on a selected one, picks just that object.
+    const now = Date.now();
+    const doubleTap = !!lastTap.current && lastTap.current.id === item.id && now - lastTap.current.at < 400;
+    lastTap.current = { id: item.id, at: now };
+    const justThis = !!item.groupId && event.altKey;
+    pendingSingle.current = item.groupId && doubleTap && selectedIds.includes(item.id) && !toggle ? item.id : null;
+    const base = justThis ? [item.id] : items.filter((i) => i.visible !== false && (item.groupId ? i.groupId === item.groupId : i.id === item.id)).map((i) => i.id);
     if (toggle) {
-      onSelect(selectedIds.includes(item.id) ? selectedIds.filter((id) => id !== item.id) : [...selectedIds, item.id]);
+      onSelect(base.every((id) => selectedIds.includes(id)) ? selectedIds.filter((id) => !base.includes(id)) : [...new Set([...selectedIds, ...base])]);
       return;
     }
-    const ids = selectedIds.includes(item.id) ? selectedIds : [item.id];
+    const ids = selectedIds.includes(item.id) && !justThis ? selectedIds : base;
     if (ids !== selectedIds) onSelect(ids);
     const movable = items.filter((candidate) => ids.includes(candidate.id) && !candidate.locked);
     if (!movable.length || item.locked) return;
@@ -100,6 +113,15 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     releaseFocus();
     event.preventDefault();
     drag.current = { kind: "rotate", id: item.id };
+    (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
+  };
+
+  const startScaleGroup = (event: PointerEvent<SVGElement>, handle: Handle, box: Box, members: DesignItem[]) => {
+    event.stopPropagation();
+    event.preventDefault();
+    releaseFocus();
+    const origins = items.filter((i) => members.some((m) => m.id === i.id));
+    drag.current = { kind: "scale-group", handle, startX: event.clientX, startY: event.clientY, box, origins, keepAspect: handle.length === 2 && !event.shiftKey };
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
   };
 
@@ -142,11 +164,27 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     const dx = (event.clientX - d.startX) / scale;
     const dy = (event.clientY - d.startY) / scale;
     if (d.kind === "move") {
+      if (pendingSingle.current && Math.hypot(event.clientX - d.startX, event.clientY - d.startY) > 4) pendingSingle.current = null;
       const origin = d.origins.get(d.primary) ?? [...d.origins.values()][0];
       let x = origin.x + dx, y = origin.y + dy;
       if (snap) { x = snapAxis(x, d.w, "x"); y = snapAxis(y, d.h, "y"); }
       const shiftX = x - origin.x, shiftY = y - origin.y;
       onMove([...d.origins].map(([id, o]) => ({ id, x: round(o.x + shiftX), y: round(o.y + shiftY) })));
+      return;
+    }
+    if (d.kind === "scale-group") {
+      const { box, handle, origins } = d;
+      let w = box.w + (handle.includes("e") ? dx : handle.includes("w") ? -dx : 0);
+      let h = box.h + (handle.includes("s") ? dy : handle.includes("n") ? -dy : 0);
+      if (d.keepAspect) { const f = Math.max(w / box.w, h / box.h); w = box.w * f; h = box.h * f; }
+      w = Math.max(MIN_SIZE, w); h = Math.max(MIN_SIZE, h);
+      const x = handle.includes("w") ? box.x + box.w - w : box.x;
+      const y = handle.includes("n") ? box.y + box.h - h : box.y;
+      const sx = w / box.w, sy = h / box.h, fontScale = d.keepAspect ? Math.min(sx, sy) : 1;
+      onScaleGroup(origins.filter((i) => !i.locked).map((i) => ({
+        id: i.id, x: round(x + (i.x - box.x) * sx), y: round(y + (i.y - box.y) * sy), w: round(i.w * sx), h: round(i.h * sy),
+        ...(i.type === "text" && fontScale !== 1 ? { fontSize: Math.round((i.fontSize ?? 12) * fontScale * 10) / 10 } : {}),
+      })));
       return;
     }
     const { box, handle, rotation } = d;
@@ -173,7 +211,10 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     onResize(d.id, { x: round(x), y: round(y), w: round(w), h: round(h) });
   };
 
-  const endDrag = () => { if (drag.current) { drag.current = null; onDragEnd(); } };
+  const endDrag = () => {
+    if (pendingSingle.current) { onSelect([pendingSingle.current]); pendingSingle.current = null; }
+    if (drag.current) { drag.current = null; onDragEnd(); }
+  };
 
   // Handles stay a constant on-screen size (and finger-sized hit area) at any zoom.
   const visual = 9 / zoom, hit = 26 / zoom;
@@ -212,6 +253,15 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
               <circle cx={x + w / 2} cy={y - reach} r={hit / 2} fill="transparent" />
               <circle cx={x + w / 2} cy={y - reach} r={visual * 0.62} fill="#fff" stroke="#d77d4e" strokeWidth={1.5 / zoom} pointerEvents="none" />
             </g>
+            {HANDLES.map((handle) => {
+              const hx = x + (handle.includes("w") ? 0 : handle.includes("e") ? w : w / 2), hy = y + (handle.includes("n") ? 0 : handle.includes("s") ? h : h / 2);
+              return (
+                <g key={handle} onPointerDown={(event) => startScaleGroup(event, handle, box, group)} style={{ cursor: cursorFor(handle, 0), touchAction: "none" }}>
+                  <rect x={hx - hit / 2} y={hy - hit / 2} width={hit} height={hit} fill="transparent" />
+                  <rect x={hx - visual / 2} y={hy - visual / 2} width={visual} height={visual} rx={visual * 0.2} fill="#fff" stroke="#d77d4e" strokeWidth={1.5 / zoom} pointerEvents="none" />
+                </g>
+              );
+            })}
           </g>
         );
       })()}
