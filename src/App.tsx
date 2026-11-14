@@ -30,6 +30,7 @@ type DesignItem = {
   fill?: string;
   stroke?: string;
   src?: string;
+  assetName?: string;
   visible?: boolean;
 };
 
