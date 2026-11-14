@@ -7,6 +7,10 @@ import {
   Trash2, Type, Upload, WandSparkles, ZoomIn, ZoomOut
 } from "lucide-react";
 import Papa from "papaparse";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 type RecordRow = Record<string, string>;
 type DesignItem = {
@@ -123,17 +127,60 @@ function App() {
     setSelectedId(item.id);
   };
 
-  const addImage = (event: ChangeEvent<HTMLInputElement>) => {
+  const addImage = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const item: DesignItem = { id: uid(), type: "image", x: 2.55, y: 0.35, w: 0.65, h: 0.65, src: String(reader.result), visible: true };
+    event.target.value = "";
+
+    try {
+      let src: string;
+      let aspectRatio = 1;
+
+      if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+        // PDFs are imported as a high-resolution image of their first page.
+        const pdf = await getDocument({ data: await file.arrayBuffer() }).promise;
+        const page = await pdf.getPage(1);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(3, Math.max(2, 1800 / Math.max(baseViewport.width, baseViewport.height)));
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Could not create an image for this PDF.");
+        await page.render({ canvas, canvasContext: context, viewport }).promise;
+        src = canvas.toDataURL("image/png");
+        aspectRatio = viewport.width / viewport.height;
+        await pdf.destroy();
+      } else {
+        src = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error("The image file could not be read."));
+          reader.readAsDataURL(file);
+        });
+        const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+          image.onerror = () => reject(new Error("This image format could not be opened."));
+          image.src = src;
+        });
+        aspectRatio = dimensions.width / dimensions.height;
+      }
+
+      const width = 1.2;
+      const item: DesignItem = {
+        id: uid(), type: "image", x: 2.1, y: 0.35, w: width,
+        h: Math.max(0.25, Math.min(2.5, width / (aspectRatio || 1))),
+        src, assetName: file.name, visible: true,
+      };
       setItems((previous) => [...previous, item]);
       setSelectedId(item.id);
-    };
-    reader.readAsDataURL(file);
-    event.target.value = "";
+      setWorkspace("template");
+    } catch (error) {
+      console.error("Asset import failed:", error);
+      window.alert(error instanceof Error ? error.message : "This file could not be imported.");
+    }
   };
 
   const bindSelected = (field: string) => {
@@ -264,7 +311,7 @@ function App() {
               {[...items].reverse().map((item) => (
                 <div key={item.id} className={selectedId === item.id ? "layer-row selected" : "layer-row"} onClick={() => { setSelectedId(item.id); setWorkspace("template"); }}>
                   <span className="layer-kind">{item.type === "text" ? <Type size={13}/> : item.type === "image" ? <FileImage size={13}/> : <Square size={13}/>}</span>
-                  <span className="layer-label">{item.field ? item.field.replaceAll("_", " ") : item.text || (item.type === "rect" ? "Shape" : "Image")}</span>
+                  <span className="layer-label">{item.field ? item.field.replaceAll("_", " ") : item.text || (item.type === "rect" ? "Shape" : item.assetName || "Image")}</span>
                   {item.field && <Link2 size={11} className="linked-icon"/>}
                   <button className="layer-visibility" onClick={(e) => { e.stopPropagation(); updateItem(item.id, { visible: item.visible === false }); }}><span>{item.visible === false ? "○" : "●"}</span></button>
                 </div>
@@ -281,7 +328,7 @@ function App() {
               <button className="tool-button" title="Add text" onClick={() => addText()}><Type size={16}/></button>
               <button className="tool-button" title="Add shape" onClick={addShape}><Shapes size={16}/></button>
               <button className="tool-button" title="Add image" onClick={() => imageRef.current?.click()}><ImagePlus size={16}/></button>
-              <input ref={imageRef} type="file" accept="image/*" hidden onChange={addImage}/>
+              <input ref={imageRef} type="file" accept=".png,.jpg,.jpeg,.svg,.pdf,image/png,image/jpeg,image/svg+xml,application/pdf" hidden onChange={addImage}/>
             </div>
             <div className="toolbar-divider"/>
             <div className="tool-group">
