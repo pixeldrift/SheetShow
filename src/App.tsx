@@ -332,8 +332,8 @@ function App() {
         <div className="topbar-center">
           <div className="document-title"><FileText size={15}/><span>Untitled bird card</span><span className="saved-dot"/></div>
           <div className="workspace-tabs">
-            <button className={workspace === "template" ? "active" : ""} onClick={() => { setWorkspace("template"); setShowPrintPreview(false); }} title="Individual template"><Crop size={16}/> <span>Template</span></button>
-            <button className={workspace === "layout" ? "active" : ""} onClick={() => { setWorkspace("layout"); setShowPrintPreview(false); }} title="Page layout"><FileStack size={16}/> <span>Page layout</span></button>
+            <button className={workspace === "template" ? "active" : ""} onClick={() => { setWorkspace("template"); setSelectedId(null); setShowMobileLayers(false); setShowPrintPreview(false); }} title="Individual template"><Crop size={16}/> <span>Template</span></button>
+            <button className={workspace === "layout" ? "active" : ""} onClick={() => { setWorkspace("layout"); setSelectedId(null); setShowMobileLayers(false); setShowPrintPreview(false); }} title="Page layout"><FileStack size={16}/> <span>Page layout</span></button>
           </div>
         </div>
         <div className="top-actions">
