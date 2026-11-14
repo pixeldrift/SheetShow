@@ -542,6 +542,7 @@ function App() {
                     {guides.map((guide) => <div key={guide.id} className={`snap-guide ${guide.axis}`} style={guide.axis === "x" ? { left: guide.position * 96 } : { top: guide.position * 96 }} onPointerDown={(e) => { e.stopPropagation(); const rect = e.currentTarget.parentElement!.getBoundingClientRect(); guideDragRef.current = { id: guide.id, axis: guide.axis, rect }; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (guideDragRef.current?.id === guide.id) moveGuide(e as unknown as PointerEvent<HTMLDivElement>); }} onPointerUp={endGuide} onDoubleClick={() => setGuides((current) => current.filter((g) => g.id !== guide.id))} title="Drag to reposition · double-click to remove"/> )}
                   </div>
                 </div>
+                </div>
                 {rulerSettingsOpen && <div className="ruler-settings-popover" role="dialog" aria-label="Page size and margins">
                   <div className="popover-title"><strong>Page setup</strong><button onClick={() => setRulerSettingsOpen(false)} aria-label="Close"><X size={15}/></button></div>
                   <label>PAGE SIZE · INCHES</label>
