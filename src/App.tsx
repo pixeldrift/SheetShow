@@ -1,0 +1,383 @@
+import { ChangeEvent, DragEvent, PointerEvent, useMemo, useRef, useState } from "react";
+import {
+  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, BadgeCheck, ChevronDown,
+  ChevronLeft, ChevronRight, CircleHelp, Copy, Database, FileImage, FilePlus2,
+  FileText, Grid2X2, ImagePlus, Layers, Link2, ListFilter, Lock, Minus, MousePointer2,
+  Plus, Printer, Search, Settings2, Shapes, SlidersHorizontal, Sparkles, Square,
+  Trash2, Type, Upload, WandSparkles, ZoomIn, ZoomOut
+} from "lucide-react";
+import Papa from "papaparse";
+
+type RecordRow = Record<string, string>;
+type DesignItem = {
+  id: string;
+  type: "text" | "rect" | "image";
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text?: string;
+  field?: string;
+  fontSize?: number;
+  fontFamily?: string;
+  color?: string;
+  weight?: number;
+  align?: "left" | "center" | "right";
+  fill?: string;
+  stroke?: string;
+  src?: string;
+  visible?: boolean;
+};
+
+const starterRecords: RecordRow[] = [
+  { name: "Pip", species: "Green-cheeked conure", band: "GC-1048", location: "Garden Room · Cage 03", diet: "Pellets, greens, fruit", hatch_date: "2022-04-18" },
+  { name: "Juniper", species: "Blue-and-gold macaw", band: "BG-0217", location: "Aviary · Flight 01", diet: "Pellets, nuts, vegetables", hatch_date: "2018-09-02" },
+  { name: "Mochi", species: "Cockatiel", band: "CK-3309", location: "Garden Room · Cage 08", diet: "Pellets, seed, greens", hatch_date: "2021-11-26" },
+  { name: "Fig", species: "African grey", band: "AG-0084", location: "Sunroom · Perch 02", diet: "Pellets, vegetables", hatch_date: "2016-02-11" },
+  { name: "Basil", species: "Indian ringneck", band: "IR-1742", location: "Garden Room · Cage 05", diet: "Pellets, fruit, greens", hatch_date: "2020-07-07" },
+  { name: "Clover", species: "Lovebird", band: "LB-4421", location: "Nursery · Cage 02", diet: "Small pellets, seed, greens", hatch_date: "2023-03-14" },
+];
+
+const starterItems: DesignItem[] = [
+  { id: "shape-1", type: "rect", x: 0.18, y: 0.18, w: 3.14, h: 1.64, fill: "#fbfaf7", stroke: "#e7e2d8", visible: true },
+  { id: "shape-2", type: "rect", x: 0.18, y: 0.18, w: 0.09, h: 1.64, fill: "#e28b55", stroke: "none", visible: true },
+  { id: "text-1", type: "text", x: 0.42, y: 0.55, w: 2.75, h: 0.28, text: "BIRD PROFILE", fontSize: 8, color: "#b16b3f", weight: 700, visible: true },
+  { id: "text-2", type: "text", x: 0.42, y: 0.91, w: 2.75, h: 0.38, text: "Bird name", field: "name", fontSize: 22, color: "#26352f", weight: 700, visible: true },
+  { id: "text-3", type: "text", x: 0.42, y: 1.23, w: 2.75, h: 0.22, text: "Species", field: "species", fontSize: 10, color: "#66736d", visible: true },
+  { id: "text-4", type: "text", x: 0.42, y: 1.55, w: 1.3, h: 0.18, text: "BAND · ", fontSize: 7, color: "#9a9d91", weight: 700, visible: true },
+  { id: "text-5", type: "text", x: 1.0, y: 1.55, w: 2.0, h: 0.18, text: "Band number", field: "band", fontSize: 8, color: "#47564f", visible: true },
+];
+
+const uid = () => Math.random().toString(36).slice(2, 9);
+const valueFor = (item: DesignItem, record: RecordRow) => item.field ? (record[item.field] ?? "—") : (item.text ?? "");
+const inches = (n: number) => Number(n.toFixed(2));
+
+function App() {
+  const [records, setRecords] = useState<RecordRow[]>(starterRecords);
+  const [fileName, setFileName] = useState("bird-records.csv");
+  const [items, setItems] = useState<DesignItem[]>(starterItems);
+  const [selectedId, setSelectedId] = useState<string | null>("text-2");
+  const [recordIndex, setRecordIndex] = useState(0);
+  const [workspace, setWorkspace] = useState<"template" | "layout" | "preview">("template");
+  const [zoom, setZoom] = useState(1);
+  const [showGrid, setShowGrid] = useState(false);
+  const [showRulers, setShowRulers] = useState(true);
+  const [pageWidth, setPageWidth] = useState(8.5);
+  const [pageHeight, setPageHeight] = useState(11);
+  const [templateWidth, setTemplateWidth] = useState(3.5);
+  const [templateHeight, setTemplateHeight] = useState(2);
+  const [columns, setColumns] = useState(2);
+  const [rows, setRows] = useState(4);
+  const [gapX, setGapX] = useState(0.18);
+  const [gapY, setGapY] = useState(0.18);
+  const [repeatMode, setRepeatMode] = useState<"same" | "next">("next");
+  const [search, setSearch] = useState("");
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const dragRef = useRef<{ id: string; startX: number; startY: number; itemX: number; itemY: number } | null>(null);
+
+  const fields = useMemo(() => Object.keys(records[0] ?? {}), [records]);
+  const currentRecord = records[recordIndex] ?? {};
+  const selected = items.find((item) => item.id === selectedId) ?? null;
+  const filteredFields = fields.filter((field) => field.toLowerCase().includes(search.toLowerCase()));
+  const totalSlots = columns * rows;
+  const pageCount = repeatMode === "same" ? 1 : Math.max(1, Math.ceil(records.length / totalSlots));
+  const currentPage = Math.floor(recordIndex / totalSlots);
+
+  const updateItem = (id: string, patch: Partial<DesignItem>) =>
+    setItems((previous) => previous.map((item) => item.id === id ? { ...item, ...patch } : item));
+
+  const addText = (field?: string, x = 0.5, y = 0.5) => {
+    const item: DesignItem = {
+      id: uid(), type: "text", x, y, w: 2.5, h: 0.28,
+      text: field ? field.replaceAll("_", " ") : "Your text",
+      field, fontSize: 12, color: "#34443d", weight: 500, visible: true,
+    };
+    setItems((previous) => [...previous, item]);
+    setSelectedId(item.id);
+    setWorkspace("template");
+  };
+
+  const importFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    Papa.parse<RecordRow>(file, {
+      header: true, skipEmptyLines: true, dynamicTyping: false,
+      complete: (result) => {
+        const cleaned = result.data.filter((row) => Object.values(row).some((v) => String(v ?? "").trim()));
+        if (cleaned.length) {
+          setRecords(cleaned);
+          setRecordIndex(0);
+          setFileName(file.name);
+        }
+      },
+    });
+    event.target.value = "";
+  };
+
+  const addShape = () => {
+    const item: DesignItem = { id: uid(), type: "rect", x: 0.35, y: 0.35, w: 1.1, h: 0.65, fill: "#e9eee9", stroke: "#cbd5cc", visible: true };
+    setItems((previous) => [...previous, item]);
+    setSelectedId(item.id);
+  };
+
+  const addImage = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const item: DesignItem = { id: uid(), type: "image", x: 2.55, y: 0.35, w: 0.65, h: 0.65, src: String(reader.result), visible: true };
+      setItems((previous) => [...previous, item]);
+      setSelectedId(item.id);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
+
+  const bindSelected = (field: string) => {
+    if (selected?.type === "text") updateItem(selected.id, { field, text: field.replaceAll("_", " ") });
+    else addText(field);
+  };
+
+  const onDragStart = (event: DragEvent<HTMLButtonElement>, field: string) => {
+    event.dataTransfer.setData("text/plain", field);
+    event.dataTransfer.effectAllowed = "copy";
+  };
+
+  const onCanvasDrop = (event: DragEvent<SVGSVGElement>) => {
+    event.preventDefault();
+    const field = event.dataTransfer.getData("text/plain");
+    const svg = svgRef.current;
+    if (!field || !svg) return;
+    const point = svg.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return;
+    const local = point.matrixTransform(matrix.inverse());
+    addText(field, inches(local.x / 96), inches(local.y / 96));
+  };
+
+  const startMove = (event: PointerEvent<SVGGElement>, item: DesignItem) => {
+    if (workspace !== "template") return;
+    event.stopPropagation();
+    setSelectedId(item.id);
+    dragRef.current = { id: item.id, startX: event.clientX, startY: event.clientY, itemX: item.x, itemY: item.y };
+    (event.currentTarget as SVGGElement).setPointerCapture(event.pointerId);
+  };
+
+  const moveItem = (event: PointerEvent<SVGSVGElement>) => {
+    if (!dragRef.current || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const scaleX = (templateWidth * 96 * zoom) / rect.width;
+    const scaleY = (templateHeight * 96 * zoom) / rect.height;
+    const deltaX = (event.clientX - dragRef.current.startX) * scaleX / 96;
+    const deltaY = (event.clientY - dragRef.current.startY) * scaleY / 96;
+    updateItem(dragRef.current.id, { x: Math.max(0, inches(dragRef.current.itemX + deltaX)), y: Math.max(0, inches(dragRef.current.itemY + deltaY)) });
+  };
+
+  const addPageSlot = (slot: number) => repeatMode === "same" ? recordIndex : Math.min(records.length - 1, currentPage * totalSlots + slot);
+  const printNow = () => window.print();
+
+  const renderTemplate = (record: RecordRow, mini = false) => (
+    <svg viewBox={`0 0 ${templateWidth * 96} ${templateHeight * 96}`} className={mini ? "mini-template" : "template-svg"} xmlns="http://www.w3.org/2000/svg">
+      {showGrid && !mini && <defs><pattern id="smallGrid" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#e8ece8" strokeWidth="0.7"/></pattern></defs>}
+      {showGrid && !mini && <rect width="100%" height="100%" fill="url(#smallGrid)"/>}
+      {items.filter((item) => item.visible !== false).map((item) => {
+        const isSelected = !mini && selectedId === item.id;
+        return (
+          <g key={item.id} transform={`translate(${item.x * 96} ${item.y * 96})`} onPointerDown={(event) => !mini && startMove(event, item)} onClick={(event) => { if (!mini) { event.stopPropagation(); setSelectedId(item.id); } }} className={!mini ? "canvas-object" : ""} style={{ cursor: mini ? "default" : "move" }}>
+            {item.type === "rect" && <rect width={item.w * 96} height={item.h * 96} rx="2" fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1"/>}
+            {item.type === "image" && item.src && <image href={item.src} width={item.w * 96} height={item.h * 96} preserveAspectRatio="xMidYMid slice"/>}
+            {item.type === "text" && <text x={item.align === "center" ? item.w * 48 : item.align === "right" ? item.w * 96 : 0} y={(item.fontSize ?? 12) * 1.15 * 96 / 72} fontFamily={item.fontFamily ?? "Inter, Arial, sans-serif"} fontSize={(item.fontSize ?? 12) * 96 / 72} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={item.align === "center" ? "middle" : item.align === "right" ? "end" : "start"}>{valueFor(item, record)}</text>}
+            {isSelected && <rect x="-4" y="-4" width={item.w * 96 + 8} height={item.h * 96 + 8} fill="none" stroke="#d77d4e" strokeWidth="1.4" strokeDasharray="4 3" pointerEvents="none"/>}
+          </g>
+        );
+      })}
+    </svg>
+  );
+
+  return (
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand">
+          <div className="brand-mark"><span className="brand-sheet"/><span className="brand-star">✦</span></div>
+          <div className="brand-name">Sheet<span>Show</span><small>WHERE DATA TAKES THE STAGE</small></div>
+        </div>
+        <div className="topbar-center">
+          <div className="document-title"><FileText size={15}/><span>Untitled bird card</span><span className="saved-dot"/></div>
+          <div className="workspace-tabs">
+            <button className={workspace === "template" ? "active" : ""} onClick={() => setWorkspace("template")}><MousePointer2 size={14}/> Template</button>
+            <button className={workspace === "layout" ? "active" : ""} onClick={() => setWorkspace("layout")}><Grid2X2 size={14}/> Page layout</button>
+            <button className={workspace === "preview" ? "active" : ""} onClick={() => setWorkspace("preview")}><WandSparkles size={14}/> Print preview</button>
+          </div>
+        </div>
+        <div className="top-actions">
+          <button className="icon-button" title="Help"><CircleHelp size={17}/></button>
+          <button className="button button-light" onClick={printNow}><Printer size={15}/> Print</button>
+          <button className="button button-primary" onClick={printNow}><Sparkles size={15}/> Make it</button>
+        </div>
+      </header>
+
+      <main className="workspace">
+        <aside className="left-panel">
+          <div className="panel-heading"><div><span className="eyebrow">YOUR PROJECT</span><h2>Studio</h2></div><button className="icon-button small"><ChevronDown size={15}/></button></div>
+          <div className="panel-section">
+            <div className="section-title"><Database size={14}/> DATA SOURCE <button className="text-action" onClick={() => fileRef.current?.click()}>Change</button></div>
+            <div className="source-card">
+              <div className="file-icon"><FileText size={17}/></div>
+              <div className="source-meta"><strong>{fileName}</strong><span>{records.length} records · {fields.length} fields</span></div>
+              <BadgeCheck size={15} className="success-icon"/>
+            </div>
+            <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" hidden onChange={importFile}/>
+            <div className="field-search"><Search size={14}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a field..."/><ListFilter size={14}/></div>
+            <div className="field-group-label"><ChevronDown size={12}/> IMPORTED DATA <span>{fields.length}</span></div>
+            <div className="field-list">
+              {filteredFields.map((field) => (
+                <button key={field} className="field-row" draggable onDragStart={(event) => onDragStart(event, field)} onClick={() => bindSelected(field)} title={selected?.type === "text" ? "Click to bind selected text" : "Click to add as a new text field"}>
+                  <span className="field-grip">⠿</span><span className="field-type"><Type size={12}/></span><span className="field-name">{field.replaceAll("_", " ")}</span><span className="field-add"><Plus size={13}/></span>
+                </button>
+              ))}
+            </div>
+            <div className="drag-hint"><MousePointer2 size={13}/> Drag a field onto your design, or select text and click a field to link it.</div>
+          </div>
+          <div className="panel-section layers-section">
+            <div className="section-title"><Layers size={14}/> LAYERS <span className="count-pill">{items.length}</span><button className="text-action" onClick={addText}>+ Add</button></div>
+            <div className="layer-list">
+              {[...items].reverse().map((item) => (
+                <div key={item.id} className={selectedId === item.id ? "layer-row selected" : "layer-row"} onClick={() => { setSelectedId(item.id); setWorkspace("template"); }}>
+                  <span className="layer-kind">{item.type === "text" ? <Type size={13}/> : item.type === "image" ? <FileImage size={13}/> : <Square size={13}/>}</span>
+                  <span className="layer-label">{item.field ? item.field.replaceAll("_", " ") : item.text || (item.type === "rect" ? "Shape" : "Image")}</span>
+                  {item.field && <Link2 size={11} className="linked-icon"/>}
+                  <button className="layer-visibility" onClick={(e) => { e.stopPropagation(); updateItem(item.id, { visible: item.visible === false }); }}><span>{item.visible === false ? "○" : "●"}</span></button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="left-footer"><div className="avatar">S</div><div><strong>Local project</strong><span>Saved in this session</span></div><Lock size={13}/></div>
+        </aside>
+
+        <section className="center-panel">
+          <div className="canvas-toolbar">
+            <div className="tool-group">
+              <button className="tool-button active" title="Select"><MousePointer2 size={16}/></button>
+              <button className="tool-button" title="Add text" onClick={() => addText()}><Type size={16}/></button>
+              <button className="tool-button" title="Add shape" onClick={addShape}><Shapes size={16}/></button>
+              <button className="tool-button" title="Add image" onClick={() => imageRef.current?.click()}><ImagePlus size={16}/></button>
+              <input ref={imageRef} type="file" accept="image/*" hidden onChange={addImage}/>
+            </div>
+            <div className="toolbar-divider"/>
+            <div className="tool-group">
+              <button className={showGrid ? "tool-button active" : "tool-button"} title="Toggle grid" onClick={() => setShowGrid(!showGrid)}><Grid2X2 size={15}/></button>
+              <button className={showRulers ? "tool-button active" : "tool-button"} title="Toggle rulers" onClick={() => setShowRulers(!showRulers)}><SlidersHorizontal size={15}/></button>
+            </div>
+            <div className="toolbar-spacer"/>
+            {workspace === "template" && <div className="dimension-chip"><span>{templateWidth.toFixed(2)}″</span><i>×</i><span>{templateHeight.toFixed(2)}″</span></div>}
+            <div className="zoom-control"><button className="tool-button" onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}><ZoomOut size={15}/></button><span>{Math.round(zoom * 100)}%</span><button className="tool-button" onClick={() => setZoom(Math.min(1.5, zoom + 0.1))}><ZoomIn size={15}/></button></div>
+          </div>
+
+          <div className="canvas-area">
+            {workspace === "template" && (
+              <div className="canvas-wrap">
+                <div className="canvas-caption"><span>INDIVIDUAL TEMPLATE</span><span>3.5 × 2 in · Landscape</span></div>
+                <div className="ruler-stage">
+                  {showRulers && <div className="ruler-corner"/>}
+                  {showRulers && <div className="top-ruler" style={{width: templateWidth * 96 * zoom}}>{Array.from({length: Math.floor(templateWidth * 4) + 1}, (_, i) => <span key={i} style={{left: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
+                  {showRulers && <div className="left-ruler" style={{height: templateHeight * 96 * zoom}}>{Array.from({length: Math.floor(templateHeight * 4) + 1}, (_, i) => <span key={i} style={{top: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
+                  <div className="paper-shadow" style={{width: templateWidth * 96 * zoom, height: templateHeight * 96 * zoom}}>
+                    <svg ref={svgRef} viewBox={`0 0 ${templateWidth * 96} ${templateHeight * 96}`} width={templateWidth * 96 * zoom} height={templateHeight * 96 * zoom} onPointerMove={moveItem} onPointerUp={() => { dragRef.current = null; }} onPointerLeave={() => { dragRef.current = null; }} onDragOver={(e) => e.preventDefault()} onDrop={onCanvasDrop} onClick={() => setSelectedId(null)} className="template-svg">
+                      {showGrid && <defs><pattern id="gridPattern" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#e9eee9" strokeWidth="0.7"/></pattern></defs>}
+                      {showGrid && <rect width="100%" height="100%" fill="url(#gridPattern)"/>}
+                      {items.filter((item) => item.visible !== false).map((item) => (
+                        <g key={item.id} transform={`translate(${item.x * 96} ${item.y * 96})`} onPointerDown={(event) => startMove(event, item)} onClick={(event) => { event.stopPropagation(); setSelectedId(item.id); }} className="canvas-object">
+                          {item.type === "rect" && <rect width={item.w * 96} height={item.h * 96} rx="2" fill={item.fill ?? "#e9eee9"} stroke={item.stroke ?? "none"} strokeWidth="1"/>}
+                          {item.type === "image" && item.src && <image href={item.src} width={item.w * 96} height={item.h * 96} preserveAspectRatio="xMidYMid slice"/>}
+                          {item.type === "text" && <text x={item.align === "center" ? item.w * 48 : item.align === "right" ? item.w * 96 : 0} y={(item.fontSize ?? 12) * 1.15 * 96 / 72} fontFamily={item.fontFamily ?? "Inter, Arial, sans-serif"} fontSize={(item.fontSize ?? 12) * 96 / 72} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={item.align === "center" ? "middle" : item.align === "right" ? "end" : "start"}>{valueFor(item, currentRecord)}</text>}
+                          {selectedId === item.id && <rect x="-4" y="-4" width={item.w * 96 + 8} height={item.h * 96 + 8} fill="none" stroke="#d77d4e" strokeWidth="1.4" strokeDasharray="4 3" pointerEvents="none"/>}
+                        </g>
+                      ))}
+                    </svg>
+                  </div>
+                </div>
+                <div className="canvas-footnote"><span><span className="orange-dot"/> {selected ? "Object selected · drag to reposition" : "Select an object to edit"}</span><span>Measurements in inches</span></div>
+              </div>
+            )}
+
+            {workspace === "layout" && (
+              <div className="layout-editor">
+                <div className="canvas-caption"><span>PAGE LAYOUT</span><span>{pageWidth} × {pageHeight} in · {totalSlots} items per sheet</span></div>
+                <div className="layout-paper-wrap">
+                  <div className="layout-paper" style={{aspectRatio: `${pageWidth} / ${pageHeight}`}}>
+                    <div className="layout-grid" style={{gridTemplateColumns: `repeat(${columns}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, gap: `${gapY * 7}px ${gapX * 7}px`}}>
+                      {Array.from({length: totalSlots}, (_, slot) => {
+                        const idx = addPageSlot(slot);
+                        return <div className="layout-cell" key={slot}>{idx < records.length ? renderTemplate(records[idx], true) : <div className="empty-slot">Empty</div>}<span className="slot-number">{repeatMode === "same" ? `#${recordIndex + 1}` : `#${idx + 1}`}</span></div>;
+                      })}
+                    </div>
+                  </div>
+                </div>
+                <div className="layout-note"><Sparkles size={14}/> {repeatMode === "same" ? `Every item repeats record ${recordIndex + 1}.` : `Items advance through your data, ${totalSlots} records per sheet.`}</div>
+              </div>
+            )}
+
+            {workspace === "preview" && (
+              <div className="print-preview">
+                <div className="canvas-caption"><span>PRINT PREVIEW</span><span>Sheet {currentPage + 1} of {pageCount}</span></div>
+                <div className="preview-paper" style={{aspectRatio: `${pageWidth} / ${pageHeight}`}}>
+                  <div className="preview-grid" style={{gridTemplateColumns: `repeat(${columns}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, gap: `${gapY * 7}px ${gapX * 7}px`}}>
+                    {Array.from({length: totalSlots}, (_, slot) => {
+                      const idx = addPageSlot(slot);
+                      return idx < records.length ? <div className="preview-cell" key={slot}>{renderTemplate(records[idx], true)}</div> : null;
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="record-bar">
+            <div className="record-info"><div className="record-icon"><Database size={15}/></div><div><strong>Data preview</strong><span>Showing {recordIndex + 1} of {records.length} records</span></div></div>
+            <div className="record-controls">
+              <button className="tool-button" onClick={() => setRecordIndex(Math.max(0, recordIndex - 1))} disabled={recordIndex === 0}><ChevronLeft size={17}/></button>
+              <div className="record-select"><span>Record</span><strong>{String(recordIndex + 1).padStart(2, "0")}</strong><span>/ {records.length}</span></div>
+              <button className="tool-button" onClick={() => setRecordIndex(Math.min(records.length - 1, recordIndex + 1))} disabled={recordIndex >= records.length - 1}><ChevronRight size={17}/></button>
+            </div>
+            <div className="record-name"><span className="record-avatar">{String(currentRecord.name ?? "R").slice(0, 1).toUpperCase()}</span><strong>{currentRecord.name ?? "Current record"}</strong></div>
+          </div>
+        </section>
+
+        <aside className="right-panel">
+          <div className="right-tabs"><button className={!selected ? "active" : ""} onClick={() => setSelectedId(null)}><Settings2 size={14}/> Document</button><button className={selected ? "active" : ""} onClick={() => selected && setSelectedId(selected.id)}><SlidersHorizontal size={14}/> Properties</button></div>
+          {selected ? (
+            <div className="properties-content">
+              <div className="property-heading"><div className="property-icon">{selected.type === "text" ? <Type size={17}/> : selected.type === "image" ? <FileImage size={17}/> : <Square size={17}/>}</div><div><strong>{selected.type === "text" ? "Text object" : selected.type === "image" ? "Image object" : "Shape object"}</strong><span>{selected.field ? `Linked to ${selected.field}` : "Static content"}</span></div></div>
+              {selected.type === "text" && <>
+                <div className="property-section"><label>CONTENT</label><input className="property-input" value={selected.field ? (selected.field.replaceAll("_", " ")) : (selected.text ?? "")} onChange={(e) => updateItem(selected.id, { text: e.target.value, field: undefined })} placeholder="Enter text..."/><div className="binding-status" onClick={() => setSearch("")}><Link2 size={13}/>{selected.field ? `Connected to ${selected.field}` : "Choose a field on the left to link data"}</div></div>
+                <div className="property-section"><label>TYPOGRAPHY</label><div className="property-two"><div><span>Font size</span><div className="number-input"><input type="number" min="4" max="96" value={selected.fontSize ?? 12} onChange={(e) => updateItem(selected.id, { fontSize: Number(e.target.value) })}/><small>pt</small></div></div><div><span>Weight</span><select value={selected.weight ?? 500} onChange={(e) => updateItem(selected.id, { weight: Number(e.target.value) })}><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select></div></div><div className="align-buttons"><button className={(selected.align ?? "left") === "left" ? "active" : ""} onClick={() => updateItem(selected.id, { align: "left" })}><AlignLeft size={15}/></button><button className={selected.align === "center" ? "active" : ""} onClick={() => updateItem(selected.id, { align: "center" })}><AlignCenter size={15}/></button><button className={selected.align === "right" ? "active" : ""} onClick={() => updateItem(selected.id, { align: "right" })}><AlignRight size={15}/></button></div><div className="color-row"><span>Text color</span><input type="color" value={selected.color ?? "#34443d"} onChange={(e) => updateItem(selected.id, { color: e.target.value })}/></div></div>
+              </>}
+              {selected.type === "rect" && <div className="property-section"><label>APPEARANCE</label><div className="color-row"><span>Fill color</span><input type="color" value={selected.fill ?? "#e9eee9"} onChange={(e) => updateItem(selected.id, { fill: e.target.value })}/></div><div className="color-row"><span>Border color</span><input type="color" value={selected.stroke === "none" ? "#ffffff" : selected.stroke ?? "#cbd5cc"} onChange={(e) => updateItem(selected.id, { stroke: e.target.value })}/></div></div>}
+              <div className="property-section"><label>POSITION & SIZE <span className="unit-label">INCHES</span></label><div className="position-grid">{([["X", "x"], ["Y", "y"], ["W", "w"], ["H", "h"]] as const).map(([label, key]) => <div key={key}><span>{label}</span><input type="number" step="0.01" value={selected[key].toFixed(2)} onChange={(e) => updateItem(selected.id, { [key]: Math.max(0.01, Number(e.target.value)) })}/></div>)}</div></div>
+              <div className="property-actions"><button onClick={() => { const copy = { ...selected, id: uid(), x: selected.x + 0.12, y: selected.y + 0.12 }; setItems((prev) => [...prev, copy]); setSelectedId(copy.id); }}><Copy size={14}/> Duplicate</button><button className="delete-action" onClick={() => { setItems((prev) => prev.filter((item) => item.id !== selected.id)); setSelectedId(null); }}><Trash2 size={14}/> Delete</button></div>
+            </div>
+          ) : (
+            <div className="properties-content">
+              <div className="document-summary"><div className="summary-icon"><FileText size={20}/></div><h3>Document setup</h3><p>Set the size of your item and arrange how it prints on a sheet.</p></div>
+              <div className="property-section"><label>INDIVIDUAL TEMPLATE SIZE</label><div className="property-two"><div><span>Width</span><div className="number-input"><input type="number" step="0.125" value={templateWidth} onChange={(e) => setTemplateWidth(Math.max(0.5, Number(e.target.value)))}/><small>in</small></div></div><div><span>Height</span><div className="number-input"><input type="number" step="0.125" value={templateHeight} onChange={(e) => setTemplateHeight(Math.max(0.5, Number(e.target.value)))}/><small>in</small></div></div></div></div>
+              <div className="property-section"><label>PAGE SIZE</label><select className="full-select" value={pageWidth === 8.5 && pageHeight === 11 ? "letter" : pageWidth === 8.27 && pageHeight === 11.69 ? "a4" : "custom"} onChange={(e) => { if (e.target.value === "letter") { setPageWidth(8.5); setPageHeight(11); } else if (e.target.value === "a4") { setPageWidth(8.27); setPageHeight(11.69); } }}><option value="letter">US Letter · 8.5 × 11 in</option><option value="a4">A4 · 8.27 × 11.69 in</option><option value="custom">Custom · {pageWidth} × {pageHeight} in</option></select></div>
+              <div className="property-section"><label>ITEMS PER PAGE</label><div className="property-two"><div><span>Columns</span><div className="number-input"><input type="number" min="1" max="8" value={columns} onChange={(e) => setColumns(Math.max(1, Math.min(8, Number(e.target.value))))}/></div></div><div><span>Rows</span><div className="number-input"><input type="number" min="1" max="12" value={rows} onChange={(e) => setRows(Math.max(1, Math.min(12, Number(e.target.value))))}/></div></div></div></div>
+              <div className="property-section"><label>ITEM SPACING</label><div className="property-two"><div><span>Horizontal</span><div className="number-input"><input type="number" min="0" step="0.05" value={gapX} onChange={(e) => setGapX(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div><div><span>Vertical</span><div className="number-input"><input type="number" min="0" step="0.05" value={gapY} onChange={(e) => setGapY(Math.max(0, Number(e.target.value)))}/><small>in</small></div></div></div></div>
+              <div className="property-section"><label>DATA ASSIGNMENT</label><div className="mode-options"><button className={repeatMode === "same" ? "mode-option active" : "mode-option"} onClick={() => setRepeatMode("same")}><span className="mode-icon"><Copy size={15}/></span><span><strong>Repeat same record</strong><small>Fill the sheet with one record</small></span><span className="mode-radio"/></button><button className={repeatMode === "next" ? "mode-option active" : "mode-option"} onClick={() => setRepeatMode("next")}><span className="mode-icon"><ListFilter size={15}/></span><span><strong>Next record each time</strong><small>Advance through your data</small></span><span className="mode-radio"/></button></div></div>
+              <div className="output-summary"><div><span>Items per sheet</span><strong>{totalSlots}</strong></div><div><span>Estimated sheets</span><strong>{pageCount}</strong></div></div>
+            </div>
+          )}
+          <div className="right-footer"><div className="tip-icon"><Sparkles size={14}/></div><p><strong>Little tip</strong> Select a text layer, then click any field in your data list to connect it.</p></div>
+        </aside>
+      </main>
+      <footer className="statusbar"><span><span className="status-dot"/> All changes in this session</span><span>SheetShow Studio <i>·</i> Prototype 0.1</span><span>Inches <i>·</i> 96 DPI canvas</span></footer>
+    </div>
+  );
+}
+
+export default App;
