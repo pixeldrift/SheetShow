@@ -7,7 +7,7 @@ import type { DesignItem, Guide, LabelPreset, Project, RecordRow, Sheet, View, W
 import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid } from "./lib/data";
 import { useHistory } from "./hooks/useHistory";
 import { useFontLibrary } from "./hooks/useFontLibrary";
-import { aabb, alignItems, boundsOf, distributeItems, type AlignMode } from "./lib/align";
+import { aabb, alignItems, boundsOf, centerOf, distributeItems, rotateAbout, type AlignMode, type Transform } from "./lib/align";
 import { downloadProject, loadProject, readProjectFile, saveProject } from "./lib/storage";
 import { Topbar } from "./components/Topbar";
 import { Toolbar } from "./components/Toolbar";
@@ -149,6 +149,15 @@ function App() {
     return list.map((item) => (byId.has(item.id) ? { ...item, x: byId.get(item.id)!.x, y: byId.get(item.id)!.y } : item));
   }, { coalesce: "drag" });
   const resizeItem = (id: string, box: { x: number; y: number; w: number; h: number }) => updateItem(id, box, `resize:${id}`);
+  const applyTransforms = (updates: Transform[], coalesce: string) => history.set((list) => {
+    const byId = new Map(updates.map((u) => [u.id, u]));
+    return list.map((item) => (byId.has(item.id) ? { ...item, ...byId.get(item.id)! } : item));
+  }, { coalesce });
+  const rotateGroup = (updates: Transform[]) => applyTransforms(updates, "rotate-group");
+  const rotateSelectionBy = (delta: number) => {
+    const group = selectedItems.filter((item) => !item.locked);
+    if (group.length) applyTransforms(rotateAbout(group, delta, centerOf(boundsOf(selectedItems))), `rotate-by:${Date.now()}`);
+  };
   const rotateItem = (id: string, rotation: number) => updateItem(id, { rotation }, `rotate:${id}`);
 
   const align = (mode: AlignMode) => {
@@ -422,7 +431,7 @@ function App() {
                   <TemplateStage
                     items={items} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
                     selectedIds={selectedIds} showGrid={showGrid} snap={snap} guides={guides.template} multi={multiMode} preview={preview} svgRef={svgRef}
-                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onDragEnd={history.breakGroup}
+                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onDragEnd={history.breakGroup}
                   />
                 ) : (
                   <LayoutStage
@@ -462,7 +471,7 @@ function App() {
           {inspectorOpen && (
             <Inspector
               workspace={workspace} items={items} selectedItems={selectedItems} onSelect={setSelectedIds} onUpdate={updateItem}
-              fontLibrary={fontLibrary} onAlign={align} onDistribute={distribute}
+              fontLibrary={fontLibrary} onAlign={align} onDistribute={distribute} onRotateBy={rotateSelectionBy}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onMoveLayer={moveLayer}
               templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate({ width, height })} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}

@@ -20,6 +20,7 @@ type Props = {
   fontLibrary: FontLibrary;
   onAlign: (mode: AlignMode) => void;
   onDistribute: (axis: "x" | "y") => void;
+  onRotateBy: (degrees: number) => void;
   onUpdate: (id: string, patch: Partial<DesignItem>, coalesce?: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -71,7 +72,7 @@ export function Inspector(props: Props) {
             {!items.length && <p className="empty-note">Nothing on this template yet.</p>}
           </div>
         ) : selectedItems.length > 1 ? (
-          <MultiProperties count={selectedItems.length} onAlign={props.onAlign} onDistribute={props.onDistribute} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
+          <MultiProperties count={selectedItems.length} onRotateBy={props.onRotateBy} onAlign={props.onAlign} onDistribute={props.onDistribute} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
         ) : selected ? (
           <ItemProperties item={selected} onUpdate={onUpdate} onDuplicate={props.onDuplicate} onDelete={props.onDelete} fontLibrary={props.fontLibrary} onAlign={props.onAlign} />
         ) : workspace === "template" ? (
@@ -106,10 +107,17 @@ function AlignRow({ onAlign, onDistribute, label }: { onAlign: (mode: AlignMode)
   );
 }
 
-function MultiProperties({ count, onAlign, onDistribute, onDuplicate, onDelete }: { count: number; onAlign: (m: AlignMode) => void; onDistribute: (a: "x" | "y") => void; onDuplicate: () => void; onDelete: () => void }) {
+function MultiProperties({ count, onAlign, onDistribute, onRotateBy, onDuplicate, onDelete }: { count: number; onRotateBy: (deg: number) => void; onAlign: (m: AlignMode) => void; onDistribute: (a: "x" | "y") => void; onDuplicate: () => void; onDelete: () => void }) {
   return (
     <>
       <div className="property-heading"><div className="property-icon"><Layers size={17} /></div><div><strong>{count} items selected</strong><span>Drag to move them together</span></div></div>
+      <Section title="ROTATE AS GROUP">
+        <div className="icon-row">
+          <button title="Rotate group 90° counter-clockwise" aria-label="Rotate group 90° counter-clockwise" onClick={() => onRotateBy(-90)}><RotateCcw size={16} /></button>
+          <button title="Rotate group 90° clockwise" aria-label="Rotate group 90° clockwise" onClick={() => onRotateBy(90)}><RotateCw size={16} /></button>
+        </div>
+        <p className="hint">Drag the round handle above the selection to turn it freely (Shift for 15° steps). Items turn together around the group’s centre.</p>
+      </Section>
       <AlignRow onAlign={onAlign} onDistribute={count >= 3 ? onDistribute : undefined} label="TO SELECTION" />
       <p className="hint">Distribute needs three or more items. Shift-click items or layers to adjust the selection.</p>
       <div className="property-actions"><button onClick={onDuplicate}><Copy size={14} /> Duplicate</button><button className="danger" onClick={onDelete}><Trash2 size={14} /> Delete</button></div>

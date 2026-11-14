@@ -1,7 +1,7 @@
 import { PointerEvent, RefObject, useRef } from "react";
 import type { DesignItem, Guide, RecordMeta, RecordRow } from "../types";
 import { PX_PER_IN, round } from "../lib/data";
-import type { Box } from "../lib/align";
+import { boundsOf, centerOf, rotateAbout, type Box, type Transform } from "../lib/align";
 import { ItemShape } from "./ItemShape";
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
@@ -31,13 +31,15 @@ type Props = {
   onMove: (updates: { id: string; x: number; y: number }[]) => void;
   onResize: (id: string, box: Box) => void;
   onRotate: (id: string, degrees: number) => void;
+  onRotateGroup: (updates: Transform[]) => void;
   onDragEnd: () => void;
 };
 
 type Drag =
   | { kind: "move"; primary: string; startX: number; startY: number; origins: Map<string, { x: number; y: number }>; w: number; h: number }
   | { kind: "resize"; id: string; handle: Handle; startX: number; startY: number; box: Box; rotation: number; keepAspect: boolean }
-  | { kind: "rotate"; id: string };
+  | { kind: "rotate"; id: string }
+  | { kind: "rotate-group"; origins: DesignItem[]; center: { x: number; y: number }; startAngle: number };
 
 /** Pointer-down handlers call preventDefault (to avoid text selection and scrolling), which also stops the browser
  *  from blurring a focused inspector field, so keyboard shortcuts would keep going into that field. Blur it ourselves. */
@@ -51,7 +53,7 @@ const GUIDE_REACH = 0.08;
 const MIN_SIZE = 0.05;
 
 /** Editable template canvas. Items may be dragged anywhere, including past the template edge and over the rulers. */
-export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, guides, multi, preview, svgRef, onSelect, onMove, onResize, onRotate, onDragEnd }: Props) {
+export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, guides, multi, preview, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onDragEnd }: Props) {
   const drag = useRef<Drag | null>(null);
   const scale = PX_PER_IN * zoom;
 
@@ -100,9 +102,30 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
   };
 
+  const pointerAngle = (clientX: number, clientY: number, center: { x: number; y: number }) => {
+    const rect = svgRef.current!.getBoundingClientRect();
+    return (Math.atan2(clientY - (rect.top + center.y * scale), clientX - (rect.left + center.x * scale)) * 180) / Math.PI;
+  };
+
+  /** Treats the selection as a temporary group: it turns about the middle of its combined bounds. */
+  const startRotateGroup = (event: PointerEvent<SVGElement>, members: DesignItem[]) => {
+    event.stopPropagation();
+    event.preventDefault();
+    releaseFocus();
+    const center = centerOf(boundsOf(members));
+    drag.current = { kind: "rotate-group", origins: members.map((m) => ({ ...m })), center, startAngle: pointerAngle(event.clientX, event.clientY, center) };
+    (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
+  };
+
   const onPointerMove = (event: PointerEvent<SVGSVGElement>) => {
     const d = drag.current;
     if (!d) return;
+    if (d.kind === "rotate-group") {
+      let delta = pointerAngle(event.clientX, event.clientY, d.center) - d.startAngle;
+      if (event.shiftKey || snap) delta = Math.round(delta / 15) * 15;
+      onRotateGroup(rotateAbout(d.origins, delta, d.center));
+      return;
+    }
     if (d.kind === "rotate") {
       const item = items.find((candidate) => candidate.id === d.id);
       const rect = svgRef.current?.getBoundingClientRect();
@@ -152,6 +175,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
 
   // Handles stay a constant on-screen size (and finger-sized hit area) at any zoom.
   const visual = 9 / zoom, hit = 26 / zoom;
+  const group = items.filter((item) => selectedIds.includes(item.id) && item.visible !== false && !item.locked);
   const single = selectedIds.length === 1 ? items.find((item) => item.id === selectedIds[0]) : undefined;
   return (
     <svg
@@ -173,6 +197,20 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       {items.filter((item) => item.visible !== false).map((item) => (
         <ItemShape key={item.id} item={item} record={record} meta={meta} selected={!preview && selectedIds.includes(item.id)} onPointerDown={(event) => startMove(event, item)} />
       ))}
+      {!preview && group.length > 1 && (() => {
+        const box = boundsOf(group), reach = 30 / zoom;
+        const x = box.x * PX_PER_IN, y = box.y * PX_PER_IN, w = box.w * PX_PER_IN, h = box.h * PX_PER_IN;
+        return (
+          <g>
+            <rect x={x - 6} y={y - 6} width={w + 12} height={h + 12} fill="none" stroke="#d77d4e" strokeWidth={1.2 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} pointerEvents="none" />
+            <line x1={x + w / 2} y1={y - 6} x2={x + w / 2} y2={y - reach} stroke="#d77d4e" strokeWidth={1.2 / zoom} pointerEvents="none" />
+            <g onPointerDown={(event) => startRotateGroup(event, group)} style={{ cursor: "grab", touchAction: "none" }}>
+              <circle cx={x + w / 2} cy={y - reach} r={hit / 2} fill="transparent" />
+              <circle cx={x + w / 2} cy={y - reach} r={visual * 0.62} fill="#fff" stroke="#d77d4e" strokeWidth={1.5 / zoom} pointerEvents="none" />
+            </g>
+          </g>
+        );
+      })()}
       {!preview && single && !single.locked && single.visible !== false && (() => {
         const w = single.w * PX_PER_IN, h = single.h * PX_PER_IN, rotation = single.rotation ?? 0;
         const reach = 30 / zoom;

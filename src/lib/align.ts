@@ -48,3 +48,23 @@ export function distributeItems(list: DesignItem[], ids: string[], axis: "x" | "
   for (const { item, box } of picked) { shifts.set(item.id, cursor - box[axis]); cursor += box[size] + gap; }
   return list.map((item) => (shifts.has(item.id) && !item.locked ? { ...item, [axis]: Number((item[axis] + shifts.get(item.id)!).toFixed(3)) } : item));
 }
+
+export type Transform = { id: string; x: number; y: number; rotation: number };
+
+/** Normalises an angle to (-180, 180]. */
+export const normAngle = (deg: number) => { const r = (((deg + 180) % 360) + 360) % 360 - 180; return r === -180 ? 180 : r; };
+
+/**
+ * Rotates items by `delta` degrees as a temporary group: each item turns about its own centre by the same angle
+ * and its centre orbits `center`. Pass the items as they were when the gesture began so repeated calls don't accumulate error.
+ */
+export function rotateAbout(items: DesignItem[], delta: number, center: { x: number; y: number }): Transform[] {
+  const r = (delta * Math.PI) / 180, cos = Math.cos(r), sin = Math.sin(r);
+  return items.filter((item) => !item.locked).map((item) => {
+    const dx = item.x + item.w / 2 - center.x, dy = item.y + item.h / 2 - center.y;
+    const cx = center.x + dx * cos - dy * sin, cy = center.y + dx * sin + dy * cos;
+    return { id: item.id, x: Number((cx - item.w / 2).toFixed(3)), y: Number((cy - item.h / 2).toFixed(3)), rotation: Number(normAngle((item.rotation ?? 0) + delta).toFixed(1)) };
+  });
+}
+
+export const centerOf = (box: Box) => ({ x: box.x + box.w / 2, y: box.y + box.h / 2 });

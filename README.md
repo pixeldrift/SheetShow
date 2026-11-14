@@ -68,6 +68,8 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
 - [ ] Persistent projects and reusable templates
 - [ ] Rich typography and image handling
 - [ ] Print-ready PDF export and crop marks
+- [ ] Curved text (text on a path / arc)
+- [ ] Column mapping when importing a new data file
 - [ ] Hierarchical data adapters and BirdBox integration
 
 ## License
