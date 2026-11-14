@@ -98,9 +98,10 @@ function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMobileLayers, setShowMobileLayers] = useState(false);
   const [dataDrawerOpen, setDataDrawerOpen] = useState(true);
-  const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia("(min-width: 621px)").matches);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
+  const gesturePointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const gestureRef = useRef<{ mode: "pan" | "pinch"; pointerId: number; startX: number; startY: number; panX: number; panY: number; startDistance: number; startZoom: number } | null>(null);
   const [presetSearch, setPresetSearch] = useState("");
   const [recordIndex, setRecordIndex] = useState(0);
   const [workspace, setWorkspace] = useState<"template" | "layout">("template");
@@ -113,7 +114,6 @@ function App() {
   const [guides, setGuides] = useState<{ id: string; axis: "x" | "y"; position: number }[]>([]);
   const guideDragRef = useRef<{ id: string; axis: "x" | "y"; rect: DOMRect } | null>(null);
   const [clipboardItem, setClipboardItem] = useState<DesignItem | null>(null);
-  const touchZoomRef = useRef<{ distance: number } | null>(null);
   const [pageWidth, setPageWidth] = useState(8.5);
   const [pageHeight, setPageHeight] = useState(11);
   const [templateWidth, setTemplateWidth] = useState(3.5);
@@ -285,23 +285,34 @@ function App() {
     addText(field, inches(local.x / 96), inches(local.y / 96));
   };
 
+  const toSvgPoint = (clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    const matrix = svg?.getScreenCTM();
+    if (!svg || !matrix) return null;
+    const point = svg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    return point.matrixTransform(matrix.inverse());
+  };
+
   const startMove = (event: PointerEvent<SVGGElement>, item: DesignItem) => {
     if (workspace !== "template" || showPrintPreview || item.locked) return;
     event.preventDefault();
     event.stopPropagation();
+    const point = toSvgPoint(event.clientX, event.clientY);
+    if (!point) return;
     setSelectedId(item.id);
     setShowMobileLayers(false);
-    dragRef.current = { id: item.id, startX: event.clientX, startY: event.clientY, itemX: item.x, itemY: item.y };
+    dragRef.current = { id: item.id, startX: point.x, startY: point.y, itemX: item.x, itemY: item.y };
     (event.currentTarget as SVGGElement).setPointerCapture(event.pointerId);
   };
 
   const moveItem = (event: PointerEvent<SVGSVGElement>) => {
-    if (!dragRef.current || !svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const scaleX = (templateWidth * 96 * zoom) / rect.width;
-    const scaleY = (templateHeight * 96 * zoom) / rect.height;
-    const deltaX = (event.clientX - dragRef.current.startX) * scaleX / 96;
-    const deltaY = (event.clientY - dragRef.current.startY) * scaleY / 96;
+    if (!dragRef.current) return;
+    const point = toSvgPoint(event.clientX, event.clientY);
+    if (!point) return;
+    const deltaX = (point.x - dragRef.current.startX) / 96;
+    const deltaY = (point.y - dragRef.current.startY) / 96;
     const step = snapToGrid ? 0.05 : 0.001;
     let nextX = Math.round((dragRef.current.itemX + deltaX) / step) * step;
     let nextY = Math.round((dragRef.current.itemY + deltaY) / step) * step;
@@ -316,40 +327,55 @@ function App() {
 
   const startPan = (event: PointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest(".canvas-object,button,input,select")) return;
-    if (event.button !== 0) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
     event.preventDefault();
-    panRef.current = { startX: event.clientX, startY: event.clientY, panX: viewPan.x, panY: viewPan.y };
     event.currentTarget.setPointerCapture(event.pointerId);
+    gesturePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const points = [...gesturePointersRef.current.values()];
+    if (points.length >= 2) {
+      const dx = points[0].x - points[1].x;
+      const dy = points[0].y - points[1].y;
+      gestureRef.current = {
+        mode: "pinch", pointerId: event.pointerId, startX: 0, startY: 0,
+        panX: viewPan.x, panY: viewPan.y,
+        startDistance: Math.max(1, Math.hypot(dx, dy)), startZoom: zoom
+      };
+    } else {
+      gestureRef.current = {
+        mode: "pan", pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+        panX: viewPan.x, panY: viewPan.y, startDistance: 0, startZoom: zoom
+      };
+    }
   };
+
   const movePan = (event: PointerEvent<HTMLDivElement>) => {
-    if (!panRef.current) return;
-    setViewPan({ x: panRef.current.panX + event.clientX - panRef.current.startX, y: panRef.current.panY + event.clientY - panRef.current.startY });
-  };
-  const endPan = () => { panRef.current = null; };
-  const touchDistance = (touches: { item: (index: number) => { clientX: number; clientY: number } | null }) => {
-    const first = touches.item(0);
-    const second = touches.item(1);
-    if (!first || !second) return 0;
-    const dx = first.clientX - second.clientX;
-    const dy = first.clientY - second.clientY;
-    return Math.hypot(dx, dy);
-  };
-  const onCanvasTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    if (event.touches.length === 2) {
-      touchZoomRef.current = { distance: touchDistance(event.touches) };
+    if (!gesturePointersRef.current.has(event.pointerId)) return;
+    gesturePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const points = [...gesturePointersRef.current.values()];
+    const gesture = gestureRef.current;
+    if (!gesture) return;
+    if (points.length >= 2 && gesture.mode === "pinch") {
+      const dx = points[0].x - points[1].x;
+      const dy = points[0].y - points[1].y;
+      const distance = Math.hypot(dx, dy);
+      setZoom(Math.max(0.15, Math.min(2.5, gesture.startZoom * distance / gesture.startDistance)));
+    } else if (points.length === 1 && gesture.mode === "pan" && gesture.pointerId === event.pointerId) {
+      setViewPan({ x: gesture.panX + event.clientX - gesture.startX, y: gesture.panY + event.clientY - gesture.startY });
     }
   };
-  const onCanvasTouchMove = (event: TouchEvent<HTMLDivElement>) => {
-    if (event.touches.length === 2 && touchZoomRef.current) {
-      event.preventDefault();
-      const nextDistance = touchDistance(event.touches);
-      const factor = nextDistance / touchZoomRef.current.distance;
-      touchZoomRef.current.distance = nextDistance;
-      setZoom((current) => Math.max(0.15, Math.min(2.5, current * Math.pow(factor, 0.65))));
+
+  const endPan = (event: PointerEvent<HTMLDivElement>) => {
+    gesturePointersRef.current.delete(event.pointerId);
+    const remaining = [...gesturePointersRef.current.entries()];
+    if (remaining.length === 1) {
+      const [pointerId, point] = remaining[0];
+      gestureRef.current = {
+        mode: "pan", pointerId, startX: point.x, startY: point.y,
+        panX: viewPan.x, panY: viewPan.y, startDistance: 0, startZoom: zoom
+      };
+    } else {
+      gestureRef.current = null;
     }
-  };
-  const onCanvasTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
-    if (event.touches.length < 2) touchZoomRef.current = null;
   };
   const copySelected = () => { if (selected) setClipboardItem({ ...selected }); };
   const cutSelected = () => {
@@ -512,7 +538,7 @@ function App() {
           </div>
         </aside>
             <div className="editor-content">
-          <div className="canvas-area" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onTouchStart={onCanvasTouchStart} onTouchMove={onCanvasTouchMove} onTouchEnd={onCanvasTouchEnd} onClick={(event) => { if (!(event.target as HTMLElement).closest(".canvas-object,button,input,select")) setSelectedId(null); }}>
+          <div className="canvas-area" onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onClick={(event) => { if (!(event.target as HTMLElement).closest(".canvas-object,button,input,select")) setSelectedId(null); }}>
             <button className={dataDrawerOpen ? "canvas-drawer-toggle left active" : "canvas-drawer-toggle left"} title={dataDrawerOpen ? "Hide data fields" : "Show data fields"} aria-label={dataDrawerOpen ? "Hide data fields" : "Show data fields"} onClick={() => setDataDrawerOpen((open) => !open)}>{dataDrawerOpen ? <PanelLeftClose size={16}/> : <PanelLeft size={16}/>}</button>
             <button className={inspectorOpen ? "canvas-drawer-toggle right active" : "canvas-drawer-toggle right"} title={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} aria-label={inspectorOpen ? "Hide properties and layers" : "Show properties and layers"} onClick={() => setInspectorOpen((open) => !open)}>{inspectorOpen ? <PanelRightClose size={16}/> : <PanelRight size={16}/>}</button>
           <div className="viewport-edit-actions" onPointerDown={(e) => e.stopPropagation()}>
@@ -530,7 +556,7 @@ function App() {
                   {showRulers && <div className="top-ruler" onPointerDown={(e) => startGuide(e, "y")} onDoubleClick={() => setRulerSettingsOpen(true)} title="Drag down to add a horizontal guide; double-click for size and margins" style={{width: templateWidth * 96 * zoom}}>{Array.from({length: Math.floor(templateWidth * 4) + 1}, (_, i) => <span key={i} style={{left: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
                   {showRulers && <div className="left-ruler" onPointerDown={(e) => startGuide(e, "x")} onDoubleClick={() => setRulerSettingsOpen(true)} title="Drag right to add a vertical guide; double-click for size and margins" style={{height: templateHeight * 96 * zoom}}>{Array.from({length: Math.floor(templateHeight * 4) + 1}, (_, i) => <span key={i} style={{top: i * 24 * zoom}}>{i % 4 === 0 ? i / 4 : ""}</span>)}</div>}
                   <div className="paper-shadow" style={{width: templateWidth * 96 * zoom, height: templateHeight * 96 * zoom}}>
-                    <svg ref={svgRef} viewBox={`0 0 ${templateWidth * 96} ${templateHeight * 96}`} width={templateWidth * 96 * zoom} height={templateHeight * 96 * zoom} onPointerMove={moveItem} onPointerUp={() => { dragRef.current = null; }} onPointerLeave={() => { dragRef.current = null; }} onDragOver={(e) => e.preventDefault()} onDrop={onCanvasDrop} onClick={() => setSelectedId(null)} className="template-svg">
+                    <svg ref={svgRef} viewBox={`0 0 ${templateWidth * 96} ${templateHeight * 96}`} width={templateWidth * 96 * zoom} height={templateHeight * 96 * zoom} onPointerMove={moveItem} onPointerUp={() => { dragRef.current = null; }} onPointerCancel={() => { dragRef.current = null; }} onDragOver={(e) => e.preventDefault()} onDrop={onCanvasDrop} onClick={() => setSelectedId(null)} className="template-svg">
                       {showGrid && <defs><pattern id="gridPattern" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#e9eee9" strokeWidth="0.7"/></pattern></defs>}
                       {showGrid && <rect width="100%" height="100%" fill="url(#gridPattern)"/>}
                       {items.filter((item) => item.visible !== false).map((item) => (

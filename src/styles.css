@@ -475,3 +475,44 @@ button:disabled{opacity:.35;cursor:not-allowed}
  .content-frame.with-inspector>.right-panel{display:flex!important;visibility:visible!important;opacity:1!important}
  .content-frame:not(.with-inspector)>.right-panel{display:none!important}
 }
+
+
+/* Interaction and toolbar corrections: one pointer gesture system, clear divider, balanced controls */
+.canvas-toolbar .toolbar-divider{
+  display:block!important;flex:0 0 1px;width:1px;min-width:1px;height:24px;
+  align-self:center;margin:0 3px;background:#cbd2c9;
+}
+.canvas-toolbar .tool-group{flex:0 0 auto}
+.record-controls .tool-button{
+  display:grid;place-items:center;padding:0;line-height:0;flex:0 0 28px;
+  width:28px;height:28px;border:1px solid #e5e8e1;border-radius:7px;
+  color:#77827b;background:#fff;
+}
+.record-controls .tool-button svg{display:block;width:17px;height:17px;margin:0}
+.record-controls .tool-button:focus:not(:focus-visible){outline:none;background:#fff;color:#77827b}
+@media(hover:hover) and (pointer:fine){
+  .record-controls .tool-button:hover{background:#f2f2ed;color:#40534a}
+}
+@media(hover:none), (pointer:coarse){
+  .record-controls .tool-button:hover{background:#fff;color:#77827b}
+}
+.record-controls .tool-button:disabled{opacity:.35;background:#fff;color:#9aa39a}
+.canvas-area{touch-action:none!important;overscroll-behavior:contain}
+.canvas-wrap,.layout-editor,.template-svg,.canvas-object{touch-action:none}
+.content-frame{position:relative;min-height:0}
+@media(max-width:850px){
+  .content-frame.with-inspector>.right-panel{
+    display:flex!important;visibility:visible!important;opacity:1!important;
+    position:absolute!important;inset:0 0 0 auto!important;
+    width:min(86vw,330px)!important;height:100%!important;max-height:none!important;
+    z-index:60!important;background:#fff!important;transform:none!important;
+    box-shadow:-8px 0 28px #26372d28!important;
+  }
+  .content-frame:not(.with-inspector)>.right-panel{display:none!important}
+  .content-frame>.editor-content{position:relative;z-index:1;min-width:0}
+  .canvas-drawer-toggle.right{z-index:70!important}
+}
+@media(max-width:620px){
+  .canvas-toolbar .toolbar-divider{height:22px;margin:0 2px}
+  .record-controls .tool-button{flex-basis:26px;width:26px;height:26px}
+}
