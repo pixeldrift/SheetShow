@@ -17,6 +17,9 @@ import { ConditionsSection } from "./ConditionsSection";
 import { PrinterCalibrationSection } from "./PrinterCalibrationSection";
 import { defaultImageSource } from "../lib/images";
 import { mergeIssues } from "../lib/merge";
+import { TokenEditor } from "./TokenEditor";
+import { TokenModeToggle } from "./TokenModeToggle";
+import { useTokenMode } from "../lib/tokenMode";
 import { StockPicker } from "./StockPicker";
 import type { PrinterCalibration } from "../hooks/usePrinterCalibration";
 
@@ -152,6 +155,7 @@ function MultiProperties({ count, onRotateBy, onDuplicate, onDelete, group, grou
 
 function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, imageTools, fitNote, instanceMode, onFitReview }: { instanceMode?: boolean; onFitReview?: () => void; fitNote?: { text: string; bad: boolean } | null; imageTools: ImageTools; item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary }) {
   const patch = (p: Partial<DesignItem>, key?: string) => onUpdate(item.id, p, key ?? `prop:${item.id}:${Object.keys(p).join()}`);
+  const [tokenMode, toggleTokenMode] = useTokenMode();
   const [convertAt, setConvertAt] = useState<{ x: number; y: number; w: number } | null>(null);
   const convertRef = useRef<HTMLButtonElement>(null);
   const convert = (action: () => void) => { setConvertAt(null); action(); };
@@ -182,7 +186,10 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
                 <button onClick={() => patch({ field: undefined, text: fieldDisplayName(item.field!) })} title="Unlink and keep as static text"><Link2Off size={13} /> Unlink</button>
               </div>
             ) : (
-              <textarea className="property-input textarea" rows={3} value={item.text ?? ""} onChange={(e) => patch({ text: e.target.value })} placeholder="Enter text…" />
+              <div className="token-box">
+                <TokenEditor className="property-input textarea" value={item.text ?? ""} onChange={(text) => patch({ text })} mode={tokenMode} fields={imageTools.columns} ariaLabel="Text" placeholder="Enter text…" />
+                <TokenModeToggle mode={tokenMode} onToggle={toggleTokenMode} />
+              </div>
             )}
             {!item.field && (
               <>

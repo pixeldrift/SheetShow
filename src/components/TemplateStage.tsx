@@ -57,7 +57,7 @@ type Drag =
  *  from blurring a focused inspector field, so keyboard shortcuts would keep going into that field. Blur it ourselves. */
 const releaseFocus = () => {
   const active = document.activeElement as HTMLElement | null;
-  if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) active.blur();
+  if (active && (/^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName) || active.isContentEditable)) active.blur();
 };
 
 const SNAP_STEP = 0.05;
