@@ -966,3 +966,7 @@ th.drop-before::before{left:-1px}th.drop-after::after{right:-1px}
 .sheets-dialog{width:min(560px,100%)}
 .warn-banner{margin-top:12px}
 .paste-name{margin-top:12px}
+
+/* A chip dragged out of the Fields drawer: the same chip, lifted a little, held where you grabbed it */
+.drag-ghost.chip{transform:none;padding:0 6px 0 7px;width:auto;display:flex;align-items:center;gap:7px;height:36px;border:1px solid #e3b898;border-radius:10px;background:#fff;color:#657169;font-weight:400;text-transform:none;box-shadow:0 10px 26px #25352b45,0 2px 6px #25352b30;scale:1.04;transform-origin:var(--ox,30%) 50%;cursor:grabbing}
+.drag-ghost.chip.special{background:#fffaf5}

@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Braces, ChevronLeft, ChevronRight, Redo2, SlidersHorizontal, Undo2 } from "lucide-react";
+import { Braces, ChevronLeft, ChevronRight, GripVertical, Hash, Redo2, SlidersHorizontal, Type, Undo2 } from "lucide-react";
 import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -120,7 +120,8 @@ function App() {
   const [multiMode, setMultiMode] = useState(false);
   const [clipboard, setClipboard] = useState<DesignItem[]>([]);
   const [saveState, setSaveState] = useState<"saved" | "error">("saved");
-  const [fieldDrag, setFieldDrag] = useState<{ field: string; x: number; y: number } | null>(null);
+  /** `grab` is where on the chip it was picked up, so it keeps that exact place under the finger as it travels (null for a table cell, which is shown as a small chip at the pointer). */
+  const [fieldDrag, setFieldDrag] = useState<{ field: string; x: number; y: number; grab: { dx: number; dy: number; w: number } | null } | null>(null);
   /** The existing text object a dragged field would link to if dropped now. */
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const justDragged = useRef(false);
@@ -603,8 +604,12 @@ function App() {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const { pointerId, clientX: startX, clientY: startY } = event;
     const touch = event.pointerType !== "mouse";
+    // A chip from the Fields drawer travels as itself, held at the same spot you grabbed it.
+    const source = event.currentTarget as HTMLElement;
+    const chip = source.classList.contains("field-row") ? source.getBoundingClientRect() : null;
+    const grab = chip ? { dx: startX - chip.left, dy: startY - chip.top, w: chip.width } : null;
     let active = false;
-    const begin = () => { active = true; setFieldDrag({ field, x: startX, y: startY }); navigator.vibrate?.(8); };
+    const begin = () => { active = true; setFieldDrag({ field, x: startX, y: startY, grab }); navigator.vibrate?.(8); };
     const timer = touch ? window.setTimeout(begin, 260) : undefined;
     const blockScroll = (e: TouchEvent) => { if (active) e.preventDefault(); };
     const cleanup = () => {
@@ -623,7 +628,7 @@ function App() {
         begin();
       }
       if (active) {
-        setFieldDrag({ field, x: e.clientX, y: e.clientY });
+        setFieldDrag({ field, x: e.clientX, y: e.clientY, grab });
         const over = document.elementFromPoint(e.clientX, e.clientY);
         const id = over?.closest(".viewport") ? over.closest("[data-item-id]")?.getAttribute("data-item-id") : null;
         setDropTargetId(id && itemsRef.current.find((i) => i.id === id)?.type === "text" ? id : null);
@@ -1093,7 +1098,15 @@ function App() {
         />
       )}
 
-      {fieldDrag && <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>}
+      {fieldDrag && (fieldDrag.grab
+        ? (
+          <div className={`field-row drag-ghost chip${fieldDrag.field.startsWith("__") ? " special" : ""}`} style={{ left: fieldDrag.x - fieldDrag.grab.dx, top: fieldDrag.y - fieldDrag.grab.dy, width: fieldDrag.grab.w }}>
+            <span className="field-type">{fieldDrag.field.startsWith("__") ? <Hash size={12} /> : <Type size={12} />}</span>
+            <span className="field-name">{fieldDisplayName(fieldDrag.field)}</span>
+            <span className="field-grip" aria-hidden><GripVertical size={14} /></span>
+          </div>
+        )
+        : <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>)}
 
       {printing && (
         <PrintSheets kind={printing} offset={printer} sheet={sheet} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} instanceFor={instanceFor} />

@@ -1,7 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { TokenEditor, type TokenEditorHandle } from "./TokenEditor";
-import { TokenModeToggle } from "./TokenModeToggle";
-import { useTokenMode } from "../lib/tokenMode";
 import type { DesignItem } from "../types";
 import { PX_PER_IN } from "../lib/data";
 import { fontStack } from "../lib/fonts";
@@ -28,7 +26,6 @@ type Props = {
  */
 export function InlineTextEditor({ item, svgRef, zoom, draft, onChange, onCommit, onCancel, fields }: Props) {
   const ref = useRef<TokenEditorHandle>(null);
-  const [tokenMode, toggleTokenMode] = useTokenMode();
   const cancelled = useRef(false);
   const mountedAt = useRef(Date.now());
   useEffect(() => { const t = window.setTimeout(() => ref.current?.focus("select"), 0); return () => window.clearTimeout(t); }, []);
@@ -54,7 +51,7 @@ export function InlineTextEditor({ item, svgRef, zoom, draft, onChange, onCommit
         ariaLabel="Edit text"
         value={draft}
         onChange={onChange}
-        mode={tokenMode}
+        mode="text" /* on the canvas tokens stay plain, colour-coded text; chips are left for the Properties box */
         fields={fields}
         onBlur={() => {
           if (cancelled.current) return;
@@ -77,7 +74,6 @@ export function InlineTextEditor({ item, svgRef, zoom, draft, onChange, onCommit
           whiteSpace: item.wrap === false ? "pre" : "pre-wrap",
         }}
       />
-      <TokenModeToggle className="inline-mode-toggle" style={{ position: "fixed", left: left + Math.max(item.w * scale, 170) - 24, top: top - 30 }} mode={tokenMode} onToggle={toggleTokenMode} />
     </>
   );
 }
