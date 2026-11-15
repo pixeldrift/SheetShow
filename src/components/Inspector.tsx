@@ -16,6 +16,7 @@ import { VariantsSection } from "./VariantSections";
 import { ConditionsSection } from "./ConditionsSection";
 import { PrinterCalibrationSection } from "./PrinterCalibrationSection";
 import { defaultImageSource } from "../lib/images";
+import { mergeIssues } from "../lib/merge";
 import { StockPicker } from "./StockPicker";
 import type { PrinterCalibration } from "../hooks/usePrinterCalibration";
 
@@ -183,7 +184,13 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
             ) : (
               <textarea className="property-input textarea" rows={3} value={item.text ?? ""} onChange={(e) => patch({ text: e.target.value })} placeholder="Enter text…" />
             )}
-            {!item.field && <p className="hint">Press Enter for a new line. Pick a field in the data drawer to link this text, or write your own wording with fields in double braces: <code>{"{{city}}, {{state}} {{zip}}"}</code>. Only show something when a value exists: <code>{"{{first}} {{last}}{{#title}}, {{title}}{{/title}}"}</code>. Extra spaces tidy themselves, so a missing middle name leaves no gap.</p>}
+            {!item.field && (
+              <>
+                <p className="hint">Press Enter for a new line. Pick a field in the Fields drawer to link this text, or write your own wording with fields in double braces: <code>{"{{city}}, {{state}} {{zip}}"}</code>. Extra spaces tidy themselves.</p>
+                <p className="hint">Only when there is a value: <code>{"{{first}} {{last}}{{?title}}, {{title}}{{/}}"}</code>. Compare with <code>=</code> <code>!=</code> <code>contains</code> <code>starts</code> <code>ends</code> (add <code>!</code> to negate a word), join with <code>and</code> / <code>or</code>, and use <code>{"{{else}}"}</code>: <code>{"{{?type = \"VIP\"}}★{{else}}·{{/}}"}</code>.</p>
+                {mergeIssues(item.text ?? "", imageTools.columns).map((issue) => <p key={issue} className="hint warn">{issue}</p>)}
+              </>
+            )}
             <label className="check-row"><input type="checkbox" checked={item.wrap !== false} onChange={(e) => patch({ wrap: e.target.checked })} /> Wrap text to the box width</label>
           </Section>
           <Section title="TYPOGRAPHY">

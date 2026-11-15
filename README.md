@@ -26,7 +26,7 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Template gallery (File menu → New from template…) with live thumbnails; drop your own `.json` projects into `src/templates/` to add more
 - Groups: select several objects and group them (Ctrl/⌘+G). A group moves, turns, resizes (text included), aligns and copies as one; Alt-click or double-click picks a single member; collapsible rows in Layers
 - Conditional objects: show, hide or restyle any object by rule (e.g. a ribbon only for VIPs, a symbol by meal choice), with AND / OR / NOT conditions
-- Merge fields inside text in double braces, e.g. `{{city}}, {{state}} {{zip}}` or `${{price}}`, with optional sections (`{{#title}}, {{title}}{{/title}}`) and automatic space tidying
+- Merge fields inside text in double braces, e.g. `{{city}}, {{state}} {{zip}}` or `${{price}}`, with conditions (`{{?title}}, {{title}}{{/}}`, `=`, `!=`, `contains`, `starts`, `ends`, `and`/`or`, `{{else}}`) and automatic space tidying
 - Sortable, movable data columns (click a heading to sort, click again to reverse, drag to reorder); tracking and pair-kerning controls for text
 - Double-tap a text object to edit it right on the canvas (linked text switches to its `{{field}}` tokens while you edit)
 - Movable, dockable tool palettes (edit, align, arrange) and stacking-order shortcuts (Ctrl/⌘+[ and ])
