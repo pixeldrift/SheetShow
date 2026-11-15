@@ -799,3 +799,6 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .convert-row .button svg{flex:none}
 .convert-row{margin:2px 0 8px}
 .field-with-twirl .stepper{display:none}.field-with-twirl .number-input{padding:0 6px}
+.effect-twirl{margin:0;padding:2px;color:#778279;font-size:11px;font-weight:500}
+.effect-off{opacity:.45}
+.format-row .align-buttons{margin-top:0}

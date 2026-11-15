@@ -218,11 +218,28 @@ export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Pa
 
 const SHADOW: Shadow = { x: 0, y: 2, blur: 5, color: "#000000", opacity: 0.35 };
 
-/** Opacity first, then the on/off effects: outline (text) and shadow. */
+/** One effect: a twirl-down with its details, and a switch to turn it on. */
+function Effect({ title, on, onToggle, children }: { title: string; on: boolean; onToggle: (on: boolean) => void; children: React.ReactNode }) {
+  const [open, setOpen] = useState(on);
+  return (
+    <div className="effect-block">
+      <div className="switch-row">
+        <button type="button" className="twirl effect-twirl" aria-expanded={open} onClick={() => setOpen((o) => !o)}><ChevronRight size={12} style={{ transform: open ? "rotate(90deg)" : undefined }} /> {title}</button>
+        <Switch label={title} on={on} onChange={(next) => { onToggle(next); if (next) setOpen(true); }} />
+      </div>
+      {open && <div className={on ? undefined : "effect-off"}>{children}</div>}
+    </div>
+  );
+}
+
+/** Opacity first, then outline (text) and shadow with their details, and finally the reference switch. */
 export function EffectsSection({ item, patch }: { item: DesignItem; patch: Patch }) {
   const shadow = item.shadow;
   const stroke = item.textStroke;
-  const set = (change: Partial<Shadow>) => patch({ shadow: { ...(shadow ?? SHADOW), ...change } });
+  const sh = shadow ?? SHADOW;
+  const set = (change: Partial<Shadow>) => patch({ shadow: { ...sh, ...change } });
+  const ol = stroke ?? { color: "#ffffff", width: 2 };
+  const setOutline = (change: Partial<{ color: string; width: number }>) => patch({ textStroke: { ...ol, ...change } });
   return (
     <Section title="EFFECTS">
       <div className="slider-row first">
@@ -230,34 +247,26 @@ export function EffectsSection({ item, patch }: { item: DesignItem; patch: Patch
         <input type="range" min="0" max="100" step="1" value={Math.round((item.opacity ?? 1) * 100)} aria-label="Opacity" onChange={(e) => patch({ opacity: Number(e.target.value) / 100 })} />
         <output>{Math.round((item.opacity ?? 1) * 100)}%</output>
       </div>
+      {item.type === "text" && (
+        <Effect title="Outline" on={!!stroke} onToggle={(on) => patch({ textStroke: on ? ol : undefined })}>
+          <div className="two-col spaced">
+            <Pair label="Color"><ColorChip value={ol.color} fallback="#ffffff" label="Outline color" onChange={(c) => setOutline({ color: c })} /></Pair>
+            <Pair label="Thickness"><NumberField value={ol.width} min={0.25} max={20} step={0.25} places={2} unit="pt" onChange={(n) => setOutline({ width: n })} /></Pair>
+          </div>
+        </Effect>
+      )}
+      <Effect title="Shadow" on={!!shadow} onToggle={(on) => patch({ shadow: on ? sh : undefined })}>
+        <div className="two-col spaced">
+          <Pair label="Offset X"><NumberField value={sh.x} min={-60} max={60} step={0.5} places={1} unit="pt" onChange={(n) => set({ x: n })} /></Pair>
+          <Pair label="Offset Y"><NumberField value={sh.y} min={-60} max={60} step={0.5} places={1} unit="pt" onChange={(n) => set({ y: n })} /></Pair>
+          <Pair label="Softness"><NumberField value={sh.blur} min={0} max={80} step={0.5} places={1} unit="pt" onChange={(n) => set({ blur: n })} /></Pair>
+          <Pair label="Opacity"><NumberField value={Math.round(sh.opacity * 100)} min={0} max={100} step={5} places={0} unit="%" onChange={(n) => set({ opacity: n / 100 })} /></Pair>
+        </div>
+        <div className="color-row"><span>Color</span><input type="color" aria-label="Shadow color" value={sh.color} onChange={(e) => set({ color: e.target.value })} /></div>
+      </Effect>
       <div className="effect-block">
         <div className="switch-row" title="A guide for you while designing (a scan, a mock-up). It is never printed and can be semi-transparent."><span>Reference only (won’t print)</span>
           <Switch label="Reference only" on={!!item.reference} onChange={(on) => patch(on ? { reference: true, opacity: (item.opacity ?? 1) === 1 ? 0.5 : item.opacity } : { reference: undefined, opacity: item.opacity === 0.5 ? undefined : item.opacity })} /></div>
-      </div>
-      {item.type === "text" && (
-        <div className="effect-block">
-          <div className="switch-row"><span>Outline</span><Switch label="Text outline" on={!!stroke} onChange={(on) => patch({ textStroke: on ? { color: "#ffffff", width: 2 } : undefined })} /></div>
-          {stroke && (
-            <div className="two-col spaced">
-              <Pair label="Color"><ColorChip value={stroke.color} fallback="#ffffff" label="Outline color" onChange={(c) => patch({ textStroke: { color: c, width: stroke.width } })} /></Pair>
-              <Pair label="Thickness"><NumberField value={stroke.width} min={0.25} max={20} step={0.25} places={2} unit="pt" onChange={(n) => patch({ textStroke: { color: stroke.color, width: n } })} /></Pair>
-            </div>
-          )}
-        </div>
-      )}
-      <div className="effect-block">
-        <div className="switch-row"><span>Shadow</span><Switch label="Shadow" on={!!shadow} onChange={(on) => patch({ shadow: on ? SHADOW : undefined })} /></div>
-        {shadow && (
-          <>
-            <div className="two-col spaced">
-              <Pair label="Offset X"><NumberField value={shadow.x} min={-60} max={60} step={0.5} places={1} unit="pt" onChange={(n) => set({ x: n })} /></Pair>
-              <Pair label="Offset Y"><NumberField value={shadow.y} min={-60} max={60} step={0.5} places={1} unit="pt" onChange={(n) => set({ y: n })} /></Pair>
-              <Pair label="Blur"><NumberField value={shadow.blur} min={0} max={80} step={0.5} places={1} unit="pt" onChange={(n) => set({ blur: n })} /></Pair>
-              <Pair label="Strength"><NumberField value={Math.round(shadow.opacity * 100)} min={0} max={100} step={5} places={0} unit="%" onChange={(n) => set({ opacity: n / 100 })} /></Pair>
-            </div>
-            <div className="color-row"><span>Shadow color</span><input type="color" aria-label="Shadow color" value={shadow.color} onChange={(e) => set({ color: e.target.value })} /></div>
-          </>
-        )}
       </div>
     </Section>
   );
