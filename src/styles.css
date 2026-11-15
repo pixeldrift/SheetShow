@@ -909,3 +909,5 @@ th.drop-before::before{left:-1px}th.drop-after::after{right:-1px}
 
 /* Clipped, not just hidden: a browser can't scroll these to reveal a focused or clicked element, which would shove the canvas out of place. */
 .editor-content,.viewport,.canvas-frame,.app-shell{overflow:hidden;overflow:clip}
+.pad-round-cell{min-width:0}
+.pad-round-row.stacked{grid-template-columns:1fr;gap:12px}
