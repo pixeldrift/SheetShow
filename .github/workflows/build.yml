@@ -29,6 +29,9 @@ jobs:
         run: npm install
       - name: Type-check and build
         run: npm run build
+        env:
+          # Optional: the OAuth client ID that enables "Sign in with Google" for private Google Sheets (a repository variable).
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
       - name: Configure GitHub Pages
         if: github.event_name == 'push'
         uses: actions/configure-pages@v5

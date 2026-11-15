@@ -26,7 +26,7 @@ The **Project menu** (a pill with an arrow, left of the tabs) is different: it i
 
 ### Importing
 
-Use the upload button in the Data tab (or **Change** in the Fields drawer). SheetShow asks what to do with the new records:
+Use the upload button in the Data tab (or **Change** in the Fields drawer). You can also **paste cells** copied from Google Sheets, Excel or Numbers into the Paste data box (the clipboard button), or import a **Google Sheet** by its address (the sheet button). A sheet shared with “anyone with the link” comes straight in; for a private one, sign in with Google (read-only), or just copy its cells and paste them. SheetShow asks what to do with the new records:
 
 - **Replace** uses only the new file.
 - **Add** puts the new records after your current ones.
@@ -109,6 +109,8 @@ SheetShow saves automatically in this browser. Use **Save to file** in the Proje
 
 ## About
 
-SheetShow is made by **pixeldrift**, with development help from Claude, an AI assistant from Anthropic. It is built to turn data into something you can hold, and is designed to grow alongside BirdBox.
+SheetShow is made by **Nathan D. B. Pizar**, with development help from Claude, an AI assistant from Anthropic. It turns data into something you can hold, and is designed to grow alongside BirdBox.
 
-Found a problem or have an idea? Please let the maker know.
+Found a problem or have an idea? Write to me at [nathan@pizar.net](mailto:nathan@pizar.net).
+
+**If you found this app useful, send me a tip!** My email is linked with Venmo, Cash App, Apple Pay and Chime, so sending to nathan@pizar.net works with any of them.
