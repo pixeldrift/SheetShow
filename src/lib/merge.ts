@@ -49,8 +49,8 @@ export const SPECIAL_NAMES = ["record number", "page number", "record count", "p
  * Once the text uses blocks, every ? tag opens one.
  */
 
-type Tok = { t: "str"; v: string } | { t: "sym"; v: string } | { t: "comma" } | { t: "field"; v: string } | { t: "word"; v: string };
-const LEX = /\s+|[“”"]([^“”"]*)[“”"]|(!=|>=|<=|[=<>])|(,)|\?([^\s"“”,=!<>]+)|(!?[^\s"“”,=!<>?]+)/y;
+type Tok = { t: "str"; v: string } | { t: "sym"; v: string } | { t: "comma" } | { t: "tilde" } | { t: "field"; v: string } | { t: "word"; v: string };
+const LEX = /\s+|[“”"]([^“”"]*)[“”"]|(!=|>=|<=|[=<>])|(,)|(~)|\?([^\s"“”,=!<>]+)|(!?[^\s"“”,=!<>?]+)/y;
 
 function lex(source: string): Tok[] | null {
   const out: Tok[] = [];
@@ -62,13 +62,15 @@ function lex(source: string): Tok[] | null {
     if (m[1] !== undefined) out.push({ t: "str", v: m[1] });
     else if (m[2]) out.push({ t: "sym", v: m[2] });
     else if (m[3]) out.push({ t: "comma" });
-    else if (m[4]) out.push({ t: "field", v: m[4] });
-    else if (m[5]) out.push({ t: "word", v: m[5] });
+    else if (m[4]) out.push({ t: "tilde" });
+    else if (m[5]) out.push({ t: "field", v: m[5] });
+    else if (m[6]) out.push({ t: "word", v: m[6] });
   }
   return out;
 }
 
-type Operand = { kind: "lit"; v: string } | { kind: "field"; v: string };
+/** `loose` (written ~"text" or ~?field) compares ignoring case, spaces, punctuation and accents. */
+type Operand = ({ kind: "lit"; v: string } | { kind: "field"; v: string }) & { loose?: boolean };
 type Clause = { field: string; op?: string; values: Operand[] };
 type Cond = { clauses: Clause[]; join: "and" | "or" };
 
@@ -92,10 +94,13 @@ function parseCondition(source: string): Cond | { error: string } {
     if (i < toks.length && isOp(toks[i])) {
       clause.op = ((toks[i++] as { v: string }).v).toLowerCase();
       for (;;) {
+        let loose = false;
+        if (toks[i]?.t === "tilde") { loose = true; i++; }
         const v = toks[i];
         if (!v) return { error: `Missing a value after ${clause.op}.` };
-        if (v.t === "str") clause.values.push({ kind: "lit", v: v.v });
-        else if (v.t === "field") clause.values.push({ kind: "field", v: v.v });
+        if (loose && v.t !== "str" && v.t !== "field") return { error: "Put quotes after ~, like ~\"this value\"." };
+        if (v.t === "str") clause.values.push({ kind: "lit", v: v.v, loose });
+        else if (v.t === "field") clause.values.push({ kind: "field", v: v.v, loose });
         else if (v.t === "word" && /^-?\d+(\.\d+)?$/.test(v.v)) clause.values.push({ kind: "lit", v: v.v });
         else return { error: `Put text in quotes, like "${(v as { v?: string }).v ?? ""}".` };
         i++;
@@ -119,6 +124,8 @@ function parseCondition(source: string): Cond | { error: string } {
 
 type Lookup = (name: string) => string | undefined;
 const norm = (s: string) => s.trim().toLowerCase();
+/** Spelling-insensitive: "This Value", "this_value", "thisValue" and "thïs-value" all become "thisvalue". */
+const looseNorm = (s: string) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 const num = (s: string) => (s.trim() !== "" && Number.isFinite(Number(s)) ? Number(s) : null);
 
 function holds(cond: Cond, lookup: Lookup): boolean | null {
@@ -128,13 +135,13 @@ function holds(cond: Cond, lookup: Lookup): boolean | null {
     if (raw === undefined) return null; // unknown field
     const value = raw;
     if (!c.op) { results.push(value.trim() !== ""); continue; }
-    const operands: string[] = [];
-    for (const o of c.values) { const r = o.kind === "lit" ? o.v : lookup(o.v); if (r === undefined) return null; operands.push(r); }
+    const operands: { text: string; loose: boolean }[] = [];
+    for (const o of c.values) { const r = o.kind === "lit" ? o.v : lookup(o.v); if (r === undefined) return null; operands.push({ text: r, loose: !!o.loose }); }
     const negate = c.op.startsWith("!");
     const op = c.op.replace(/^!/, "");
-    const a = norm(value);
-    const test = (b0: string) => {
-      const b = norm(b0);
+    const test = ({ text: b0, loose }: { text: string; loose: boolean }) => {
+      const a = loose ? looseNorm(value) : norm(value);
+      const b = loose ? looseNorm(b0) : norm(b0);
       switch (op) {
         case "=": { const x = num(a), y = num(b); return x !== null && y !== null ? x === y : a === b; }
         case "contains": return b !== "" ? a.includes(b) : a === "";

@@ -187,7 +187,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
             {!item.field && (
               <>
                 <p className="hint">Press Enter for a new line. Pick a field in the Fields drawer to link this text, or write your own wording with fields in double braces: <code>{"{{city}}, {{state}} {{zip}}"}</code>. Extra spaces tidy themselves.</p>
-                <p className="hint">Only when there is a value: <code>{"{{first}} {{last}}{{?title}}, {{title}}{{/}}"}</code>. Compare with <code>=</code> <code>!=</code> <code>contains</code> <code>starts</code> <code>ends</code> (add <code>!</code> to negate a word), join with <code>and</code> / <code>or</code>, and use <code>{"{{else}}"}</code>: <code>{"{{?type = \"VIP\"}}★{{else}}·{{/}}"}</code>.</p>
+                <p className="hint">Only when there is a value: <code>{"{{first}} {{last}}{{?title}}, {{title}}{{/}}"}</code>. Compare with <code>=</code> <code>!=</code> <code>contains</code> <code>starts</code> <code>ends</code> (add <code>!</code> to negate a word), put <code>~</code> before a quoted value to match loosely (ignoring spaces and punctuation), join with <code>and</code> / <code>or</code>, and use <code>{"{{else}}"}</code>: <code>{"{{?type = \"VIP\"}}★{{else}}·{{/}}"}</code>.</p>
                 {mergeIssues(item.text ?? "", imageTools.columns).map((issue) => <p key={issue} className="hint warn">{issue}</p>)}
               </>
             )}
