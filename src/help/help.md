@@ -46,9 +46,10 @@ The **field names** button at the right of the bar swaps every linked text for i
 
 ## Designing a template
 
-- **Add things** with the toolbar: **Text**, **Rectangle** and **Image**. Select a rectangle and use **This object is** in Properties to turn it into a text box or a photo placeholder, ready to link to your data. On a narrow screen the add buttons collapse into one **Add** menu.
+- **Add things** with the toolbar: **Text**, **Rectangle**, **Image** and **Reference image**. Select a rectangle and use **This object is** in Properties to turn it into a text box or a photo placeholder, ready to link to your data. On a narrow screen the add buttons collapse into one **Add** menu.
 - **Link text to data**: select a text object and tap a field in the **Fields** drawer. Or type your own wording with merge fields, such as `{city}, {state} {zip}` or `${price}`.
 - **Properties**: the **Properties** drawer holds the settings for the selected object. Number fields have small arrows, and you can **drag a field's label** (or its unit) left and right to scrub the value. Hold Shift to go ten times faster, or Alt for fine steps.
+- **Reference objects**: switch on **Reference only** for any object (or add a **Reference image**) to use it as a guide: a scan to trace, a mock-up to match. Reference objects are faded to 50% (change it if you like), never print, and a reference image is added locked at the bottom.
 - **Move, resize and rotate**: drag an object, use its square handles, or the round handle above it to rotate.
 - **Align** with the bar at the bottom of the canvas. One object aligns to the template; several align to each other.
 - **Group** objects with Ctrl/⌘+G so they move, turn and resize together. Alt-click or double-click picks a single member.
@@ -57,11 +58,11 @@ The **field names** button at the right of the bar swaps every linked text for i
 
 ### Text that fits
 
-For any text you can choose what happens when it is too long: let it spill, cut it off with “…”, shrink it to fit the box, or shrink it to fit one line. A **text outline** keeps words readable over pictures. In Page layout, **Check text fit** lists every record whose text doesn't fit.
+**Autoscale** shrinks text to fit the box (or one line, or fills the box). **Overflow** says what happens if it still doesn’t fit: **Spill over** the edge, **Clip** at the edge, **Truncate** by dropping the words that don’t fit, or **Truncate…** with an ellipsis. A **text outline** keeps words readable over pictures. In Page layout, **Check text fit** lists every record whose text doesn't fit.
 
 ### Corners and frames
 
-Pictures, shapes and text boxes can have rounded corners, set by percent or by pixels, with a twirl-down for each corner on its own. **Circle** makes a shape perfectly round. Frame colour and thickness sit on one line.
+Background, border and border size sit on one line. **Padding** and **Rounding** are single numbers you can drag to scrub or tap to type; rounding switches between percent and pixels, and each has a twirl-down for every side or corner on its own. **Circle** makes a shape perfectly round.
 
 ## Pictures
 

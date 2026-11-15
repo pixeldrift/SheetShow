@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   ChevronDown, Group, Ungroup,
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
-  Hash, Image as ImageIcon, Italic, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
+  Bold, Hash, Image as ImageIcon, Italic, Underline, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   X, Filter,
 } from "lucide-react";
 import type { DesignItem, LabelPreset, Sheet } from "../types";
@@ -75,10 +75,10 @@ export function Inspector(props: Props) {
 
   return (
     <aside className="panel right-panel" aria-label="Properties and layers">
-      <div className="panel-heading">
+      <button type="button" className="panel-heading clickable" title="Close this drawer" aria-label={`Close ${title}`} onClick={onClose}>
         <h2><SlidersHorizontal size={15} className="heading-icon" /> {title}</h2>
-        <button className="icon-button" title="Collapse inspector" aria-label="Collapse inspector" onClick={onClose}><ChevronRight size={17} /></button>
-      </div>
+        <ChevronRight size={17} className="heading-chevron" />
+      </button>
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === "properties"} className={tab === "properties" ? "active" : ""} onClick={() => setTab("properties")}><SlidersHorizontal size={14} /> Properties</button>
         <button role="tab" aria-selected={tab === "layers"} className={tab === "layers" ? "active" : ""} onClick={() => setTab("layers")}><Layers size={14} /> Layers <span className="count-pill">{items.length}</span></button>
@@ -91,7 +91,7 @@ export function Inspector(props: Props) {
               const itemRow = (item: DesignItem, indented: boolean) => (
                 <div key={item.id} className={`${selectedItems.some((x) => x.id === item.id) ? "layer-row selected" : "layer-row"}${indented ? " nested" : ""}`} onClick={(e) => pick([item.id], e)}>
                   <span className="layer-kind">{kindIcon(item, 13)}</span>
-                  <span className="layer-label">{layerLabel(item)}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
+                  <span className="layer-label">{layerLabel(item)}{item.reference ? <em className="ref-tag">reference</em> : null}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
                   <button className="mini-button" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { visible: item.visible === false }); }}>{item.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}</button>
                   <button className="mini-button" title={item.locked ? "Unlock" : "Lock"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { locked: !item.locked }); }}>{item.locked ? <Lock size={13} /> : <Unlock size={13} />}</button>
                   <button className="mini-button" title="Bring forward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(item.id, 1); }}><ArrowUp size={13} /></button>
@@ -201,6 +201,12 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
         <div><strong>{item.type === "text" ? "Text object" : item.type === "image" ? "Image object" : "Shape object"}</strong><span>{item.field ? `Linked to ${fieldDisplayName(item.field)}` : item.type === "image" ? (item.imageSource ? "Data-driven picture" : "One picture") : "Static content"}</span></div>
       </div>
 
+      <div className="convert-row">
+        {item.type !== "rect" && <button className="button" onClick={() => patch({ type: "rect", text: undefined, field: undefined, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><Square size={14} /> Convert to shape</button>}
+        {item.type !== "text" && <button className="button" onClick={() => patch({ type: "text", text: item.text ?? "Text", fontSize: item.fontSize ?? 11, color: item.color ?? "#34443d", weight: item.weight ?? 500, wrap: true, padding: item.padding ?? 0.08, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><TextCursorInput size={14} /> Convert to text box</button>}
+        {item.type !== "image" && <button className="button" onClick={() => patch({ type: "image", imageSource: defaultImageSource(imageTools.columns), text: undefined, field: undefined }, `kind:${item.id}`)}><ImageIcon size={14} /> Convert to photo box</button>}
+      </div>
+
       {item.type === "text" && (
         <>
           <Section title="CONTENT">
@@ -219,57 +225,49 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
             <FontPicker value={item.fontFamily} library={fontLibrary} onPick={(family) => patch({ fontFamily: family })} />
             <div className="two-col spaced">
               <Pair label="Font size"><NumberField value={item.fontSize ?? 12} min={4} max={200} step={1} unit="pt" onChange={(n) => patch({ fontSize: n })} /></Pair>
-              <Pair label="Weight">
-                <select className="select" value={item.weight ?? 500} onChange={(e) => patch({ weight: Number(e.target.value) })}>
-                  <option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option>
-                </select>
-              </Pair>
+              <Pair label="Text color"><span className="color-chip"><input type="color" aria-label="Text color" value={item.color ?? "#34443d"} onChange={(e) => patch({ color: e.target.value })} /></span></Pair>
             </div>
-            <div className="spaced">
-              <Pair label="Auto scale">
+            <div className="two-col spaced">
+              <Pair label="Autoscale">
                 <select className="select" value={item.autoFit ?? "off"} onChange={(e) => patch({ autoFit: e.target.value as DesignItem["autoFit"] })}>
                   <option value="off">Fixed size</option>
-                  <option value="shrink">Shrink to fit box</option>
-                  <option value="width">Shrink to fit width (one line)</option>
-                  <option value="fit">Fit to box (grow or shrink)</option>
+                  <option value="shrink">Shrink to box</option>
+                  <option value="width">One line</option>
+                  <option value="fit">Fill the box</option>
                 </select>
               </Pair>
-            </div>
-            {item.autoFit && item.autoFit !== "off" && (
-              <>
-                <p className="hint">{item.autoFit === "shrink" ? "Text shrinks below the size above until it fits the box." : item.autoFit === "width" ? "Stays on one line and shrinks until it fits the width. Good for names." : "Text is sized to fill the box. Resize the box to change it."}</p>
-                <div className="two-col spaced"><Pair label="Never smaller than"><NumberField value={item.minFontSize ?? 4} min={2} max={200} step={0.5} places={1} unit="pt" onChange={(n) => patch({ minFontSize: n })} /></Pair></div>
-              </>
-            )}
-            <div className="spaced">
-              <Pair label="If it still doesn’t fit">
+              <Pair label="Overflow">
                 <select className="select" value={item.overflow ?? "spill"} onChange={(e) => patch({ overflow: e.target.value as DesignItem["overflow"] })}>
-                  <option value="spill">Let it spill past the box</option>
-                  <option value="truncate">Cut off with “…”</option>
+                  <option value="spill">Spill over</option>
+                  <option value="clip">Clip</option>
+                  <option value="cut">Truncate</option>
+                  <option value="truncate">Truncate…</option>
                 </select>
               </Pair>
             </div>
+            <p className="hint">{(item.autoFit ?? "off") === "off" ? "Text stays at the size above." : item.autoFit === "shrink" ? "Text shrinks below the size above until it fits the box." : item.autoFit === "width" ? "Stays on one line and shrinks until it fits the width. Good for names." : "Text is sized to fill the box. Resize the box to change it."} If it still doesn’t fit: {({ spill: "it spills past the box", clip: "it is clipped at the box edge", cut: "whole words are dropped", truncate: "it is cut off with “…”" } as const)[item.overflow ?? "spill"]}.</p>
+            {item.autoFit && item.autoFit !== "off" && (
+              <div className="two-col spaced"><Pair label="Never smaller than"><NumberField value={item.minFontSize ?? 4} min={2} max={200} step={0.5} places={1} unit="pt" onChange={(n) => patch({ minFontSize: n })} /></Pair></div>
+            )}
             {fitNote && <p className={`hint ${fitNote.bad ? "warn" : ""}`}>{fitNote.text}{fitNote.bad && !instanceMode && <> <button className="link-button" onClick={onFitReview}>Review…</button></>}</p>}
-            <div className="align-buttons">
-              {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([value, Icon]) => (
-                <button key={value} aria-label={`Align ${value}`} className={(item.align ?? "left") === value ? "active" : ""} onClick={() => patch({ align: value })}><Icon size={15} /></button>
-              ))}
-              <button aria-label="Italic" aria-pressed={!!item.italic} className={item.italic ? "active" : ""} onClick={() => patch({ italic: !item.italic })}><Italic size={15} /></button>
+            <div className="format-row">
+              <div className="style-buttons" role="group" aria-label="Text style">
+                <button aria-label="Bold" title="Bold" aria-pressed={(item.weight ?? 500) >= 600} onClick={() => patch({ weight: (item.weight ?? 500) >= 600 ? 400 : 700 })}><Bold size={15} /></button>
+                <button aria-label="Italic" title="Italic" aria-pressed={!!item.italic} onClick={() => patch({ italic: !item.italic })}><Italic size={15} /></button>
+                <button aria-label="Underline" title="Underline" aria-pressed={!!item.underline} onClick={() => patch({ underline: !item.underline })}><Underline size={15} /></button>
+              </div>
             </div>
-            <div className="two-col spaced"><Pair label="Line height"><NumberField value={item.lineHeight ?? 1.2} min={0.6} max={4} step={0.05} places={2} onChange={(n) => patch({ lineHeight: n })} /></Pair></div>
-            <div className="color-row"><span>Text color</span><input type="color" value={item.color ?? "#34443d"} onChange={(e) => patch({ color: e.target.value })} /></div>
+            <div className="format-row">
+              <div className="align-buttons" role="group" aria-label="Text alignment">
+                {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([value, Icon]) => (
+                  <button key={value} aria-label={`Align ${value}`} aria-pressed={(item.align ?? "left") === value} className={(item.align ?? "left") === value ? "active" : ""} onClick={() => patch({ align: value })}><Icon size={15} /></button>
+                ))}
+              </div>
+              <Pair label="Line height"><NumberField value={item.lineHeight ?? 1.2} min={0.6} max={4} step={0.05} places={2} onChange={(n) => patch({ lineHeight: n })} /></Pair>
+            </div>
           </Section>
         </>
       )}
-
-      <Section title="THIS OBJECT IS">
-        <div className="two-col">
-          {item.type !== "rect" && <button className="button" onClick={() => patch({ type: "rect", text: undefined, field: undefined, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><Square size={14} /> Plain shape</button>}
-          {item.type !== "text" && <button className="button" onClick={() => patch({ type: "text", text: item.text ?? "Text", fontSize: item.fontSize ?? 11, color: item.color ?? "#34443d", weight: item.weight ?? 500, wrap: true, padding: item.padding ?? 0.08, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><TextCursorInput size={14} /> Text box</button>}
-          {item.type !== "image" && <button className="button" onClick={() => patch({ type: "image", imageSource: defaultImageSource(imageTools.columns), text: undefined, field: undefined }, `kind:${item.id}`)}><ImageIcon size={14} /> Photo placeholder</button>}
-        </div>
-        <p className="hint">{item.type === "rect" ? "Turn this shape into a text box or a photo placeholder, then link it to your data." : "Switch what this object is. Its position, size and frame are kept."}</p>
-      </Section>
 
       {item.type === "image" && <PictureSection item={item} patch={patch} tools={imageTools} />}
       <ShapeStyleSection item={item} patch={patch} />

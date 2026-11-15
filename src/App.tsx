@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Braces, Redo2, SlidersHorizontal, Undo2 } from "lucide-react";
+import { Braces, ChevronLeft, ChevronRight, Redo2, SlidersHorizontal, Undo2 } from "lucide-react";
 import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -139,7 +139,7 @@ function App() {
   const svgRef = useRef<SVGSVGElement>(null);
   const library = useImageLibrary();
   // Which image dialog is open: inserting from the toolbar, choosing for an item, or reviewing a data-driven picture's matches.
-  const [libraryDialog, setLibraryDialog] = useState<null | { kind: "insert" } | { kind: "pick"; itemId: string; target: "asset" | "fallback" }>(null);
+  const [libraryDialog, setLibraryDialog] = useState<null | { kind: "insert"; reference?: boolean } | { kind: "pick"; itemId: string; target: "asset" | "fallback" }>(null);
   const [reviewItemId, setReviewItemId] = useState<string | null>(null);
 
   // ── Derived ─────────────────────────────────────────────────────────────
@@ -420,6 +420,14 @@ function App() {
     return { w, h: asset ? clamp(w / (asset.width / asset.height || 1), 0.25, 2.5) : w };
   };
   const insertPicture = (asset: Asset) => {
+    if (libraryDialog?.kind === "insert" && libraryDialog.reference) {
+      // A reference image: sized to the template, faded, locked and at the very bottom, and never printed.
+      const aspect = (asset.width / asset.height) || 1; const w = Math.min(template.width, template.height * aspect), h = w / aspect;
+      const item: DesignItem = { id: uid(), type: "image", x: (template.width - w) / 2, y: (template.height - h) / 2, w, h, assetId: asset.id, assetName: asset.name, visible: true, reference: true, locked: true, opacity: 0.5 };
+      history.set((list) => [item, ...list]);
+      setSelectedIds([item.id]); setWorkspace("template"); setPreview(false); setLibraryDialog(null);
+      return;
+    }
     addItem({ id: uid(), type: "image", x: 0.35, y: 0.35, ...pictureBox(asset), assetId: asset.id, assetName: asset.name, visible: true });
     setLibraryDialog(null);
   };
@@ -785,7 +793,7 @@ function App() {
           preview={preview} onPreview={() => setPreview((v) => !v)}
           multi={multiMode} onMulti={() => setMultiMode((v) => !v)}
           zoom={view.zoom} onZoom={setZoom} onZoomPreset={toggleZoomPreset}
-          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })}
+          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })} onAddReference={() => setLibraryDialog({ kind: "insert", reference: true })}
         />
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
@@ -839,10 +847,10 @@ function App() {
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
               <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields drawer (your data columns)" : "Show the Fields drawer (your data columns)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
-                <Braces size={15} /><span>Fields</span>
+                <Braces size={15} /><span>Fields</span>{dataOpen ? <ChevronLeft size={13} className="toggle-arrow" /> : <ChevronRight size={13} className="toggle-arrow" />}
               </button>
               <button className="drawer-toggle right" title={inspectorOpen ? "Hide the Properties drawer" : "Show the Properties drawer (settings, layers)"} aria-label={inspectorOpen ? "Hide properties" : "Show properties"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>
-                <SlidersHorizontal size={15} /><span>Properties</span>
+                <SlidersHorizontal size={15} /><span>Properties</span>{inspectorOpen ? <ChevronRight size={13} className="toggle-arrow" /> : <ChevronLeft size={13} className="toggle-arrow" />}
               </button>
               {workspace === "template" && !preview && selectedItems.length > 0 && <AlignBar units={unitsOf(items, selectedIds).length} onAlign={align} onDistribute={distribute} />}
               {workspace === "template" && (
@@ -902,10 +910,10 @@ function App() {
       {libraryDialog && (
         <ImageLibraryDialog
           library={library}
-          title={libraryDialog.kind === "insert" ? "Add a picture" : libraryDialog.target === "fallback" ? "Choose a placeholder" : "Choose a picture"}
+          title={libraryDialog.kind === "insert" ? (libraryDialog.reference ? "Add a reference image" : "Add a picture") : libraryDialog.target === "fallback" ? "Choose a placeholder" : "Choose a picture"}
           onClose={() => setLibraryDialog(null)}
           onPick={(asset) => (libraryDialog.kind === "insert" ? insertPicture(asset) : choosePicture(libraryDialog.itemId, libraryDialog.target, asset))}
-          onInsertDataDriven={libraryDialog.kind === "insert" ? insertDataDriven : undefined}
+          onInsertDataDriven={libraryDialog.kind === "insert" && !libraryDialog.reference ? insertDataDriven : undefined}
         />
       )}
       {reviewItemId && items.find((i) => i.id === reviewItemId) && (

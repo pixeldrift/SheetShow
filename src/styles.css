@@ -751,3 +751,51 @@ kbd,.help-body kbd{font:600 11px ui-monospace,Menlo,monospace;background:#f3f1ec
 
 .add-collapsed{display:none}
 @media(max-width:520px){.add-inline{display:none}.add-collapsed{display:flex}}
+
+/* ── Selection: this is an app, not a document. Only real text fields can select text. ── */
+html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input,textarea,[contenteditable="true"],.selectable,.help-body,.help-body *{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+img,svg{-webkit-user-drag:none;user-drag:none}
+.number-input input{touch-action:pan-y}
+.number-input input:not(:focus){cursor:ew-resize}
+
+/* ── Properties: one-line rows, switches, colour chips ──────────────────── */
+.style-row{display:grid;grid-template-columns:auto auto 1fr;gap:10px;align-items:end}
+.style-row.two{grid-template-columns:auto 1fr}
+.color-chip{position:relative;display:inline-block;width:40px;height:34px}
+.color-chip input[type=color]{width:100%;height:100%;border:1px solid #e3e5de;border-radius:6px;padding:3px;background:#fff;cursor:pointer}
+.color-chip.empty input[type=color]{background:linear-gradient(135deg,#fff 45%,#d96a4a 45%,#d96a4a 55%,#fff 55%);color-scheme:light}
+.color-chip.empty input[type=color]::-webkit-color-swatch-wrapper{opacity:.0}
+.chip-clear{position:absolute;top:-5px;right:-5px;width:15px;height:15px;border-radius:50%;border:1px solid #e3e5de;background:#fff;color:#78847a;display:grid;place-items:center;padding:0}
+.pad-round-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.55fr);gap:10px;margin-top:12px}
+.pad-round-row.one{grid-template-columns:1fr}
+.field-with-twirl{display:flex;align-items:center;gap:4px;min-width:0}
+.field-with-twirl .number-input{flex:1;min-width:0}
+.field-with-twirl .seg-mini button{min-width:0;padding:0 6px}
+.twirl-button{flex:none;width:22px;height:30px;border:0;background:transparent;color:#78847a;display:grid;place-items:center;border-radius:6px;padding:0}
+.twirl-button[aria-expanded="true"]{color:#b86e46;background:#f8f3ed}
+.switch-row{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#778279}
+.effect-block{margin-top:12px;padding-top:12px;border-top:1px solid var(--line-2)}
+.switch{width:34px;height:20px;border-radius:10px;border:0;background:#d8dbd3;padding:2px;display:flex;align-items:center;transition:background .15s}
+.switch span{width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0003;transition:transform .15s}
+.switch[aria-checked="true"]{background:var(--accent)}
+.switch[aria-checked="true"] span{transform:translateX(14px)}
+.slider-row.first{margin-top:0}
+.format-row{display:flex;align-items:flex-end;gap:10px;margin-top:12px}
+.format-row .align-buttons,.format-row .style-buttons{margin-top:0}
+.format-row .pair{flex:1;min-width:0}
+.style-buttons{display:flex;gap:5px}
+.style-buttons button{width:34px;height:30px;border:1px solid #e3e5de;border-radius:6px;background:#fff;color:#89938a;display:grid;place-items:center}
+.style-buttons button[aria-pressed="true"]{background:var(--accent-soft);border-color:#efd6c5;color:#b86e46}
+.convert-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 4px}
+.convert-row .button{display:flex;align-items:center;justify-content:center;gap:6px;padding:0 6px;font-size:11px;white-space:nowrap}
+.panel-heading.clickable{cursor:pointer;border:0;background:transparent;width:100%;text-align:left}
+.panel-heading.clickable:active{background:#f8f3ed}
+.heading-chevron{color:#77827b;flex:none}
+.toggle-arrow{margin-left:-2px;opacity:.8;flex:none}
+.ref-tag{font-style:normal;font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#7c5cdb;background:#efeafb;border-radius:4px;padding:1px 5px;margin-left:6px}
+@media(max-width:560px){.drawer-toggle{width:auto;padding:0 6px}.drawer-toggle .toggle-arrow{margin:0}}
+.convert-row .button{height:auto;min-height:34px;padding:5px 6px;white-space:normal;line-height:1.15;text-align:left;justify-content:flex-start}
+.convert-row .button svg{flex:none}
+.convert-row{margin:2px 0 8px}
+.field-with-twirl .stepper{display:none}.field-with-twirl .number-input{padding:0 6px}

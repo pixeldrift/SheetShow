@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { BoxSelect, ChevronDown, FileSearch, Grid2X2, ImagePlus, Magnet, PencilLine, Plus, Ruler, Square, Type } from "lucide-react";
+import { BoxSelect, ChevronDown, FileSearch, Grid2X2, ImagePlus, Magnet, PencilLine, Plus, Ruler, ScanLine, Square, Type } from "lucide-react";
 import { MAX_ZOOM, MIN_ZOOM } from "./Viewport";
 import { ZoomField } from "./ZoomField";
 
@@ -13,7 +13,7 @@ type Props = {
   preview: boolean; onPreview: () => void;
   zoom: number; onZoom: (zoom: number) => void; onZoomPreset: () => void;
   multi: boolean; onMulti: () => void;
-  onAddText: () => void; onAddShape: () => void; onAddImage: () => void;
+  onAddText: () => void; onAddShape: () => void; onAddImage: () => void; onAddReference: () => void;
 };
 
 export function Toolbar(p: Props) {
@@ -34,6 +34,7 @@ export function Toolbar(p: Props) {
             <button className="tool-button" title="Add text" aria-label="Add text" onClick={p.onAddText}><Type size={16} /></button>
             <button className="tool-button" title="Add rectangle: then turn it into a text box or photo placeholder in Properties" aria-label="Add rectangle" onClick={p.onAddShape}><Square size={16} /></button>
             <button className="tool-button" title="Add image or PDF" aria-label="Add image or PDF" onClick={p.onAddImage}><ImagePlus size={16} /></button>
+            <button className="tool-button" title="Add a reference image: a faded, locked guide at the bottom that never prints" aria-label="Add reference image" onClick={p.onAddReference}><ScanLine size={16} /></button>
           </div>
           <div className="tool-group add-collapsed">
             <button ref={shapesRef} className="tool-button with-caret" title="Add something to the template" aria-label="Add" aria-haspopup="menu" aria-expanded={!!shapesAt} onClick={() => (shapesAt ? setShapesAt(null) : openShapes())}>
@@ -71,6 +72,7 @@ export function Toolbar(p: Props) {
             <button role="menuitem" onClick={choose(p.onAddText)}><Type size={15} /> <span>Text<small>Typed or linked to a field</small></span></button>
             <button role="menuitem" onClick={choose(p.onAddShape)}><Square size={15} /> <span>Rectangle<small>Turn it into a text box or photo placeholder in Properties</small></span></button>
             <button role="menuitem" onClick={choose(p.onAddImage)}><ImagePlus size={15} /> <span>Image or PDF<small>From your library or a file</small></span></button>
+            <button role="menuitem" onClick={choose(p.onAddReference)}><ScanLine size={15} /> <span>Reference image<small>A faded, locked guide that never prints</small></span></button>
           </div>
         </>
       )}

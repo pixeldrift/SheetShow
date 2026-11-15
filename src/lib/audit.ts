@@ -19,7 +19,7 @@ export const itemLabel = (item: DesignItem) => (item.field ? fieldDisplayName(it
 export function instanceIssues(items: DesignItem[], record: RecordRow, meta: RecordMeta): { item: DesignItem; kind: TextIssue; atMin: boolean }[] {
   const out: { item: DesignItem; kind: TextIssue; atMin: boolean }[] = [];
   for (const item of items) {
-    if (item.type !== "text" || item.visible === false) continue;
+    if (item.type !== "text" || item.visible === false || item.reference) continue;
     const layout = layoutText(item, valueFor(item, record, meta), item.w * PX_PER_IN, item.h * PX_PER_IN);
     if (layout.issue) out.push({ item, kind: layout.issue, atMin: layout.atMin });
   }

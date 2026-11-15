@@ -241,7 +241,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
           <rect width={width * PX_PER_IN} height={height * PX_PER_IN} fill="url(#gridPattern)" pointerEvents="none" />
         </>
       )}
-      {items.filter((item) => item.visible !== false).map((item) => (
+      {items.filter((item) => item.visible !== false && !(preview && item.reference)).map((item) => (
         <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} raw={rawFields} onPointerDown={(event) => startMove(event, item)} />
       ))}
       {!preview && group.length > 1 && (() => {
