@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Download, FilePlus2, Plus, Redo2, Search, Trash2, Undo2, Upload } from "lucide-react";
+import { ClipboardPaste, Copy, Download, Sheet, FilePlus2, Plus, Redo2, Search, Trash2, Undo2, Upload } from "lucide-react";
 import type { RecordRow } from "../types";
 import { prettyField } from "../lib/data";
 import { ID, isIncluded } from "../lib/records";
+import { parseGrid } from "../lib/importText";
 import { SortArrow, useColumnHeaders, type SortState } from "./columnDrag";
 
 const ROW_H = 38;
@@ -28,6 +29,8 @@ type Props = {
   onPaste: (id: string, column: string, grid: string[][]) => void;
   onImport: (file: File) => void;
   onExport: () => void;
+  onPasteData: () => void;
+  onGoogleSheet: () => void;
 };
 
 type Show = "all" | "included" | "excluded";
@@ -96,7 +99,9 @@ export function DataTable(p: Props) {
     const text = event.clipboardData.getData("text");
     if (!/[\t\n]/.test(text.replace(/\n$/, ""))) return; // a single value pastes normally
     event.preventDefault();
-    p.onPaste(id, column, text.replace(/\r/g, "").replace(/\n$/, "").split("\n").map((line) => line.split("\t")));
+    // Spreadsheets copy tab-separated cells, so a column is lines and a row is tabs. Quoted cells (with line breaks inside) are kept whole.
+    const grid = parseGrid(text, "\t");
+    if (grid.length) p.onPaste(id, column, grid);
   };
 
   return (
@@ -115,6 +120,8 @@ export function DataTable(p: Props) {
           <button className="button" onClick={p.onAddRow}><Plus size={15} /> Row</button>
           <button className="button" onClick={p.onAddColumn}><FilePlus2 size={15} /> Column</button>
           <button className="tool-button" title="Open another CSV…" aria-label="Open another CSV" onClick={() => fileRef.current?.click()}><Upload size={16} /></button>
+          <button className="tool-button" title="Paste data copied from a spreadsheet…" aria-label="Paste data" onClick={p.onPasteData}><ClipboardPaste size={16} /></button>
+          <button className="tool-button" title="Import from Google Sheets…" aria-label="Import from Google Sheets" onClick={p.onGoogleSheet}><Sheet size={16} /></button>
           <button className="tool-button" title="Export CSV" aria-label="Export CSV" onClick={p.onExport}><Download size={16} /></button>
           <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) p.onImport(f); e.target.value = ""; }} />
         </div>

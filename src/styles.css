@@ -950,3 +950,19 @@ th.drop-before::before{left:-1px}th.drop-after::after{right:-1px}
 /* On the canvas the text can be huge, so tokens keep a steady size of their own */
 .inline-editor .te-chip{font-size:13px;line-height:1.5;padding:0 8px;vertical-align:middle}
 .inline-editor .te-raw{font-size:15px}
+
+/* Paste and Google Sheets import dialogs */
+.paste-dialog{width:min(680px,100%)}
+.paste-box{width:100%;min-height:150px;resize:vertical;border:1px solid #e3e5de;border-radius:8px;padding:10px 12px;font:12px/1.5 ui-monospace,Menlo,monospace;color:#4c5a51;background:#fcfcfa;outline:none;white-space:pre;overflow:auto}
+.paste-box:focus{border-color:#d69a77}
+.paste-options{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:10px 0 4px}
+.paste-delim{display:flex;align-items:center;gap:8px;font-size:12px;color:#778279}
+.paste-delim .select{width:auto;height:30px}
+.paste-count{margin-top:10px}
+.paste-preview{overflow:auto;max-height:180px;border:1px solid var(--line);border-radius:8px}
+.paste-preview table{border-collapse:collapse;font-size:12px;min-width:100%}
+.paste-preview th,.paste-preview td{padding:5px 10px;text-align:left;border-bottom:1px solid #eeeee8;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.paste-preview th{background:#f8f7f3;font-size:10px;letter-spacing:.5px;color:#78847a;position:sticky;top:0}
+.sheets-dialog{width:min(560px,100%)}
+.warn-banner{margin-top:12px}
+.paste-name{margin-top:12px}

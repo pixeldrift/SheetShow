@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { BadgeCheck, Braces, ChevronDown, ChevronLeft, Database, FileText, Hash, GripVertical, Layers, MousePointer2, Search, Type } from "lucide-react";
+import { ClipboardPaste, Sheet, Upload, BadgeCheck, Braces, ChevronDown, ChevronLeft, Database, FileText, Hash, GripVertical, Layers, MousePointer2, Search, Type } from "lucide-react";
 import { specialFields, prettyField } from "../lib/data";
 
 type Props = {
@@ -14,12 +14,16 @@ type Props = {
   onFieldPointerDown: (field: string, event: React.PointerEvent) => void;
   dragging: boolean;
   onClose: () => void;
+  onPasteData: () => void;
+  onGoogleSheet: () => void;
   /** The layer list, shown on its own tab beside the fields. */
   layers: React.ReactNode;
   layerCount: number;
 };
 
-export function DataPanel({ fileName, fields, recordCount, totalRecords, hasTextSelected, onImport, onField, onFieldPointerDown, dragging, onClose, layers, layerCount }: Props) {
+export function DataPanel({ fileName, fields, recordCount, totalRecords, hasTextSelected, onImport, onField, onFieldPointerDown, dragging, onClose, layers, layerCount, onPasteData, onGoogleSheet }: Props) {
+  const [sourceMenu, setSourceMenu] = useState<{ x: number; y: number } | null>(null);
+  const sourceRef = useRef<HTMLButtonElement>(null);
   const [tab, setTab] = useState<"fields" | "layers">("fields");
   const fileRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
@@ -46,7 +50,17 @@ export function DataPanel({ fileName, fields, recordCount, totalRecords, hasText
       {/* Everything below the heading scrolls. */}
       {tab === "layers" ? <div className="panel-body" data-scroll>{layers}</div> : (
       <div className="panel-body" data-scroll>
-        <div className="section-title"><Database size={14} /> DATA SOURCE <button className="text-action" onClick={() => fileRef.current?.click()}>Change</button></div>
+        <div className="section-title"><Database size={14} /> DATA SOURCE <button ref={sourceRef} className="text-action" aria-haspopup="menu" aria-expanded={!!sourceMenu} onClick={() => { const r = sourceRef.current?.getBoundingClientRect(); setSourceMenu(sourceMenu || !r ? null : { x: Math.max(8, r.right - 210), y: r.bottom + 4 }); }}>Change</button></div>
+        {sourceMenu && (
+          <>
+            <div className="menu-scrim" onClick={() => setSourceMenu(null)} />
+            <div className="menu" role="menu" style={{ position: "fixed", left: sourceMenu.x, top: sourceMenu.y, minWidth: 210 }}>
+              <button role="menuitem" onClick={() => { setSourceMenu(null); fileRef.current?.click(); }}><Upload size={14} /> <span>Open a CSV file…</span></button>
+              <button role="menuitem" onClick={() => { setSourceMenu(null); onPasteData(); }}><ClipboardPaste size={14} /> <span>Paste data…</span></button>
+              <button role="menuitem" onClick={() => { setSourceMenu(null); onGoogleSheet(); }}><Sheet size={14} /> <span>Google Sheet…</span></button>
+            </div>
+          </>
+        )}
         <div className="source-card">
           <div className="file-icon"><FileText size={17} /></div>
           <div className="source-meta"><strong>{fileName}</strong><span>{recordCount === totalRecords ? `${recordCount} records` : `${recordCount} of ${totalRecords} records`} · {fields.length} fields</span></div>

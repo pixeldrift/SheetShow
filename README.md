@@ -78,6 +78,14 @@ The application keeps three concepts separate:
 
 The initial CSV/TSV adapter is intentionally replaceable. Future data adapters can expose hierarchical BirdBox entities and relationships without coupling the editor to BirdBox.
 
+## Importing data
+
+- **File:** a CSV or TSV, from the Data tab or the Fields drawer.
+- **Paste:** copy cells in Google Sheets, Excel or Numbers and paste them into the Paste data box. Tabs, commas, semicolons and bars are detected. A plain list with no headings comes in as one column, which you name. A block can also be pasted straight into the data table, starting at any cell.
+- **Google Sheets by address:** a sheet shared as “anyone with the link can view” is read directly. A private sheet is brought in by copying its cells and pasting them; there is no sign-in.
+
+All of these finish with the same choice: replace your records, add to them, or merge without duplicates.
+
 ## Roadmap
 
 - [x] App foundation and visual workspace

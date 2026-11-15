@@ -56,16 +56,23 @@ export function duplicateRows(rows: RecordRow[], ids: Set<string>): RecordRow[] 
   return rows.flatMap((row) => (ids.has(row[ID]) ? [row, { ...row, [ID]: uid() }] : [row]));
 }
 
-/** Pastes a block copied from a spreadsheet, starting at a cell and growing the table if the block runs past the end. */
+/**
+ * Pastes a block copied from a spreadsheet, starting at a cell. A column pastes downward and a row pastes across; the table
+ * grows with new records (and new columns, called Column N) when the block runs past the end.
+ */
 export function pasteGrid(rows: RecordRow[], columns: string[], startId: string, startColumn: string, grid: string[][]): RecordRow[] {
   const startRow = rows.findIndex((row) => row[ID] === startId);
   const startCol = columns.indexOf(startColumn);
   if (startRow < 0 || startCol < 0) return rows;
-  const next = [...rows];
+  const width = Math.max(0, ...grid.map((cells) => cells.length));
+  const all = [...columns];
+  for (let n = 1; all.length < startCol + width; n++) { const name = `Column ${n}`; if (!all.includes(name)) all.push(name); }
+  const added = all.slice(columns.length);
+  let next = added.length ? rows.map((row) => ({ ...row, ...Object.fromEntries(added.map((c) => [c, ""])) })) : [...rows];
   grid.forEach((cells, r) => {
-    if (startRow + r >= next.length) next.push(blankRow(columns));
+    if (startRow + r >= next.length) next.push(blankRow(all));
     const target = { ...next[startRow + r] };
-    cells.forEach((value, c) => { const column = columns[startCol + c]; if (column) target[column] = value; });
+    cells.forEach((value, c) => { target[all[startCol + c]] = value; });
     next[startRow + r] = target;
   });
   return next;

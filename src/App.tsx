@@ -37,6 +37,8 @@ import { AlignBar } from "./components/AlignBar";
 import { ArrangeBar } from "./components/ArrangeBar";
 import { InlineTextEditor } from "./components/InlineTextEditor";
 import { LayersPanel } from "./components/LayersPanel";
+import { PasteDialog } from "./components/PasteDialog";
+import { SheetsDialog } from "./components/SheetsDialog";
 import type { SortState } from "./components/columnDrag";
 import type { PaletteState } from "./components/Palette";
 import { DataPanel } from "./components/DataPanel";
@@ -123,6 +125,8 @@ function App() {
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const justDragged = useRef(false);
   // A freshly imported file waiting for the person to confirm how its columns map onto the template.
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [sheetsOpen, setSheetsOpen] = useState(false);
   const [pendingImport, setPendingImport] = useState<{ records: RecordRow[]; fileName: string; stage: "choose" | "map" } | null>(null);
   const [dataOpen, setDataOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
   const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
@@ -483,6 +487,12 @@ function App() {
   };
   /** "Add" or "Merge": the finished list, as one undo step. */
   const combineImport = (rows: RecordRow[]) => { recordHistory.set(() => rows); setPendingImport(null); };
+  /** Records that came from somewhere other than a file (pasted cells, a Google Sheet): ask replace, add or merge. */
+  const importRecords = (records: RecordRow[], name: string) => {
+    setPasteOpen(false); setSheetsOpen(false);
+    if (!records.length) { window.alert("No records were found."); return; }
+    setPendingImport({ records, fileName: name, stage: "choose" });
+  };
   const importData = (file: File) => {
     Papa.parse<RecordRow>(file, {
       header: true, skipEmptyLines: true,
@@ -888,7 +898,7 @@ function App() {
           <DataTable
             rows={records} columns={fields} fileName={fileName}
             canUndo={recordHistory.canUndo} canRedo={recordHistory.canRedo} onUndo={recordHistory.undo} onRedo={recordHistory.redo}
-            onImport={importData} sort={dataSort} {...dataActions}
+            onImport={importData} onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} sort={dataSort} {...dataActions}
           />
         </main>
       )}
@@ -907,7 +917,7 @@ function App() {
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
           {dataOpen && (
-            <DataPanel fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
+            <DataPanel onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
               layerCount={(inLayoutEdit ? instItems : items).length}
               layers={<LayersPanel items={inLayoutEdit ? instItems : items} selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems} flat={!!instanceBanner}
                 onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
@@ -1067,6 +1077,8 @@ function App() {
         </div>
       )}
 
+      {pasteOpen && <PasteDialog onUse={importRecords} onCancel={() => setPasteOpen(false)} />}
+      {sheetsOpen && <SheetsDialog onUse={importRecords} onPasteInstead={() => { setSheetsOpen(false); setPasteOpen(true); }} onCancel={() => setSheetsOpen(false)} />}
       {pendingImport?.stage === "choose" && (
         <ImportDialog
           fileName={pendingImport.fileName} incoming={pendingImport.records} existing={records} existingColumns={fields}
