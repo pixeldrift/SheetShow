@@ -692,7 +692,7 @@ kbd,.help-body kbd{font:600 11px ui-monospace,Menlo,monospace;background:#f3f1ec
 .preset-option.selected{background:#eef5ee}
 
 /* ── Record bar preview + records drawer ───────────────────────────────── */
-.editor-content{position:relative}
+.editor-content{position:relative;overflow:hidden}
 .record-bar{gap:10px}
 .record-peek{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;background:transparent;padding:6px 8px;border-radius:9px;text-align:left}
 .peek-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
@@ -802,3 +802,18 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .effect-twirl{margin:0;padding:2px;color:#778279;font-size:11px;font-weight:500}
 .effect-off{opacity:.45}
 .format-row .align-buttons{margin-top:0}
+
+/* Layers: tight eye/lock, grab handle, drop line */
+.layer-row{gap:0}
+.layer-row .mini-button{width:22px}
+.layer-row .layer-label{margin-right:auto}
+.layer-grip{flex:none;width:26px;height:28px;display:grid;place-items:center;color:#a4aca2;cursor:grab;touch-action:none;border-radius:6px;margin-left:2px}
+.layer-row.drop-above{box-shadow:0 -2px 0 0 var(--accent)}
+.layer-row.drop-below{box-shadow:0 2px 0 0 var(--accent)}
+
+/* Drawers: slide open, and the button that opened one steps aside */
+:root{--left-w:188px}
+@keyframes panel-in{from{width:0}}
+.left-panel,.right-panel{overflow:hidden;animation:panel-in .22s cubic-bezier(.2,.8,.3,1)}
+.left-panel>*{min-width:var(--left-w)}.right-panel>*{min-width:var(--right-w)}
+@media(prefers-reduced-motion:reduce){.left-panel,.right-panel{animation:none}}

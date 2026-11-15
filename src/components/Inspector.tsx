@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-  ChevronDown, Group, Ungroup,
-  AlignCenter, AlignLeft, AlignRight, AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
+  ChevronDown, ChevronsUpDown, Group, Ungroup,
+  AlignCenter, AlignLeft, AlignRight, AlertTriangle, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
   Hash, Image as ImageIcon, Italic, Underline, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   X, Filter,
 } from "lucide-react";
@@ -49,7 +49,8 @@ type Props = {
   onUpdate: (id: string, patch: Partial<DesignItem>, coalesce?: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  onMoveLayer: (id: string, direction: -1 | 1, asGroup?: boolean) => void;
+  /** Drag-and-drop in the layer list: put `id` above/below `targetId`. */
+  onReorder: (id: string, targetId: string, above: boolean, asGroup: boolean) => void;
   templateWidth: number;
   templateHeight: number;
   onTemplateSize: (width: number, height: number) => void;
@@ -71,6 +72,29 @@ export function Inspector(props: Props) {
   const [tab, setTab] = useState<"properties" | "layers">("properties");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const flatLayers = !!props.instance; // hand-editing one record: groups aren't offered
+  // Drag a layer by its grip: the row under the pointer shows a line where it will land.
+  const [drag, setDrag] = useState<{ id: string; over: string; above: boolean } | null>(null);
+  const dropClass = (rowId: string) => (drag && drag.over === rowId && drag.id !== rowId ? (drag.above ? " drop-above" : " drop-below") : "");
+  const startDrag = (id: string, asGroup: boolean) => (event: React.PointerEvent) => {
+    event.preventDefault(); event.stopPropagation();
+    const target = (e: PointerEvent) => {
+      const row = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>("[data-layer-id]");
+      if (!row) return null;
+      const rect = row.getBoundingClientRect();
+      return { over: row.dataset.layerId!, above: e.clientY < rect.top + rect.height / 2 };
+    };
+    document.body.classList.add("scrubbing");
+    let last: { over: string; above: boolean } | null = null;
+    const move = (e: PointerEvent) => { last = target(e); setDrag(last ? { id, ...last } : null); };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+      document.body.classList.remove("scrubbing");
+      setDrag(null);
+      // The list is drawn top (front) to bottom (back), so "above" in the list means later in the stacking order.
+      if (last && last.over !== id) props.onReorder(id, last.over, last.above, asGroup);
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
   const title = tab === "layers" ? "Layers" : selectedItems.length > 1 ? (props.groups.wholeGroup ? `Group · ${selectedItems[0].groupName ?? ""}` : `${selectedItems.length} items`) : selected ? "Item properties" : workspace === "template" ? "Template setup" : "Page setup";
 
   return (
@@ -89,13 +113,12 @@ export function Inspector(props: Props) {
             {(() => {
               const pick = (ids: string[], e: React.MouseEvent) => { if (e.shiftKey || e.metaKey || e.ctrlKey) { const have = selectedItems.map((x) => x.id); onSelect(ids.every((id) => have.includes(id)) ? have.filter((id) => !ids.includes(id)) : [...new Set([...have, ...ids])]); } else { onSelect(ids); setTab("properties"); } };
               const itemRow = (item: DesignItem, indented: boolean) => (
-                <div key={item.id} className={`${selectedItems.some((x) => x.id === item.id) ? "layer-row selected" : "layer-row"}${indented ? " nested" : ""}`} onClick={(e) => pick([item.id], e)}>
+                <div key={item.id} data-layer-id={item.id} className={`${selectedItems.some((x) => x.id === item.id) ? "layer-row selected" : "layer-row"}${indented ? " nested" : ""}${dropClass(item.id)}`} onClick={(e) => pick([item.id], e)}>
                   <span className="layer-kind">{kindIcon(item, 13)}</span>
                   <span className="layer-label">{layerLabel(item)}{item.reference ? <em className="ref-tag">reference</em> : null}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
                   <button className="mini-button" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { visible: item.visible === false }); }}>{item.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}</button>
                   <button className="mini-button" title={item.locked ? "Unlock" : "Lock"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { locked: !item.locked }); }}>{item.locked ? <Lock size={13} /> : <Unlock size={13} />}</button>
-                  <button className="mini-button" title="Bring forward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(item.id, 1); }}><ArrowUp size={13} /></button>
-                  <button className="mini-button" title="Send backward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(item.id, -1); }}><ArrowDown size={13} /></button>
+                  <span className="layer-grip" title="Drag to change the stacking order" aria-label="Drag to reorder" role="button" onClick={(e) => e.stopPropagation()} onPointerDown={startDrag(item.id, false)}><ChevronsUpDown size={14} /></span>
                 </div>
               );
               const rows: React.ReactNode[] = [];
@@ -109,14 +132,13 @@ export function Inspector(props: Props) {
                 const open = !collapsed.has(item.groupId);
                 const allHidden = members.every((m) => m.visible === false), allLocked = members.every((m) => m.locked);
                 rows.push(
-                  <div key={`g-${item.groupId}`} className={ids.every((id) => selectedItems.some((x) => x.id === id)) ? "layer-row group selected" : "layer-row group"} onClick={(e) => pick(ids, e)}>
+                  <div key={`g-${item.groupId}`} data-layer-id={ids[0]} className={`${ids.every((id) => selectedItems.some((x) => x.id === id)) ? "layer-row group selected" : "layer-row group"}${dropClass(ids[0])}`} onClick={(e) => pick(ids, e)}>
                     <button className="mini-button chev" aria-label={open ? "Collapse group" : "Expand group"} onClick={(e) => { e.stopPropagation(); setCollapsed((c) => { const n = new Set(c); if (n.has(item.groupId!)) n.delete(item.groupId!); else n.add(item.groupId!); return n; }); }}><ChevronDown size={13} style={{ transform: open ? undefined : "rotate(-90deg)" }} /></button>
                     <span className="layer-kind"><Group size={13} /></span>
                     <span className="layer-label">{item.groupName ?? "Group"} <em>{members.length}</em></span>
                     <button className="mini-button" title={allHidden ? "Show group" : "Hide group"} onClick={(e) => { e.stopPropagation(); props.groups.onUpdateMany(ids, { visible: allHidden }); }}>{allHidden ? <EyeOff size={13} /> : <Eye size={13} />}</button>
                     <button className="mini-button" title={allLocked ? "Unlock group" : "Lock group"} onClick={(e) => { e.stopPropagation(); props.groups.onUpdateMany(ids, { locked: !allLocked }); }}>{allLocked ? <Lock size={13} /> : <Unlock size={13} />}</button>
-                    <button className="mini-button" title="Bring group forward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(ids[0], 1, true); }}><ArrowUp size={13} /></button>
-                    <button className="mini-button" title="Send group backward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(ids[0], -1, true); }}><ArrowDown size={13} /></button>
+                    <span className="layer-grip" title="Drag to change the stacking order" aria-label="Drag group to reorder" role="button" onClick={(e) => e.stopPropagation()} onPointerDown={startDrag(ids[0], true)}><ChevronsUpDown size={14} /></span>
                   </div>,
                 );
                 if (open) members.forEach((m) => rows.push(itemRow(m, true)));

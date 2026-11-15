@@ -7,7 +7,7 @@ import type { DesignItem, Guide, InstanceOverride, ItemPatch, LabelPreset, Proje
 import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid, valueFor } from "./lib/data";
 import { applyOverride, hasEdits, pickVariant, toItemPatch } from "./lib/instances";
 import { applyConditions } from "./lib/conditions";
-import { cloneItems, expandToGroups, groupItems, moveLayer as moveLayerIn, nextGroupName, renameGroup as renameGroupIn, ungroupItems, unitsOf } from "./lib/groups";
+import { cloneItems, expandToGroups, groupItems, moveLayerTo, nextGroupName, renameGroup as renameGroupIn, ungroupItems, unitsOf } from "./lib/groups";
 import { instanceIssues, itemLabel, recordLabel, type Issue } from "./lib/audit";
 import { checkImageUrls } from "./lib/webImages";
 import { layoutText } from "./lib/text";
@@ -377,7 +377,7 @@ function App() {
     setSelectedIds((current) => (additive ? [...new Set([...current, ...withGroups])] : withGroups));
   };
 
-  const moveLayer = (id: string, direction: -1 | 1, asGroup = false) => history.set((list) => moveLayerIn(list, id, direction, asGroup));
+  const reorderLayer = (id: string, targetId: string, above: boolean, asGroup: boolean) => history.set((list) => moveLayerTo(list, id, targetId, above, asGroup));
 
   const bindField = (field: string) => {
     if (justDragged.current) return;
@@ -846,12 +846,12 @@ function App() {
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
-              <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields drawer (your data columns)" : "Show the Fields drawer (your data columns)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
-                <Braces size={15} /><span>Fields</span>{dataOpen ? <ChevronLeft size={13} className="toggle-arrow" /> : <ChevronRight size={13} className="toggle-arrow" />}
-              </button>
-              <button className="drawer-toggle right" title={inspectorOpen ? "Hide the Properties drawer" : "Show the Properties drawer (settings, layers)"} aria-label={inspectorOpen ? "Hide properties" : "Show properties"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>
-                <SlidersHorizontal size={15} /><span>Properties</span>{inspectorOpen ? <ChevronRight size={13} className="toggle-arrow" /> : <ChevronLeft size={13} className="toggle-arrow" />}
-              </button>
+              {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields drawer (your data columns)" : "Show the Fields drawer (your data columns)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
+                <Braces size={15} /><span>Fields</span><ChevronRight size={13} className="toggle-arrow" />
+              </button>}
+              {!inspectorOpen && <button className="drawer-toggle right" title={inspectorOpen ? "Hide the Properties drawer" : "Show the Properties drawer (settings, layers)"} aria-label={inspectorOpen ? "Hide properties" : "Show properties"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>
+                <SlidersHorizontal size={15} /><span>Properties</span><ChevronLeft size={13} className="toggle-arrow" />
+              </button>}
               {workspace === "template" && !preview && selectedItems.length > 0 && <AlignBar units={unitsOf(items, selectedIds).length} onAlign={align} onDistribute={distribute} />}
               {workspace === "template" && (
                 <EditBar
@@ -888,7 +888,7 @@ function App() {
               instance={instanceBanner}
               fitNote={inLayoutEdit && instItem?.type === "text" && instRecord ? (() => { const l = layoutText(instItem, valueFor(instItem, instRecord, metaFor(instIndex)), instItem.w * PX_PER_IN, instItem.h * PX_PER_IN); return l.issue ? { bad: true, text: l.issue === "truncated" ? "This text is being cut off." : "This text runs past its box." } : { bad: false, text: "This text fits." }; })() : fitNote}
               fontLibrary={fontLibrary} onRotateBy={rotateSelectionBy} imageTools={imageTools}
-              onDuplicate={duplicateSelected} onDelete={deleteSelected} onMoveLayer={moveLayer}
+              onDuplicate={duplicateSelected} onDelete={deleteSelected} onReorder={reorderLayer}
               groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
               templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate({ width, height })} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}

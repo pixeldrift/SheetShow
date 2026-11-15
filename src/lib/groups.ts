@@ -105,3 +105,26 @@ export function unitsOf(list: DesignItem[], ids: string[]): Unit[] {
   for (const item of list) if (ids.includes(item.id)) { const key = item.groupId ?? item.id; map.set(key, [...(map.get(key) ?? []), item]); }
   return [...map].map(([key, members]) => ({ key, members }));
 }
+
+/**
+ * Drag-and-drop reorder: puts `id` just above (or below) `targetId` in the stacking order.
+ * Grouped objects reorder only among their own group's members unless the whole group (`asGroup`) is moved.
+ */
+export function moveLayerTo(list: DesignItem[], id: string, targetId: string, above: boolean, asGroup: boolean): DesignItem[] {
+  const item = list.find((i) => i.id === id), target = list.find((i) => i.id === targetId);
+  if (!item || !target || id === targetId) return list;
+  if (item.groupId && !asGroup) {
+    if (target.groupId !== item.groupId) return list;
+    const rest = list.filter((i) => i.id !== id);
+    const at = rest.findIndex((i) => i.id === targetId);
+    rest.splice(above ? at + 1 : at, 0, item);
+    return rest;
+  }
+  const all = blocks(list);
+  const from = all.findIndex((b) => b.some((i) => i.id === id));
+  const [moving] = all.splice(from, 1);
+  const to = all.findIndex((b) => b.some((i) => i.id === targetId));
+  if (from < 0 || to < 0) return list;
+  all.splice(above ? to + 1 : to, 0, moving);
+  return all.flat();
+}
