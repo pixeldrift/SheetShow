@@ -44,8 +44,8 @@ const card: TemplatePreset = {
       field("name", 0.45, 0.42, 2.8, 0.45, "name", { fontSize: 20, weight: 700, color: "#1f2d3a", autoFit: "width", minFontSize: 11 }),
       field("title", 0.45, 0.92, 2.8, 0.25, "title", { fontSize: 10, color: "#5b6b7a" }),
       field("company", 0.45, 1.16, 2.8, 0.22, "company", { fontSize: 9, weight: 700, color: "#2f5f8a" }),
-      text("phone", 0.45, 1.5, 2.8, 0.18, "{phone}", { fontSize: 8, color: "#3b4a57" }),
-      text("email", 0.45, 1.68, 2.8, 0.18, "{email}", { fontSize: 8, color: "#3b4a57" }),
+      text("phone", 0.45, 1.5, 2.8, 0.18, "{{phone}}", { fontSize: 8, color: "#3b4a57" }),
+      text("email", 0.45, 1.68, 2.8, 0.18, "{{email}}", { fontSize: 8, color: "#3b4a57" }),
     ],
   },
 };
@@ -70,7 +70,7 @@ const address: TemplatePreset = {
     items: [
       field("name", 0.14, 0.12, 2.35, 0.26, "name", { fontSize: 11, weight: 700, autoFit: "width", minFontSize: 8 }),
       field("street", 0.14, 0.4, 2.35, 0.22, "street", { fontSize: 10, autoFit: "width", minFontSize: 7 }),
-      text("city", 0.14, 0.64, 2.35, 0.22, "{city}, {state} {zip}", { fontSize: 10 }),
+      text("city", 0.14, 0.64, 2.35, 0.22, "{{city}}, {{state}} {{zip}}", { fontSize: 10 }),
     ],
   },
 };
@@ -85,7 +85,7 @@ const badgeItems = (color: string): DesignItem[] => [
   box("band", 0, 0, 4, 0.72, color),
   text("event", 0.3, 0.2, 3.4, 0.35, "DESIGN SUMMIT 2026", { fontSize: 15, weight: 700, color: "#ffffff" }),
   box("photo-bg", 0.3, 0.98, 1.15, 1.15, "#e7ecef", { radius: 50 }),
-  { id: "photo", type: "image", x: 0.3, y: 0.98, w: 1.15, h: 1.15, radius: 50, stroke: color, strokeWidth: 2.5, imageSource: { mode: "pattern", pattern: "{name}" }, visible: true },
+  { id: "photo", type: "image", x: 0.3, y: 0.98, w: 1.15, h: 1.15, radius: 50, stroke: color, strokeWidth: 2.5, imageSource: { mode: "pattern", pattern: "{{name}}" }, visible: true },
   field("name", 1.65, 1.0, 2.15, 0.78, "name", { fontSize: 24, weight: 700, color: "#1f2d3a", autoFit: "shrink", minFontSize: 12 }),
   field("org", 1.65, 1.86, 1.6, 0.3, "org", { fontSize: 12, color: "#51606d", autoFit: "width", minFontSize: 8 }),
   box("veg", 3.35, 1.84, 0.4, 0.4, "#3f8f5a", { radius: 50, rules: veggieOnly("veg") }),

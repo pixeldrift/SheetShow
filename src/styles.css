@@ -820,7 +820,7 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 
 /* iOS Safari zooms the whole page when a focused field's text is under 16px: on touch screens every field is at least that. */
 @media(pointer:coarse){
-  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea,[contenteditable="true"]{font-size:max(16px,1em)!important}
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea:not(.inline-editor),[contenteditable="true"]{font-size:max(16px,1em)!important}
 }
 
 .convert-row .with-chevron{display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
@@ -869,3 +869,7 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .arrange-bar{position:absolute;z-index:6;left:50%;bottom:114px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:3px 6px;background:rgba(255,255,255,.96);border:1px solid #e5e6df;border-radius:10px;box-shadow:0 3px 14px #27372d20}
 .arrange-bar .tool-button{width:32px;height:30px}
 @media(max-width:620px){.arrange-bar{bottom:106px}}
+
+/* On-canvas text editing */
+.inline-editor{z-index:40;box-sizing:border-box;resize:none;overflow:hidden;border:0;outline:2px solid var(--accent);outline-offset:0;border-radius:2px;background:rgba(255,255,255,.92);box-shadow:0 4px 18px #27372d33;margin:0;-webkit-user-select:text;user-select:text;font-size:inherit}
+@media(pointer:coarse){.inline-editor{font-size:revert-layer}}

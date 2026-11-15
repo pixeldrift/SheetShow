@@ -119,5 +119,5 @@ export const needsReview = (m: Match) => m.kind === "fuzzy" || m.kind === "none"
 export function defaultImageSource(columns: string[]): import("../types").ImageSource {
   const fileColumn = columns.find((c) => /^(image|photo|picture|pic|img|file|filename)/i.test(c));
   if (fileColumn) return { mode: "column", column: fileColumn };
-  return { mode: "pattern", pattern: `{${columns.find((c) => /^(band|id|name)/i.test(c)) ?? columns[0] ?? "name"}}` };
+  return { mode: "pattern", pattern: `{{${columns.find((c) => /^(band|id|name)/i.test(c)) ?? columns[0] ?? "name"}}}` };
 }

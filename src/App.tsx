@@ -4,8 +4,9 @@ import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { DesignItem, Guide, InstanceOverride, ItemPatch, LabelPreset, Project, RecordRow, Sheet, Variant, VariantRule, View, Workspace } from "./types";
+import { upgradeProject } from "./lib/merge";
 import { DEFAULT_SNAP_OPTIONS, type SnapOptions } from "./lib/smartSnap";
-import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid, valueFor } from "./lib/data";
+import { PX_PER_IN, clamp, fieldDisplayName, specialFields, starterItems, starterRecords, uid, valueFor } from "./lib/data";
 import { applyOverride, hasEdits, pickVariant, toItemPatch } from "./lib/instances";
 import { applyConditions } from "./lib/conditions";
 import { cloneItems, expandToGroups, groupItems, moveLayerTo, reorderSelection, type ArrangeMode, nextGroupName, renameGroup as renameGroupIn, ungroupItems, unitsOf } from "./lib/groups";
@@ -34,6 +35,7 @@ import { Toolbar } from "./components/Toolbar";
 import { EditBar } from "./components/EditBar";
 import { AlignBar } from "./components/AlignBar";
 import { ArrangeBar } from "./components/ArrangeBar";
+import { InlineTextEditor } from "./components/InlineTextEditor";
 import type { PaletteState } from "./components/Palette";
 import { DataPanel } from "./components/DataPanel";
 import { Inspector } from "./components/Inspector";
@@ -399,6 +401,26 @@ function App() {
     setSelectedIds((current) => (additive ? [...new Set([...current, ...withGroups])] : withGroups));
   };
 
+  // ── Editing a text object in place ──
+  const [inlineEdit, setInlineEdit] = useState<{ id: string; draft: string } | null>(null);
+  const startInlineEdit = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (!item || item.type !== "text") return;
+    // Linked text is edited as its tokens, so the preview pauses and field names can be typed or mixed with other words.
+    setInlineEdit({ id, draft: item.field ? `{{${item.field.startsWith("__") ? fieldDisplayName(item.field) : item.field}}}` : item.text ?? "" });
+  };
+  const finishInlineEdit = (save: boolean) => {
+    const edit = inlineEdit;
+    setInlineEdit(null);
+    const item = edit && items.find((i) => i.id === edit.id);
+    if (!edit || !item || !save) return;
+    const whole = edit.draft.trim().match(/^\{\{\s*([^{}|#^/]+?)\s*\}\}$/); // exactly one field: keep it a real link
+    const named = whole && [...fields, ...specialFields.map((f) => f.key)].find((f) => f === whole[1] || fieldDisplayName(f).toLowerCase() === whole[1].toLowerCase());
+    const next = named ? { field: named, text: fieldDisplayName(named) } : { field: undefined, text: edit.draft };
+    if (next.field === item.field && next.text === item.text) return;
+    updateItem(item.id, next);
+  };
+  useEffect(() => { if (inlineEdit && workspace !== "template") finishInlineEdit(true); }); // leaving the template saves the edit
   const arrange = (mode: ArrangeMode) => history.set((list) => reorderSelection(list, selectedIds, mode));
   const reorderLayer = (id: string, targetId: string, above: boolean, asGroup: boolean) => history.set((list) => moveLayerTo(list, id, targetId, above, asGroup));
 
@@ -589,7 +611,8 @@ function App() {
     return () => window.clearTimeout(timer);
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const applyProject = async (project: Project, images?: { asset: Asset; blob: Blob }[]) => {
+  const applyProject = async (raw: Project, images?: { asset: Asset; blob: Blob }[]) => {
+    const project = upgradeProject(raw);
     if (images) await library.replaceAll(images);
     const vs = project.variants?.length ? project.variants : [{ id: "a", name: "Template A", items: project.items }];
     doc.reset({
@@ -865,9 +888,9 @@ function App() {
               >
                 {workspace === "template" ? (
                   <TemplateStage
-                    items={displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
+                    items={inlineEdit ? displayItems.map((i) => (i.id === inlineEdit.id ? { ...i, text: "", field: undefined } : i)) : displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
                     selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} dropTargetId={dropTargetId} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
-                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup}
+                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup} onEditText={startInlineEdit}
                   />
                 ) : (
                   <LayoutStage
@@ -898,6 +921,7 @@ function App() {
                 <SlidersHorizontal size={15} /><span>Properties</span><ChevronLeft size={13} className="toggle-arrow" />
               </button>}
               {templateTools.floating}
+              {inlineEdit && workspace === "template" && (() => { const it = items.find((i) => i.id === inlineEdit.id); return it ? <InlineTextEditor item={it} svgRef={svgRef} zoom={view.zoom} draft={inlineEdit.draft} onChange={(draft) => setInlineEdit({ id: inlineEdit.id, draft })} onCommit={() => finishInlineEdit(true)} onCancel={() => finishInlineEdit(false)} /> : null; })()}
             </div>
 
             <RecordsDrawer

@@ -1,3 +1,4 @@
+import { renameTokens } from "./merge";
 import type { DesignItem } from "../types";
 import { fieldDisplayName } from "./data";
 import { ruleFields } from "./conditions";
@@ -74,6 +75,9 @@ export function applyMapping(items: DesignItem[], mapping: Record<string, string
       const wasPlaceholder = item.text === fieldDisplayName(item.field);
       next = { ...next, field: target, text: wasPlaceholder ? fieldDisplayName(target) : item.text };
     }
+    if (!item.field && item.text) { const t = renameTokens(item.text, mapping); if (t !== item.text) next = { ...next, text: t }; }
+    if (item.imageSource?.mode === "pattern") { const p = renameTokens(item.imageSource.pattern, mapping); if (p !== item.imageSource.pattern) next = { ...next, imageSource: { mode: "pattern", pattern: p } }; }
+    if (item.imageSource?.mode === "column" && mapping[item.imageSource.column] && mapping[item.imageSource.column] !== item.imageSource.column) next = { ...next, imageSource: { mode: "column", column: mapping[item.imageSource.column]! } };
     if (item.rules?.some((r) => r.when?.conditions.some((c) => mapping[c.field] && mapping[c.field] !== c.field))) {
       next = { ...next, rules: item.rules.map((r) => (r.when ? { ...r, when: { ...r.when, conditions: r.when.conditions.map((c) => ({ ...c, field: mapping[c.field] || c.field })) } } : r)) };
     }

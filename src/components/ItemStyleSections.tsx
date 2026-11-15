@@ -34,7 +34,7 @@ export function PictureSection({ item, patch, tools }: { item: DesignItem; patch
   const attention = useMemo(() => (source ? tools.records.filter((r) => needsReview(library.resolver.resolve(item, r))).length : 0), [source, item, tools.records, library.resolver]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const useData = () => patch({ imageSource: defaultImageSource(columns) });
-  const insertField = (field: string) => source?.mode === "pattern" && patch({ imageSource: { mode: "pattern", pattern: source.pattern + `{${field}}` } });
+  const insertField = (field: string) => source?.mode === "pattern" && patch({ imageSource: { mode: "pattern", pattern: source.pattern + `{{${field}}}` } });
 
   return (
     <Section title="PICTURE">
@@ -54,7 +54,7 @@ export function PictureSection({ item, patch, tools }: { item: DesignItem; patch
       {source && (
         <>
           <Pair label="Find the picture using">
-            <select className="select" value={source.mode} onChange={(e) => patch({ imageSource: e.target.value === "column" ? { mode: "column", column: columns.find((c) => /^(image|photo|picture|pic|img|file|filename)/i.test(c)) ?? columns[0] ?? "" } : { mode: "pattern", pattern: `{${columns[0] ?? "name"}}` } })}>
+            <select className="select" value={source.mode} onChange={(e) => patch({ imageSource: e.target.value === "column" ? { mode: "column", column: columns.find((c) => /^(image|photo|picture|pic|img|file|filename)/i.test(c)) ?? columns[0] ?? "" } : { mode: "pattern", pattern: `{{${columns[0] ?? "name"}}}` } })}>
               <option value="pattern">A filename pattern</option><option value="column">A column with the filename or URL</option>
             </select>
           </Pair>
@@ -63,12 +63,12 @@ export function PictureSection({ item, patch, tools }: { item: DesignItem; patch
           ) : (
             <div className="spaced-block">
               <Pair label="Pattern">
-                <input className="property-input mono" value={source.pattern} spellCheck={false} onChange={(e) => patch({ imageSource: { mode: "pattern", pattern: e.target.value } }, `pattern:${item.id}`)} placeholder="{band}.jpg" />
+                <input className="property-input mono" value={source.pattern} spellCheck={false} onChange={(e) => patch({ imageSource: { mode: "pattern", pattern: e.target.value } }, `pattern:${item.id}`)} placeholder="{{band}}.jpg" />
               </Pair>
               <div className="chip-row">
-                {columns.slice(0, 12).map((c) => <button key={c} className="field-chip" onClick={() => insertField(c)} title={`Insert {${c}}`}>+ {prettyField(c)}</button>)}
+                {columns.slice(0, 12).map((c) => <button key={c} className="field-chip" onClick={() => insertField(c)} title={`Insert {{${c}}}`}>+ {prettyField(c)}</button>)}
               </div>
-              <p className="hint">Put fields in braces. Add transforms with a bar: <code>{"{name|lower}"}</code>, <code>{"{species|slug}"}</code>. Separate fallbacks with <code>||</code>. A web address works too: <code>https://example.com/{"{band}"}.jpg</code>. Transforms: {TRANSFORM_NAMES.join(", ")}.</p>
+              <p className="hint">Put fields in double braces. Add transforms with a bar: <code>{"{{name|lower}}"}</code>, <code>{"{{species|slug}}"}</code>. Separate fallbacks with <code>||</code>. A web address works too: <code>https://example.com/{"{{band}}"}.jpg</code>. Transforms: {TRANSFORM_NAMES.join(", ")}.</p>
               {patternFields(source.pattern).some((f) => !columns.includes(f)) && <p className="hint warn">Unknown field: {patternFields(source.pattern).filter((f) => !columns.includes(f)).join(", ")}</p>}
             </div>
           )}

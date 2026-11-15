@@ -42,6 +42,8 @@ type Props = {
   /** Resizing a selection of several objects (or a group): new boxes, and font sizes when scaling proportionally. */
   onScaleGroup: (updates: { id: string; x: number; y: number; w: number; h: number; fontSize?: number }[]) => void;
   onDragEnd: () => void;
+  /** Double-tap on a text object: edit its words right on the canvas. */
+  onEditText?: (id: string) => void;
 };
 
 type Drag =
@@ -63,7 +65,7 @@ const GUIDE_REACH = 0.08;
 const MIN_SIZE = 0.05;
 
 /** Editable template canvas. Items may be dragged anywhere, including past the template edge and over the rulers. */
-export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, snapOptions, dropTargetId, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd }: Props) {
+export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, snapOptions, dropTargetId, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd, onEditText }: Props) {
   const drag = useRef<Drag | null>(null);
   const lastTap = useRef<{ id: string; at: number } | null>(null);
   /** A double-click on a grouped object picks just that object, but only once the pointer is released without having moved (otherwise it was a quick click-and-drag of the group). */
@@ -100,6 +102,13 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     const doubleTap = !!lastTap.current && lastTap.current.id === item.id && now - lastTap.current.at < 400;
     lastTap.current = { id: item.id, at: now };
     const justThis = !!item.groupId && event.altKey;
+    // Double-tap a text object (one that is already selected on its own) to edit its words in place.
+    if (doubleTap && item.type === "text" && !item.locked && !(multi || event.shiftKey || event.metaKey || event.ctrlKey) && selectedIds.length === 1 && selectedIds[0] === item.id && onEditText) {
+      event.preventDefault();
+      lastTap.current = null;
+      onEditText(item.id);
+      return;
+    }
     pendingSingle.current = item.groupId && doubleTap && selectedIds.includes(item.id) && !toggle ? item.id : null;
     const base = justThis ? [item.id] : items.filter((i) => i.visible !== false && (item.groupId ? i.groupId === item.groupId : i.id === item.id)).map((i) => i.id);
     if (toggle) {

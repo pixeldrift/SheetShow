@@ -30,7 +30,7 @@ type Props = {
  * grown to cover wrapped text that runs past it, unless auto-fit is keeping the text inside.
  */
 /** What a linked text shows in "field names" view: {name}. Static text (including your own {merge} fields) stays as typed. */
-const rawText = (item: DesignItem) => (item.field ? `{${item.field.startsWith("__") ? fieldDisplayName(item.field) : item.field}}` : item.text ?? "");
+const rawText = (item: DesignItem) => (item.field ? `{{${item.field.startsWith("__") ? fieldDisplayName(item.field) : item.field}}}` : item.text ?? "");
 
 function layoutItem(source: DesignItem, record: RecordRow, meta: RecordMeta, raw = false) {
   const w = source.w * PX_PER_IN;
@@ -101,7 +101,7 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
   let missingLabel = "Picture";
   if (item.type === "image") {
     if (item.imageSource && raw) {
-      missingLabel = item.imageSource.mode === "column" ? `{${item.imageSource.column}}` : item.imageSource.pattern;
+      missingLabel = item.imageSource.mode === "column" ? `{{${item.imageSource.column}}}` : item.imageSource.pattern;
     } else if (item.imageSource) {
       const match = images.resolver.resolve(item, record);
       urls = [match, ...match.alternates].filter((m) => m.kind !== "none").map((m) => m.url ?? images.urlFor(m.asset?.id)).filter((u): u is string => !!u);
