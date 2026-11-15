@@ -26,7 +26,9 @@ The **Project menu** (a pill with an arrow, left of the tabs) is different: it i
 
 ### Importing
 
-Use the upload button in the Data tab (or **Change** in the Fields drawer). You can also **paste cells** copied from Google Sheets, Excel or Numbers into the Paste data box (the clipboard button), or import a **Google Sheet** by its address (the sheet button). A sheet shared with “anyone with the link” comes straight in; for a private one, sign in with Google (read-only), or just copy its cells and paste them. SheetShow asks what to do with the new records:
+Use the upload button in the Data tab (or **Change** in the Fields drawer). You can also **paste cells** copied from Google Sheets, Excel or Numbers into the Paste data box (the clipboard button), or import a **Google Sheet** by its address (the sheet button). A sheet shared with “anyone with the link” comes straight in; for a private one, copy its cells in Google Sheets and paste them. A plain list with no headings comes in as a single column that you name.
+
+You can also paste straight into the table: click a cell and paste. A whole **column** (lines) pastes downward and a whole **row** (tabs) pastes across, adding records or columns as needed. SheetShow asks what to do with the new records:
 
 - **Replace** uses only the new file.
 - **Add** puts the new records after your current ones.

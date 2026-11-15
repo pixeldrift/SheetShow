@@ -12,7 +12,9 @@ type Props = {
 /** A box to paste cells into: copy a block in Google Sheets, Excel or Numbers and paste it here. */
 export function PasteDialog({ onUse, onCancel }: Props) {
   const [text, setText] = useState("");
-  const [header, setHeader] = useState(true);
+  // A single column is most likely a plain list with no heading, so the first row is data unless you say otherwise.
+  const [headerChoice, setHeaderChoice] = useState<boolean | null>(null);
+  const [listName, setListName] = useState("");
   const [delimiter, setDelimiter] = useState<Delimiter>("auto");
   const box = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { box.current?.focus(); }, []);
@@ -23,9 +25,15 @@ export function PasteDialog({ onUse, onCancel }: Props) {
   }, [onCancel]);
 
   const grid = useMemo(() => parseGrid(text, delimiter), [text, delimiter]);
-  const records = useMemo(() => gridToRecords(grid, header), [grid, header]);
-  const columns = Object.keys(records[0] ?? {});
   const width = Math.max(0, ...grid.map((r) => r.length));
+  const header = headerChoice ?? width > 1;
+  const isList = width === 1 && !header;
+  const records = useMemo(() => {
+    const made = gridToRecords(grid, header);
+    // A plain list gets the name you give it, in place of "Column 1".
+    return isList && listName.trim() ? made.map((r) => ({ [listName.trim()]: r["Column 1"] })) : made;
+  }, [grid, header, isList, listName]);
+  const columns = Object.keys(records[0] ?? {});
 
   return (
     <div className="dialog-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
@@ -37,13 +45,18 @@ export function PasteDialog({ onUse, onCancel }: Props) {
         <div className="dialog-body" data-scroll>
           <textarea ref={box} className="paste-box" value={text} onChange={(e) => setText(e.target.value)} placeholder={"Name\tSpecies\tBand\nPip\tGreen-cheeked conure\tGC-1048"} spellCheck={false} aria-label="Pasted data" />
           <div className="paste-options">
-            <label className="check-row"><input type="checkbox" checked={header} onChange={(e) => setHeader(e.target.checked)} /> The first row has the column names</label>
+            <label className="check-row"><input type="checkbox" checked={header} onChange={(e) => setHeaderChoice(e.target.checked)} /> The first row has the column names</label>
             <label className="paste-delim">Separated by
               <select className="select" value={delimiter} onChange={(e) => setDelimiter(e.target.value as Delimiter)}>
                 <option value="auto">Detect</option><option value={"\t"}>Tabs</option><option value=",">Commas</option><option value=";">Semicolons</option><option value="|">Bars (|)</option>
               </select>
             </label>
           </div>
+          {isList && text.trim() && (
+            <label className="pair paste-name"><span>This looks like a plain list. What should the column be called?</span>
+              <input className="property-input" value={listName} onChange={(e) => setListName(e.target.value)} placeholder="For example: Name" aria-label="Column name" />
+            </label>
+          )}
           {text.trim() ? (
             records.length ? (
               <>
@@ -60,7 +73,7 @@ export function PasteDialog({ onUse, onCancel }: Props) {
         <div className="dialog-foot">
           <span className="spacer" />
           <button className="button" onClick={onCancel}>Cancel</button>
-          <button className="button primary" disabled={!records.length} onClick={() => onUse(records, "Pasted data")}><ClipboardPaste size={14} /> Use this data</button>
+          <button className="button primary" disabled={!records.length || (isList && !listName.trim())} onClick={() => onUse(records, "Pasted data")}><ClipboardPaste size={14} /> Use this data</button>
         </div>
       </div>
     </div>

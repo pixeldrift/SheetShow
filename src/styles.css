@@ -965,3 +965,4 @@ th.drop-before::before{left:-1px}th.drop-after::after{right:-1px}
 .paste-preview th{background:#f8f7f3;font-size:10px;letter-spacing:.5px;color:#78847a;position:sticky;top:0}
 .sheets-dialog{width:min(560px,100%)}
 .warn-banner{margin-top:12px}
+.paste-name{margin-top:12px}

@@ -3,6 +3,7 @@ import { ClipboardPaste, Copy, Download, Sheet, FilePlus2, Plus, Redo2, Search, 
 import type { RecordRow } from "../types";
 import { prettyField } from "../lib/data";
 import { ID, isIncluded } from "../lib/records";
+import { parseGrid } from "../lib/importText";
 import { SortArrow, useColumnHeaders, type SortState } from "./columnDrag";
 
 const ROW_H = 38;
@@ -98,7 +99,9 @@ export function DataTable(p: Props) {
     const text = event.clipboardData.getData("text");
     if (!/[\t\n]/.test(text.replace(/\n$/, ""))) return; // a single value pastes normally
     event.preventDefault();
-    p.onPaste(id, column, text.replace(/\r/g, "").replace(/\n$/, "").split("\n").map((line) => line.split("\t")));
+    // Spreadsheets copy tab-separated cells, so a column is lines and a row is tabs. Quoted cells (with line breaks inside) are kept whole.
+    const grid = parseGrid(text, "\t");
+    if (grid.length) p.onPaste(id, column, grid);
   };
 
   return (

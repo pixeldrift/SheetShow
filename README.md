@@ -81,21 +81,10 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
 ## Importing data
 
 - **File:** a CSV or TSV, from the Data tab or the Fields drawer.
-- **Paste:** copy cells in Google Sheets, Excel or Numbers and paste them into the Paste data box. Tabs, commas, semicolons and bars are detected, and the first row is treated as the column names (switchable).
-- **Google Sheets by address:** a sheet shared as “anyone with the link can view” is read directly. A private sheet can be read after “Sign in with Google”, which asks for **read-only** access (`spreadsheets.readonly`) and keeps the token in memory only.
+- **Paste:** copy cells in Google Sheets, Excel or Numbers and paste them into the Paste data box. Tabs, commas, semicolons and bars are detected. A plain list with no headings comes in as one column, which you name. A block can also be pasted straight into the data table, starting at any cell.
+- **Google Sheets by address:** a sheet shared as “anyone with the link can view” is read directly. A private sheet is brought in by copying its cells and pasting them; there is no sign-in.
 
-All three finish with the same choice: replace your records, add to them, or merge without duplicates.
-
-### Enabling “Sign in with Google” (optional)
-
-The button only appears when the build has an OAuth client ID:
-
-1. In the [Google Cloud console](https://console.cloud.google.com/), create a project and enable the **Google Sheets API**.
-2. Under *OAuth consent screen*, set it up (External). While it is in *Testing*, add the Google accounts that should be allowed as test users. Making it public for everyone needs Google’s verification, because the Sheets scope is a sensitive one.
-3. Under *Credentials*, create an **OAuth client ID** of type *Web application* and add the site as an authorized JavaScript origin (for example `https://pixeldrift.github.io`, and `http://localhost:5173` for development).
-4. Give the client ID to the build: set it as the repository variable `VITE_GOOGLE_CLIENT_ID` (Settings → Secrets and variables → Actions → Variables) for the Pages deploy, or put `VITE_GOOGLE_CLIENT_ID=…` in a local `.env.local` file.
-
-Without a client ID, private sheets can still be brought in by copying the cells and pasting them.
+All of these finish with the same choice: replace your records, add to them, or merge without duplicates.
 
 ## Roadmap
 
