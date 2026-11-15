@@ -129,4 +129,4 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
 
 To be determined.
 - [ ] **Rework the per-record override interface** (the data is fine; the UI for finding, making and reviewing overrides needs a rethink)
-- [ ] Page view showing every sheet in a scrolling column (or grid), instead of one sheet at a time
+- [x] Page view showing every sheet in a scrolling column or a grid, as well as one sheet at a time

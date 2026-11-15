@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
+import { kindIcon } from "./LayersPanel";
 import {
-  ChevronDown, ChevronsUpDown, Shapes, Group, Ungroup,
+  ChevronDown, FileText, LayoutTemplate, Shapes, Group, Ungroup,
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
   Hash, Image as ImageIcon, Italic, Underline, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   X, Filter,
@@ -62,92 +63,27 @@ type Props = {
   onClose: () => void;
 };
 
-const kindIcon = (item: DesignItem, size = 14) =>
-  item.type === "text" ? (item.field?.startsWith("__") ? <Hash size={size} /> : <Type size={size} />) : item.type === "image" ? <FileImage size={size} /> : <Square size={size} />;
-const layerLabel = (item: DesignItem) => (item.field ? fieldDisplayName(item.field) : item.text || item.assetName || (item.type === "rect" ? "Shape" : "Item"));
-
 export function Inspector(props: Props) {
   const { workspace, items, selectedItems, onSelect, onUpdate, onClose } = props;
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
-  const [tab, setTab] = useState<"properties" | "layers">("properties");
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const flatLayers = !!props.instance; // hand-editing one record: groups aren't offered
-  // Drag a layer by its grip: the row under the pointer shows a line where it will land.
-  const [drag, setDrag] = useState<{ id: string; over: string; above: boolean } | null>(null);
-  const dropClass = (rowId: string) => (drag && drag.over === rowId && drag.id !== rowId ? (drag.above ? " drop-above" : " drop-below") : "");
-  const startDrag = (id: string, asGroup: boolean) => (event: React.PointerEvent) => {
-    event.preventDefault(); event.stopPropagation();
-    const target = (e: PointerEvent) => {
-      const row = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>("[data-layer-id]");
-      if (!row) return null;
-      const rect = row.getBoundingClientRect();
-      return { over: row.dataset.layerId!, above: e.clientY < rect.top + rect.height / 2 };
-    };
-    document.body.classList.add("scrubbing");
-    let last: { over: string; above: boolean } | null = null;
-    const move = (e: PointerEvent) => { last = target(e); setDrag(last ? { id, ...last } : null); };
-    const up = () => {
-      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
-      document.body.classList.remove("scrubbing");
-      setDrag(null);
-      // The list is drawn top (front) to bottom (back), so "above" in the list means later in the stacking order.
-      if (last && last.over !== id) props.onReorder(id, last.over, last.above, asGroup);
-    };
-    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
-  };
-  const title = tab === "layers" ? "Layers" : selectedItems.length > 1 ? (props.groups.wholeGroup ? `Group · ${selectedItems[0].groupName ?? ""}` : `${selectedItems.length} items`) : selected ? "Item properties" : workspace === "template" ? "Template setup" : "Page setup";
+  // The header names what the drawer is showing: the selected object, the template, or the page.
+  const head = selectedItems.length > 1
+    ? { icon: props.groups.wholeGroup ? <Group size={16} /> : <Layers size={16} />, title: props.groups.wholeGroup ? `Group · ${selectedItems[0].groupName ?? ""}` : `${selectedItems.length} objects`, sub: props.groups.wholeGroup ? "Moves and resizes as one" : "Selected together" }
+    : selected
+      ? { icon: kindIcon(selected, 16), title: selected.type === "text" ? "Text" : selected.type === "image" ? "Picture" : "Shape", sub: selected.field ? `Linked to ${fieldDisplayName(selected.field)}` : selected.type === "image" ? (selected.imageSource ? "Different for each record" : "One picture") : selected.type === "text" ? "Typed text" : "Fill, border and corners" }
+      : workspace === "template"
+        ? { icon: <LayoutTemplate size={16} />, title: "Template", sub: "Size and label stock" }
+        : { icon: <FileText size={16} />, title: "Page", sub: "Sheet, margins and printing" };
 
   return (
-    <aside className="panel right-panel" aria-label="Properties and layers">
-      <button type="button" className="panel-heading clickable" title="Close this drawer" aria-label={`Close ${title}`} onClick={onClose}>
-        <h2><SlidersHorizontal size={15} className="heading-icon" /> {title}</h2>
+    <aside className="panel right-panel" aria-label="Properties">
+      <button type="button" className="panel-heading clickable two-line" title="Close this drawer" aria-label={`Close ${head.title} properties`} onClick={onClose}>
+        <span className="head-icon">{head.icon}</span>
+        <span className="head-text"><strong>{head.title}</strong><small>{head.sub}</small></span>
         <ChevronRight size={17} className="heading-chevron" />
       </button>
-      <div className="tabs" role="tablist">
-        <button role="tab" aria-selected={tab === "properties"} className={tab === "properties" ? "active" : ""} onClick={() => setTab("properties")}><SlidersHorizontal size={14} /> Properties</button>
-        <button role="tab" aria-selected={tab === "layers"} className={tab === "layers" ? "active" : ""} onClick={() => setTab("layers")}><Layers size={14} /> Layers <span className="count-pill">{items.length}</span></button>
-      </div>
       <div className="panel-body" data-scroll>
-        {tab === "layers" ? (
-          <div className="layer-list">
-            {(() => {
-              const pick = (ids: string[], e: React.MouseEvent) => { if (e.shiftKey || e.metaKey || e.ctrlKey) { const have = selectedItems.map((x) => x.id); onSelect(ids.every((id) => have.includes(id)) ? have.filter((id) => !ids.includes(id)) : [...new Set([...have, ...ids])]); } else { onSelect(ids); setTab("properties"); } };
-              const itemRow = (item: DesignItem, indented: boolean) => (
-                <div key={item.id} data-layer-id={item.id} className={`${selectedItems.some((x) => x.id === item.id) ? "layer-row selected" : "layer-row"}${indented ? " nested" : ""}${dropClass(item.id)}`} onClick={(e) => pick([item.id], e)}>
-                  <span className="layer-kind">{kindIcon(item, 13)}</span>
-                  <span className="layer-label">{layerLabel(item)}{item.reference ? <em className="ref-tag">reference</em> : null}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
-                  <button className="mini-button" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { visible: item.visible === false }); }}>{item.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}</button>
-                  <button className="mini-button" title={item.locked ? "Unlock" : "Lock"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { locked: !item.locked }); }}>{item.locked ? <Lock size={13} /> : <Unlock size={13} />}</button>
-                  <span className="layer-grip" title="Drag to change the stacking order" aria-label="Drag to reorder" role="button" onClick={(e) => e.stopPropagation()} onPointerDown={startDrag(item.id, false)}><ChevronsUpDown size={14} /></span>
-                </div>
-              );
-              const rows: React.ReactNode[] = [];
-              const seen = new Set<string>();
-              for (const item of [...items].reverse()) {
-                if (!item.groupId || flatLayers) { rows.push(itemRow(item, false)); continue; }
-                if (seen.has(item.groupId)) continue;
-                seen.add(item.groupId);
-                const members = [...items].reverse().filter((m) => m.groupId === item.groupId);
-                const ids = members.map((m) => m.id);
-                const open = !collapsed.has(item.groupId);
-                const allHidden = members.every((m) => m.visible === false), allLocked = members.every((m) => m.locked);
-                rows.push(
-                  <div key={`g-${item.groupId}`} data-layer-id={ids[0]} className={`${ids.every((id) => selectedItems.some((x) => x.id === id)) ? "layer-row group selected" : "layer-row group"}${dropClass(ids[0])}`} onClick={(e) => pick(ids, e)}>
-                    <button className="mini-button chev" aria-label={open ? "Collapse group" : "Expand group"} onClick={(e) => { e.stopPropagation(); setCollapsed((c) => { const n = new Set(c); if (n.has(item.groupId!)) n.delete(item.groupId!); else n.add(item.groupId!); return n; }); }}><ChevronDown size={13} style={{ transform: open ? undefined : "rotate(-90deg)" }} /></button>
-                    <span className="layer-kind"><Group size={13} /></span>
-                    <span className="layer-label">{item.groupName ?? "Group"} <em>{members.length}</em></span>
-                    <button className="mini-button" title={allHidden ? "Show group" : "Hide group"} onClick={(e) => { e.stopPropagation(); props.groups.onUpdateMany(ids, { visible: allHidden }); }}>{allHidden ? <EyeOff size={13} /> : <Eye size={13} />}</button>
-                    <button className="mini-button" title={allLocked ? "Unlock group" : "Lock group"} onClick={(e) => { e.stopPropagation(); props.groups.onUpdateMany(ids, { locked: !allLocked }); }}>{allLocked ? <Lock size={13} /> : <Unlock size={13} />}</button>
-                    <span className="layer-grip" title="Drag to change the stacking order" aria-label="Drag group to reorder" role="button" onClick={(e) => e.stopPropagation()} onPointerDown={startDrag(ids[0], true)}><ChevronsUpDown size={14} /></span>
-                  </div>,
-                );
-                if (open) members.forEach((m) => rows.push(itemRow(m, true)));
-              }
-              return rows;
-            })()}
-            {!items.length && <p className="empty-note">Nothing on this template yet.</p>}
-          </div>
-        ) : selectedItems.length > 1 ? (
+        {selectedItems.length > 1 ? (
           <MultiProperties group={props.groups.wholeGroup ? { id: selectedItems[0].groupId!, name: selectedItems[0].groupName ?? "" } : null} groups={props.groups} count={selectedItems.length} onRotateBy={props.onRotateBy} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
         ) : selected ? (
           <>
@@ -188,7 +124,6 @@ const norm = (deg: number) => { const r = ((deg + 180) % 360 + 360) % 360 - 180;
 function MultiProperties({ count, onRotateBy, onDuplicate, onDelete, group, groups }: { group: { id: string; name: string } | null; groups: Props["groups"]; count: number; onRotateBy: (deg: number) => void; onDuplicate: () => void; onDelete: () => void }) {
   return (
     <>
-      <div className="property-heading"><div className="property-icon">{group ? <Group size={17} /> : <Layers size={17} />}</div><div><strong>{group ? "Group" : `${count} items selected`}</strong><span>{group ? `${count} items move, turn and resize together` : "Drag to move them together"}</span></div></div>
       {group ? (
         <Section title="GROUP">
           <input className="property-input" value={group.name} aria-label="Group name" onChange={(e) => groups.onRename(group.id, e.target.value)} />
@@ -221,11 +156,6 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
   const convert = (action: () => void) => { setConvertAt(null); action(); };
   return (
     <>
-      <div className="property-heading">
-        <div className="property-icon">{kindIcon(item, 17)}</div>
-        <div><strong>{item.type === "text" ? "Text object" : item.type === "image" ? "Image object" : "Shape object"}</strong><span>{item.field ? `Linked to ${fieldDisplayName(item.field)}` : item.type === "image" ? (item.imageSource ? "Data-driven picture" : "One picture") : "Static content"}</span></div>
-      </div>
-
       <div className="convert-row">
         <button ref={convertRef} className="button wide with-chevron" aria-haspopup="menu" aria-expanded={!!convertAt} onClick={() => { const r = convertRef.current?.getBoundingClientRect(); setConvertAt(convertAt || !r ? null : { x: r.left, y: r.bottom + 4, w: r.width }); }}>
           <Shapes size={14} /> Convert to… <ChevronDown size={13} className="caret" />

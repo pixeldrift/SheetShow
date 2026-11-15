@@ -46,7 +46,7 @@ The **field names** button at the right of the bar swaps every linked text for i
 
 ## Designing a template
 
-- **Add things** with the toolbar: **Text**, **Rectangle**, **Image** and **Reference image**. Select a rectangle and use **This object is** in Properties to turn it into a text box or a photo placeholder, ready to link to your data. On a narrow screen the add buttons collapse into one **Add** menu.
+- **Add things** with the toolbar: **Text**, **Rectangle**, **Image** and **Reference image**. Select a rectangle and use **Convert to…** in Properties to turn it into a text box or a photo placeholder, ready to link to your data. On a narrow screen the add buttons collapse into one **Add** menu.
 - **Link text to data**: drag a field from the **Fields** drawer. Over an existing text object it highlights with a link badge, and dropping links it; over empty canvas it adds a new linked text. Or select a text object and tap a field. Or type your own wording with fields in double braces, such as `{{city}}, {{state}} {{zip}}` or `${{price}}`. **Double-tap a text object** to edit it right on the canvas; linked text shows its `{{field}}` tokens while you edit, and tapping outside saves.
 - **Optional pieces**: a missing value shouldn’t leave stray punctuation. `{{#title}}, {{title}}{{/title}}` shows the comma and title only when there is one, and `{{^title}}No title{{/title}}` shows only when there isn’t. Extra spaces tidy themselves, so `{{first}} {{middle}} {{last}}` has no gap when the middle name is blank.
 - **Properties**: the **Properties** drawer holds the settings for the selected object. Number fields have small arrows, and you can **drag a field's label** (or its unit) left and right to scrub the value. Hold Shift to go ten times faster, or Alt for fine steps.
@@ -57,7 +57,7 @@ The **field names** button at the right of the bar swaps every linked text for i
 - **Move the tool bars**: the edit, align and arrange tools float on the canvas. Drag one by its handle to put it anywhere, or drop it on the toolbar at the top (or press its pin) to dock it; drag the divider before a docked group down to float it again.
 - **Align** with the bar at the bottom of the canvas. One object aligns to the template; several align to each other.
 - **Group** objects with Ctrl/⌘+G so they move, turn and resize together. Alt-click or double-click picks a single member.
-- **Layers** (in Properties) lists everything in stacking order, with show, hide, lock and reorder.
+- **Layers** (the second tab in the left drawer, beside Fields) lists every object in stacking order, with show, hide, lock, and a handle to drag it up or down. It is the way to select something you have made fully transparent.
 - **Undo and redo** cover everything: edits, new templates, page setup and data changes.
 
 ### Text that fits
@@ -85,6 +85,7 @@ A **data-driven picture** shows a different image for each record. Point it at a
 - **Label stock**: pick an Avery sheet in either the Template or the Page layout settings and both are set together. Change either one afterwards if you need something custom.
 - **Sort** the sheets by any field, add **crop marks**, and preview with the toolbar's print preview button.
 - **Printer calibration**: if your printer lands a little off, nudge the whole page in the Page layout settings. Save the setting for that printer, and print the calibration sheet to measure.
+- **See every sheet**: beside the toolbar buttons in Page layout, switch between one sheet, all sheets in a scrolling column, or a grid. The arrows under the canvas turn to the next sheet in any of them.
 - **One record per sheet**: in Page layout settings choose “One record per sheet” to fill each sheet with copies of a single record, with a sheet for every record, handy for a page of return-address labels per person. The arrows under the canvas turn sheets, and picking a record in the records list jumps to its sheet.
 - **Printing** checks your pictures and text first. Choose **Save as PDF** in the print dialog to make a PDF.
 

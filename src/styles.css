@@ -876,3 +876,24 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .drawer-table tr.on-page td{background:#faf5ef}
 .drawer-table tr.current td{background:var(--accent-soft)}
 .sheet-no{display:block;font-size:8px;font-weight:700;color:#b9916f;letter-spacing:.3px}
+
+/* ── Drawer headers: the left one carries Fields | Layers tabs; the right one names what it shows ── */
+.tabs-heading{display:flex;align-items:center;gap:2px;padding:0 4px 0 8px;border-bottom:1px solid var(--line)}
+.head-tab{height:48px;display:flex;align-items:center;gap:6px;padding:0 9px;border:0;border-bottom:2px solid transparent;background:transparent;font:700 12px Manrope,sans-serif;color:#8f968d;margin-bottom:-1px}
+.head-tab.active{color:#b86e46;border-bottom-color:var(--accent)}
+.head-close{margin-left:auto;width:30px;height:30px}
+.two-line{gap:10px;justify-content:flex-start!important;height:56px!important;padding:0 8px 0 14px!important;border-bottom:1px solid var(--line)!important}
+.two-line .head-icon{flex:none;width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:#bd7147;display:grid;place-items:center}
+.two-line .head-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;text-align:left}
+.two-line .head-text strong{font:700 13px Manrope,sans-serif;color:#46564c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.two-line .head-text small{font-size:10px;color:#9aa198;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.layer-list{padding-top:6px}
+
+/* ── All sheets: a scrolling column or a grid ── */
+.paper.stack{background:transparent;box-shadow:none}
+.page-stack{position:relative}
+.stack-sheet{position:absolute;box-shadow:0 8px 28px #28382d1c,0 1px 3px #28382d17;background:#fff}
+.stack-sheet .layout-page.placeholder{display:grid;place-items:center;color:#c0c5bc;font:700 40px Manrope,sans-serif}
+.sheet-label{position:absolute;left:0;top:-22px;font-size:12px;font-weight:700;letter-spacing:.6px;color:#9ba198;text-transform:uppercase;pointer-events:none}
+.view-modes{margin-left:8px;flex:none}
+.view-modes button{min-width:30px;padding:0 6px;display:grid;place-items:center}

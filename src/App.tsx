@@ -36,6 +36,7 @@ import { EditBar } from "./components/EditBar";
 import { AlignBar } from "./components/AlignBar";
 import { ArrangeBar } from "./components/ArrangeBar";
 import { InlineTextEditor } from "./components/InlineTextEditor";
+import { LayersPanel } from "./components/LayersPanel";
 import type { PaletteState } from "./components/Palette";
 import { DataPanel } from "./components/DataPanel";
 import { Inspector } from "./components/Inspector";
@@ -247,26 +248,58 @@ function App() {
   })();
 
   // ── View: per-workspace zoom / pan / fit ───────────────────────────────
+  // ── Page view: one sheet, or every sheet in a scrolling column or a grid ──
+  const [pageView, setPageView] = useState<"single" | "scroll" | "grid">("single");
+  const stack = workspace === "layout" && pageView !== "single";
+  const GAP = 0.35; // inches between sheets
+  const stackCols = pageView === "grid" ? (pageCount <= 1 ? 1 : pageCount <= 4 ? 2 : pageCount <= 9 ? 3 : 4) : 1;
+  const stackRows = Math.ceil(pageCount / stackCols);
+  const stackW = stackCols * sheet.pageWidth + (stackCols - 1) * GAP;
+  const stackH = stackRows * sheet.pageHeight + (stackRows - 1) * GAP;
+  const pagePos = (k: number) => ({ x: (k % stackCols) * (sheet.pageWidth + GAP), y: Math.floor(k / stackCols) * (sheet.pageHeight + GAP) });
+  /** The pan that brings sheet k into view: its top near the top of the window when it is taller than the window, else its middle. */
+  const panForPage = (k: number, zoom: number) => {
+    const scale = PX_PER_IN * zoom, pos = pagePos(Math.max(0, Math.min(pageCount - 1, k)));
+    const vh = viewportRef.current?.clientHeight ?? 600;
+    const x = -(pos.x + sheet.pageWidth / 2 - stackW / 2) * scale;
+    const tall = sheet.pageHeight * scale > vh - 70;
+    const y = tall ? 40 - vh / 2 - (pos.y - stackH / 2) * scale : -(pos.y + sheet.pageHeight / 2 - stackH / 2) * scale;
+    return { x, y };
+  };
+  /** In a scrolling column or grid: the sheet nearest the middle of the window. */
+  const visiblePage = (() => {
+    if (!stack) return currentPage;
+    const scale = PX_PER_IN * view.zoom;
+    const cx = stackW / 2 - view.pan.x / scale, cy = stackH / 2 - view.pan.y / scale;
+    const col = Math.max(0, Math.min(stackCols - 1, Math.floor(cx / (sheet.pageWidth + GAP))));
+    const row = Math.max(0, Math.min(stackRows - 1, Math.floor(cy / (sheet.pageHeight + GAP))));
+    return Math.min(pageCount - 1, row * stackCols + col);
+  })();
   const patchView = useCallback((patch: Partial<View>) => setViews((v) => ({ ...v, [workspace]: { ...v[workspace], ...patch } })), [workspace]);
-  const widthOf = (w: Workspace) => (w === "template" ? template.width : sheet.pageWidth);
-  const heightOf = (w: Workspace) => (w === "template" ? template.height : sheet.pageHeight);
+  const widthOf = (w: Workspace) => (w === "template" ? template.width : stack ? stackW : sheet.pageWidth);
+  const heightOf = (w: Workspace) => (w === "template" ? template.height : stack ? stackH : sheet.pageHeight);
 
   const fitZoom = (w: Workspace) => {
     const el = viewportRef.current;
     const availW = Math.max(120, (el?.clientWidth ?? 800) - 110);
     const availH = Math.max(120, (el?.clientHeight ?? 600) - 150);
-    return Number(clamp(Math.min(availW / (widthOf(w) * PX_PER_IN), availH / (heightOf(w) * PX_PER_IN)), MIN_ZOOM, MAX_ZOOM).toFixed(2));
+    // A scrolling column fits the sheet's width (you scroll for the rest); everything else fits whole.
+    const fitH = w === "layout" && pageView === "scroll" ? Infinity : availH / (heightOf(w) * PX_PER_IN);
+    return Number(clamp(Math.min(availW / (widthOf(w) * PX_PER_IN), fitH), MIN_ZOOM, MAX_ZOOM).toFixed(2));
   };
 
   // First visit to a workspace (or after its size changed from a preset): fit and centre it.
   useLayoutEffect(() => {
-    if (!view.fitted && viewportRef.current) patchView({ zoom: fitZoom(workspace), pan: { x: 0, y: 0 }, fitted: true });
-  }, [workspace, view.fitted]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!view.fitted && viewportRef.current) { const zoom = fitZoom(workspace); patchView({ zoom, pan: pageView === "scroll" && stack ? panForPage(currentPage, zoom) : { x: 0, y: 0 }, fitted: true }); }
+  }, [workspace, view.fitted]);
+  // Changing how sheets are shown (or how many there are) refits.
+  useEffect(() => { setViews((v) => ({ ...v, layout: { ...v.layout, fitted: false } })); }, [pageView, pageCount, sheet.pageWidth, sheet.pageHeight]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setZoom = (zoom: number) => patchView({ zoom: clamp(zoom, MIN_ZOOM, MAX_ZOOM) });
   const toggleZoomPreset = () => {
     const fit = fitZoom(workspace);
-    patchView({ zoom: Math.abs(view.zoom - fit) < 0.02 ? 1 : fit, pan: { x: 0, y: 0 } });
+    const zoom = Math.abs(view.zoom - fit) < 0.02 ? 1 : fit;
+    patchView({ zoom, pan: pageView === "scroll" && stack ? panForPage(visiblePage, zoom) : { x: 0, y: 0 } });
   };
 
   const switchWorkspace = (next: Workspace) => {
@@ -730,7 +763,11 @@ function App() {
 
   // ── Records ─────────────────────────────────────────────────────────────
   const stepRecord = (delta: number) => {
-    if (pagedNav) setRecordIndex(clamp(currentPage + delta, 0, pageCount - 1) * (sheet.repeatMode === "same" ? 1 : slots));
+    if (pagedNav) {
+      const page = clamp((stack ? visiblePage : currentPage) + delta, 0, pageCount - 1);
+      setRecordIndex(Math.min(Math.max(0, activeRecords.length - 1), page * (sheet.repeatMode === "same" ? 1 : slots)));
+      if (stack) patchView({ pan: panForPage(page, view.zoom) });
+    }
     else setRecordIndex((index) => clamp(index + delta, 0, Math.max(0, activeRecords.length - 1)));
   };
 
@@ -862,12 +899,17 @@ function App() {
           preview={preview} onPreview={() => setPreview((v) => !v)}
           multi={multiMode} onMulti={() => setMultiMode((v) => !v)}
           zoom={view.zoom} onZoom={setZoom} onZoomPreset={toggleZoomPreset}
-          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })} onAddReference={() => setLibraryDialog({ kind: "insert", reference: true })} docked={templateTools.docked}
+          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })} onAddReference={() => setLibraryDialog({ kind: "insert", reference: true })} docked={templateTools.docked} pageView={pageView} onPageView={setPageView} pageCount={pageCount}
         />
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
           {dataOpen && (
-            <DataPanel fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)} />
+            <DataPanel fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
+              layerCount={(inLayoutEdit ? instItems : items).length}
+              layers={<LayersPanel items={inLayoutEdit ? instItems : items} selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems} flat={!!instanceBanner}
+                onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
+                onUpdate={inLayoutEdit && instRecord ? (id, patch) => setInstanceItem(instRecord[ID], id, toItemPatch(patch)) : updateItem}
+                onUpdateMany={updateMany} onReorder={reorderLayer} />} />
           )}
 
           <div className="editor-content">
@@ -878,14 +920,14 @@ function App() {
                 onView={patchView}
                 widthIn={widthOf(workspace)}
                 heightIn={heightOf(workspace)}
-                showRulers={showRulers}
-                guides={guides[workspace]}
+                showRulers={showRulers && !stack}
+                guides={stack ? [] : guides[workspace]}
                 onGuides={(update) => setGuides((g) => ({ ...g, [workspace]: update(g[workspace]) }))}
                 onRulerDoubleClick={() => { setSelectedIds([]); setInspectorOpen(true); }}
                 onBackgroundClick={() => { setSelectedIds([]); setInstanceSel(null); }}
                 marqueeMode={multiMode && workspace === "template"}
                 onMarquee={workspace === "template" ? onMarquee : undefined}
-                paperClassName={preview ? "preview" : ""}
+                paperClassName={`${preview ? "preview" : ""}${stack ? " stack" : ""}`}
               >
                 {workspace === "template" ? (
                   <TemplateStage
@@ -894,6 +936,31 @@ function App() {
                     onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup} onEditText={startInlineEdit}
                   />
                 ) : (
+                  stack ? (
+                    <div className="page-stack" style={{ width: stackW * PX_PER_IN, height: stackH * PX_PER_IN }}>
+                      {Array.from({ length: pageCount }, (_, K) => {
+                        const pos = pagePos(K);
+                        const near = pageCount <= 10 || Math.abs(K - visiblePage) <= (pageView === "grid" ? stackCols * 2 : 2);
+                        return (
+                          <div key={K} className="stack-sheet" style={{ left: pos.x * PX_PER_IN, top: pos.y * PX_PER_IN }}>
+                            {near ? (
+                              <LayoutStage
+                      sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
+                      slotRecord={(slot) => (sheet.repeatMode === "same" ? K : K * slots + slot)}
+                      pageNumber={K + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
+                      offset={printer} edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
+                      onSelect={(sel) => { setInstanceSel(sel); setEditingText(null); if (sel) setInspectorOpen(true); }}
+                      onStartEdit={(sel) => { const item = instanceFor(activeRecords[indexOfRecord(sel.recordId)], indexOfRecord(sel.recordId), 0).items.find((i) => i.id === sel.itemId); if (item?.type === "text") { setInstanceSel(sel); setEditingText(sel); } else if (item?.type === "image") { setInstanceSel(sel); setLibraryDialog({ kind: "pick", itemId: sel.itemId, target: "asset" }); } }}
+                      onCommitText={commitInstanceText} onCancelEdit={() => setEditingText(null)}
+                      onDropFiles={dropPictureOnSlot} onToggleOff={toggleInstanceOff} onResetInstance={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
+                    />
+                            ) : <div className="layout-page placeholder" style={{ width: sheet.pageWidth * PX_PER_IN, height: sheet.pageHeight * PX_PER_IN }}>Sheet {K + 1}</div>}
+                            <span className="sheet-label">Sheet {K + 1}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
                   <LayoutStage
                     sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
                     slotRecord={(slot) => (sheet.repeatMode === "same" ? recordIndex : currentPage * slots + slot)}
@@ -904,6 +971,7 @@ function App() {
                     onCommitText={commitInstanceText} onCancelEdit={() => setEditingText(null)}
                     onDropFiles={dropPictureOnSlot} onToggleOff={toggleInstanceOff} onResetInstance={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
                   />
+                  )
                 )}
               </Viewport>
 
@@ -915,7 +983,7 @@ function App() {
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
-              {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields drawer (your data columns)" : "Show the Fields drawer (your data columns)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
+              {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields and Layers drawer" : "Show the Fields and Layers drawer (your data columns, and every object in the design)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
                 <Braces size={15} /><span>Fields</span><ChevronRight size={13} className="toggle-arrow" />
               </button>}
               {!inspectorOpen && <button className="drawer-toggle right" title={inspectorOpen ? "Hide the Properties drawer" : "Show the Properties drawer (settings, layers)"} aria-label={inspectorOpen ? "Hide properties" : "Show properties"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>
@@ -927,13 +995,13 @@ function App() {
 
             <RecordsDrawer
               open={recordsOpen} records={activeRecords} fields={fields} current={recordIndex} excluded={records.length - activeRecords.length}
-              onPick={(index) => { setRecordIndex(index); if (!window.matchMedia(WIDE_QUERY).matches) setRecordsOpen(false); }} onClose={() => setRecordsOpen(false)}
+              onPick={(index) => { setRecordIndex(index); if (stack) patchView({ pan: panForPage(sheet.repeatMode === "same" ? index : Math.floor(index / slots), view.zoom) }); if (!window.matchMedia(WIDE_QUERY).matches) setRecordsOpen(false); }} onClose={() => setRecordsOpen(false)}
               onCellPointerDown={startFieldDrag} justDragged={() => justDragged.current} dragging={!!fieldDrag}
               pageOf={workspace === "layout" ? (index) => (sheet.repeatMode === "same" ? index : Math.floor(index / slots)) : undefined} currentPage={currentPage}
             />
             <RecordBar
               label={pagedNav ? "Sheet" : "Record"}
-              position={pagedNav ? currentPage + 1 : recordIndex + 1}
+              position={pagedNav ? (stack ? visiblePage : currentPage) + 1 : recordIndex + 1}
               total={pagedNav ? pageCount : activeRecords.length}
               preview={fields.map((f) => (currentRecord[f] ?? "").trim()).filter(Boolean).join(" · ")}
               onStep={stepRecord}

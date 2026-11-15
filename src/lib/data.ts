@@ -13,6 +13,20 @@ export const starterRecords: RecordRow[] = [
   { name: "Fig", species: "African grey", band: "AG-0084", location: "Sunroom · Perch 02", diet: "Pellets, vegetables", hatch_date: "2016-02-11" },
   { name: "Basil", species: "Indian ringneck", band: "IR-1742", location: "Garden Room · Cage 05", diet: "Pellets, fruit, greens", hatch_date: "2020-07-07" },
   { name: "Clover", species: "Lovebird", band: "LB-4421", location: "Nursery · Cage 02", diet: "Small pellets, seed, greens", hatch_date: "2023-03-14" },
+  { name: "Sage", species: "Quaker parrot", band: "QP-2210", location: "Nursery · Cage 04", diet: "Pellets, vegetables, seed", hatch_date: "2022-08-30" },
+  { name: "Rio", species: "Scarlet macaw", band: "SM-0562", location: "Aviary · Flight 02", diet: "Pellets, nuts, fruit", hatch_date: "2015-05-21" },
+  { name: "Pepper", species: "Senegal parrot", band: "SP-1133", location: "Sunroom · Perch 04", diet: "Pellets, greens, sweet potato", hatch_date: "2019-12-09" },
+  { name: "Tango", species: "Sun conure", band: "SC-3076", location: "Garden Room · Cage 01", diet: "Pellets, fruit, seed", hatch_date: "2021-06-03" },
+  { name: "Willow", species: "Eclectus", band: "EC-0791", location: "Aviary · Flight 03", diet: "Pellets, vegetables, fruit", hatch_date: "2017-10-15" },
+  { name: "Biscuit", species: "Budgerigar", band: "BU-5588", location: "Nursery · Cage 06", diet: "Seed, millet, greens", hatch_date: "2023-09-12" },
+  { name: "Olive", species: "Pionus", band: "PI-2204", location: "Garden Room · Cage 07", diet: "Pellets, greens, fruit", hatch_date: "2020-01-28" },
+  { name: "Mango", species: "Caique", band: "CQ-0415", location: "Sunroom · Perch 01", diet: "Pellets, fruit, vegetables", hatch_date: "2019-04-04" },
+  { name: "Ziggy", species: "Rose-breasted cockatoo", band: "RC-0938", location: "Aviary · Flight 04", diet: "Pellets, nuts, vegetables", hatch_date: "2014-03-17" },
+  { name: "Dot", species: "Parrotlet", band: "PL-4067", location: "Nursery · Cage 01", diet: "Small pellets, seed, greens", hatch_date: "2022-12-01" },
+  { name: "Maple", species: "Hahn's macaw", band: "HM-0629", location: "Sunroom · Perch 03", diet: "Pellets, vegetables, nuts", hatch_date: "2018-02-23" },
+  { name: "Kiwi", species: "Green-cheeked conure", band: "GC-1102", location: "Garden Room · Cage 02", diet: "Pellets, greens, fruit", hatch_date: "2021-02-19" },
+  { name: "Echo", species: "Cockatiel", band: "CK-3351", location: "Garden Room · Cage 09", diet: "Pellets, seed, greens", hatch_date: "2022-05-06" },
+  { name: "Luna", species: "Indian ringneck", band: "IR-1788", location: "Garden Room · Cage 06", diet: "Pellets, fruit, greens", hatch_date: "2020-11-30" },
 ];
 
 export const starterItems: DesignItem[] = [
