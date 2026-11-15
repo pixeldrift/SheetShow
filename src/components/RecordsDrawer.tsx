@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, GripVertical } from "lucide-react";
 import type { RecordRow } from "../types";
 import { prettyField } from "../lib/data";
+import { SortArrow, useColumnHeaders, type SortState } from "./columnDrag";
 
 type Props = {
   open: boolean;
@@ -18,13 +19,17 @@ type Props = {
   dragging: boolean;
   /** Page view: which sheet each record prints on, so picking a record turns to its sheet and the current sheet's records are marked. */
   pageOf?: (index: number) => number;
+  sort: SortState;
+  onSort: (column: string, dir: 1 | -1) => void;
+  onReorderColumn: (column: string, target: string, after: boolean) => void;
   currentPage?: number;
 };
 
 const ROW = 34;
 
 /** A slide-up list of the records being previewed: scroll, tap a row to preview it, drag a cell onto the template. */
-export function RecordsDrawer({ open, records, fields, current, excluded, onPick, onClose, onCellPointerDown, justDragged, dragging, pageOf, currentPage }: Props) {
+export function RecordsDrawer({ open, records, fields, current, excluded, onPick, onClose, onCellPointerDown, justDragged, dragging, pageOf, currentPage, sort, onSort, onReorderColumn }: Props) {
+  const { headerProps } = useColumnHeaders((column) => onSort(column, sort?.column === column && sort.dir === 1 ? -1 : 1), onReorderColumn);
   const scroller = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
   const [height, setHeight] = useState(240);
@@ -51,7 +56,7 @@ export function RecordsDrawer({ open, records, fields, current, excluded, onPick
       </div>
       <div className="drawer-scroll" ref={scroller} onScroll={(e) => setTop(e.currentTarget.scrollTop)} data-scroll>
         <table className="drawer-table">
-          <thead><tr><th className="num">#</th>{fields.map((f) => <th key={f}>{prettyField(f)}</th>)}</tr></thead>
+          <thead><tr><th className="num">#</th>{fields.map((f) => <th key={f} {...headerProps(f)} title="Click to sort · click again to reverse · drag to move the column">{prettyField(f)}<SortArrow sort={sort} column={f} /></th>)}</tr></thead>
           <tbody>
             {start > 0 && <tr aria-hidden style={{ height: start * ROW }}><td colSpan={fields.length + 1} /></tr>}
             {records.slice(start, end).map((record, i) => {

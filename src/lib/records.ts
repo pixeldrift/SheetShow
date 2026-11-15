@@ -73,3 +73,17 @@ export function pasteGrid(rows: RecordRow[], columns: string[], startId: string,
 
 export const toCsv = (rows: RecordRow[], columns: string[]) =>
   Papa.unparse({ fields: columns, data: rows.map((row) => columns.map((column) => row[column] ?? "")) });
+
+/** Moves `column` to sit before (or after) `target`. Every row is rebuilt so the new order is what the columns are everywhere. */
+export function reorderColumns(rows: RecordRow[], column: string, target: string, after: boolean): RecordRow[] {
+  const order = columnsOf(rows).filter((c) => c !== column);
+  const at = order.indexOf(target);
+  if (at < 0 || column === target) return rows;
+  order.splice(after ? at + 1 : at, 0, column);
+  return rows.map((row) => {
+    const next: RecordRow = {};
+    for (const key of Object.keys(row)) if (!order.includes(key)) next[key] = row[key]; // internal keys (id, included) first
+    for (const key of order) next[key] = row[key] ?? "";
+    return next;
+  });
+}

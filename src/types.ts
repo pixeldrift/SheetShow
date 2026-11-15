@@ -16,6 +16,10 @@ export type DesignItem = {
   weight?: number;
   italic?: boolean;
   underline?: boolean;
+  /** Tracking: extra space between letters, in thousandths of an em (negative tightens). */
+  letterSpacing?: number;
+  /** Pair kerning (the font's built-in adjustments between certain letters). On unless set to false. */
+  kerning?: boolean;
   lineHeight?: number;
   /** Wrap text to the box width (default true). */
   wrap?: boolean;

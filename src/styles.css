@@ -897,3 +897,15 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .sheet-label{position:absolute;left:0;top:-22px;font-size:12px;font-weight:700;letter-spacing:.6px;color:#9ba198;text-transform:uppercase;pointer-events:none}
 .view-modes{margin-left:8px;flex:none}
 .view-modes button{min-width:30px;padding:0 6px;display:grid;place-items:center}
+.layer-linked{margin-left:5px;color:#7d9a86;vertical-align:-1px;flex:none}
+
+/* Sortable, movable column headers */
+th.sortable{cursor:pointer;touch-action:pan-y}
+th.sortable:hover{background:#f6f1ea}
+th.sortable .sort-arrow{margin-left:5px;font-size:9px;color:var(--accent)}
+th.col-dragging{opacity:.45}
+th.drop-before::before,th.drop-after::after{content:"";position:absolute;top:0;bottom:0;width:3px;background:var(--accent);z-index:3}
+th.drop-before::before{left:-1px}th.drop-after::after{right:-1px}
+
+/* Clipped, not just hidden: a browser can't scroll these to reveal a focused or clicked element, which would shove the canvas out of place. */
+.editor-content,.viewport,.canvas-frame,.app-shell{overflow:hidden;overflow:clip}

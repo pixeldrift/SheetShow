@@ -5,7 +5,7 @@ import { cornerRadii, isUniform, paddingsOf, roundedRectPath, type Radii } from 
 import { fieldDisplayName } from "../lib/data";
 import { PX_PER_IN, valueFor } from "../lib/data";
 import { fontStack } from "../lib/fonts";
-import { layoutText, type TextLayout } from "../lib/text";
+import { layoutText, spacingPx, type TextLayout } from "../lib/text";
 
 type Props = {
   item: DesignItem;
@@ -19,6 +19,8 @@ type Props = {
   interactive?: boolean;
   /** Editor only: show linked text as {field} instead of the record's value, to see at a glance what is variable. */
   raw?: boolean;
+  /** Editor only: mark text that is linked to the data with a small database icon. */
+  badge?: boolean;
   /** This item has hand edits on this record's copy. */
   overridden?: boolean;
   /** Set for the editable canvas; omitted for thumbnails and print output. */
@@ -32,13 +34,19 @@ type Props = {
 /** What a linked text shows in "field names" view: {name}. Static text (including your own {merge} fields) stays as typed. */
 const rawText = (item: DesignItem) => (item.field ? `{{${item.field.startsWith("__") ? fieldDisplayName(item.field) : item.field}}}` : item.text ?? "");
 
+/** Text that gets its words from the data: a linked field, or your own wording with {{fields}} in it. */
+export const isLinked = (item: DesignItem) => item.type === "text" && (!!item.field || /\{\{/.test(item.text ?? ""));
+
 function layoutItem(source: DesignItem, record: RecordRow, meta: RecordMeta, raw = false) {
   const w = source.w * PX_PER_IN;
   const boxH = source.h * PX_PER_IN;
   if (source.type !== "text") return { item: source, w, boxH, h: boxH, fontSize: 0, lines: [] as string[], issue: null as TextLayout["issue"] };
-  const layout = layoutText(source, raw ? rawText(source) : valueFor(source, record, meta), w, boxH);
+  // The {{field names}} view is longer than most values (a two-digit page number is {{Page number}}): show it on one line,
+  // clipped to the box, so a narrow box stays narrow and tidy.
+  const effective: DesignItem = raw && isLinked(source) ? { ...source, wrap: false, autoFit: "off", overflow: "clip" } : source;
+  const layout = layoutText(effective, raw ? rawText(source) : valueFor(source, record, meta), w, boxH);
   // Without auto-fit or truncation, wrapped text can run past the box, so the frame grows to cover it.
-  const expands = (source.autoFit ?? "off") === "off" && (source.overflow ?? "spill") === "spill";
+  const expands = (effective.autoFit ?? "off") === "off" && (effective.overflow ?? "spill") === "spill";
   const h = expands ? Math.max(boxH, layout.needH) : boxH;
   return { item: layout.item, w, boxH, h, fontSize: layout.fontPx, lines: layout.lines, issue: layout.issue };
 }
@@ -71,7 +79,7 @@ function ImageLayer({ urls, w, h, fit, editor, label }: { urls: string[]; w: num
 }
 
 /** One design object as SVG, positioned in inches. Shared by the editor, page layout and print output. */
-export function ItemShape({ item: source, record, meta, outline, zoom = 1, interactive, overridden, raw, onPointerDown }: Props) {
+export function ItemShape({ item: source, record, meta, outline, zoom = 1, interactive, overridden, raw, badge, onPointerDown }: Props) {
   const images = useImages();
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const { item, w, boxH, h, fontSize, lines } = layoutItem(source, record, meta, raw);
@@ -139,13 +147,23 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
             {(item.fill || hasStroke) && outlineShape(strokePx / 2, { fill: item.fill ?? "none", stroke: hasStroke ? item.stroke : "none", strokeWidth: strokePx })}
             {/* Invisible hit area so thin text is easy to grab with a finger. */}
             {editor && <rect width={w} height={h} fill="transparent" />}
-            <g clipPath={item.overflow === "clip" ? `url(#${uid}t)` : undefined}><text x={textX} y={padT + fontSize * 1.15} fontFamily={fontStack(item.fontFamily)} fontStyle={item.italic ? "italic" : "normal"} textDecoration={item.underline ? "underline" : undefined} fontSize={fontSize} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={anchor}
+            <g clipPath={item.overflow === "clip" ? `url(#${uid}t)` : undefined}><text x={textX} y={padT + fontSize * 1.15} fontFamily={fontStack(item.fontFamily)} fontStyle={item.italic ? "italic" : "normal"} letterSpacing={item.letterSpacing ? spacingPx(item) : undefined} style={item.kerning === false ? { fontKerning: "none" } : undefined} textDecoration={item.underline ? "underline" : undefined} fontSize={fontSize} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={anchor}
               {...(item.textStroke ? { stroke: item.textStroke.color, strokeWidth: item.textStroke.width * 2 * PT, paintOrder: "stroke", strokeLinejoin: "round" as const } : {})}>
               {lines.map((line, i) => <tspan key={i} x={textX} dy={i === 0 ? 0 : lineStep}>{line || "\u00a0"}</tspan>)}
             </text></g>
           </>
         )}
       </g>
+      {badge && isLinked(source) && (() => {
+        const s = 14 / zoom;
+        return (
+          <g transform={`translate(${-s * 0.5} ${-s * 0.5}) scale(${s / 24})`} pointerEvents="none">
+            <title>Linked to your data</title>
+            <rect width="24" height="24" rx="6" fill="#eef3ec" stroke="#8fa896" strokeWidth="1.6" />
+            <g transform="translate(4.5 4.5) scale(.625)" fill="none" stroke="#4f6b58" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5v14a9 3 0 0 0 18 0V5" /><path d="M3 12a9 3 0 0 0 18 0" /></g>
+          </g>
+        );
+      })()}
       {/* Outline sits exactly on the frame edge, so the resize handles (centred on the same edge) attach to it. */}
       {editor && !outline && <rect className="hover-outline" width={w} height={h} fill="none" stroke={ACCENT} strokeWidth={1 / zoom} pointerEvents="none" />}
       {source._ruleHidden && editor && <rect width={w} height={h} fill="none" stroke="#8f968d" strokeWidth={1 / zoom} strokeDasharray={`${3 / zoom} ${3 / zoom}`} pointerEvents="none" />}

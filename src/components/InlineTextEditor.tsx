@@ -3,6 +3,7 @@ import type { DesignItem } from "../types";
 import { PX_PER_IN } from "../lib/data";
 import { fontStack } from "../lib/fonts";
 import { paddingsOf } from "../lib/shape";
+import { spacingPx } from "../lib/text";
 
 type Props = {
   item: DesignItem;
@@ -59,10 +60,10 @@ export function InlineTextEditor({ item, svgRef, zoom, draft, onChange, onCommit
       }}
       onPointerDown={(e) => e.stopPropagation()}
       style={{
-        position: "fixed", left: rect.left + item.x * scale, top: rect.top + item.y * scale, width: item.w * scale, minHeight: item.h * scale,
+        position: "fixed", left: rect.left + item.x * scale, top: rect.top + item.y * scale, width: Math.max(item.w * scale, 170), minHeight: item.h * scale,
         padding: `${pt}px ${pr}px ${pb}px ${pl}px`,
         fontFamily: fontStack(item.fontFamily), fontSize: ((item.fontSize ?? 12) * 96 / 72) * zoom, fontWeight: item.weight ?? 500, fontStyle: item.italic ? "italic" : "normal",
-        textDecoration: item.underline ? "underline" : undefined, lineHeight: item.lineHeight ?? 1.2, color: item.color ?? "#34443d", textAlign: item.align ?? "left",
+        textDecoration: item.underline ? "underline" : undefined, letterSpacing: item.letterSpacing ? `${spacingPx(item) * zoom}px` : undefined, fontKerning: item.kerning === false ? "none" : undefined, lineHeight: item.lineHeight ?? 1.2, color: item.color ?? "#34443d", textAlign: item.align ?? "left",
         transform: item.rotation ? `rotate(${item.rotation}deg)` : undefined, transformOrigin: "center",
         whiteSpace: item.wrap === false ? "pre" : "pre-wrap",
       }}

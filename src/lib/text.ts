@@ -7,6 +7,13 @@ let context: CanvasRenderingContext2D | null = null;
 const measure = () => (context ??= document.createElement("canvas").getContext("2d")!);
 
 export const fontSizePx = (item: DesignItem) => (item.fontSize ?? 12) * PX_PER_IN / 72;
+/** Tracking in px for this item. */
+export const spacingPx = (item: DesignItem) => ((item.letterSpacing ?? 0) / 1000) * fontSizePx(item);
+/** Width (px) of a run of text as drawn: the measured glyphs plus the tracking between letters. */
+const widthOf = (ctx: CanvasRenderingContext2D, text: string, item: DesignItem) => {
+  (ctx as CanvasRenderingContext2D & { fontKerning?: string }).fontKerning = item.kerning === false ? "none" : "auto";
+  return ctx.measureText(text).width + text.length * spacingPx(item);
+};
 export const cssFont = (item: DesignItem) => `${item.italic ? "italic " : ""}${item.weight ?? 500} ${fontSizePx(item)}px ${fontStack(item.fontFamily)}`;
 
 /** Splits text into lines: explicit line breaks always, plus greedy word wrapping to maxWidth (px) when enabled. */
@@ -20,7 +27,7 @@ export function layoutLines(text: string, item: DesignItem, maxWidth: number): s
     let line = "";
     for (const word of paragraph.split(/(\s+)/)) {
       const candidate = line + word;
-      if (line && ctx.measureText(candidate.trimEnd()).width > maxWidth) { lines.push(line.trimEnd()); line = word.trimStart(); }
+      if (line && widthOf(ctx, candidate.trimEnd(), item) > maxWidth) { lines.push(line.trimEnd()); line = word.trimStart(); }
       else line = candidate;
     }
     lines.push(line.trimEnd());
@@ -31,7 +38,7 @@ export function layoutLines(text: string, item: DesignItem, maxWidth: number): s
 const widest = (lines: string[], item: DesignItem) => {
   const ctx = measure();
   ctx.font = cssFont(item);
-  return Math.max(0, ...lines.map((line) => ctx.measureText(line).width));
+  return Math.max(0, ...lines.map((line) => widthOf(ctx, line, item)));
 };
 
 /** Height (px) the given lines need, measured the way CSS does: lines × font size × line height. */
@@ -62,10 +69,10 @@ function truncate(lines: string[], item: DesignItem, w: number, h: number, ignor
   const ctx = measure();
   ctx.font = cssFont(item);
   const ellipsize = (line: string) => {
-    if (ctx.measureText(line).width <= w + TOL) return line;
+    if (widthOf(ctx, line, item) <= w + TOL) return line;
     let text = line.trimEnd();
     const dots = mark ? "…" : "";
-    while (text.length > 1 && ctx.measureText(text + dots).width > w) text = text.slice(0, -1).trimEnd();
+    while (text.length > 1 && widthOf(ctx, text + dots, item) > w) text = text.slice(0, -1).trimEnd();
     return text + dots;
   };
   const out = lines.slice(0, keep).map((line, i) => (mark && i === keep - 1 && keep < lines.length ? ellipsize(line + " …") : ellipsize(line)));
@@ -87,7 +94,7 @@ export function layoutText(source: DesignItem, text: string, outerW: number, out
   if (mode !== "off") {
     const min = Math.max(2, source.minFontSize ?? 4);
     const max = Math.max(min, mode === "fit" ? 300 : (source.fontSize ?? 12));
-    const key = [text, mode, min, max, item.fontFamily, item.weight, item.italic, lh, Math.round(w), Math.round(h)].join("|");
+    const key = [text, mode, min, max, item.fontFamily, item.weight, item.italic, item.letterSpacing, item.kerning, lh, Math.round(w), Math.round(h)].join("|");
     let found = sizeCache.get(key);
     if (!found) {
       const fits = (pt: number) => {

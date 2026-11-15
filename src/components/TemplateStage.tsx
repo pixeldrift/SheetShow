@@ -284,7 +284,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
         </>
       )}
       {items.filter((item) => item.visible !== false && !(preview && item.reference)).map((item) => (
-        <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} raw={rawFields} onPointerDown={(event) => startMove(event, item)} />
+        <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} raw={rawFields} badge={!preview} onPointerDown={(event) => startMove(event, item)} />
       ))}
       {dropTargetId && (() => {
         const target = items.find((i) => i.id === dropTargetId);

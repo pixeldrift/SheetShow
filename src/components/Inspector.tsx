@@ -213,6 +213,14 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
               </Pair>
               <Pair label="Line height"><NumberField value={item.lineHeight ?? 1.2} min={0.6} max={4} step={0.05} places={2} onChange={(n) => patch({ lineHeight: n })} /></Pair>
             </div>
+            <div className="two-col spaced">
+              <Pair label="Tracking"><NumberField value={item.letterSpacing ?? 0} min={-200} max={1000} step={5} places={0} unit="‰" onChange={(v) => patch({ letterSpacing: v || undefined })} /></Pair>
+              <Pair label="Pair kerning">
+                <select className="select" aria-label="Pair kerning" value={item.kerning === false ? "off" : "on"} onChange={(e) => patch({ kerning: e.target.value === "off" ? false : undefined })}>
+                  <option value="on">Auto</option><option value="off">Off</option>
+                </select>
+              </Pair>
+            </div>
             <div className="two-col stack-narrow spaced">
               <Pair label="Autoscale">
                 <select className="select" value={item.autoFit ?? "off"} onChange={(e) => patch({ autoFit: e.target.value as DesignItem["autoFit"] })}>

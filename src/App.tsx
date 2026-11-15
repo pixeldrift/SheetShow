@@ -37,6 +37,7 @@ import { AlignBar } from "./components/AlignBar";
 import { ArrangeBar } from "./components/ArrangeBar";
 import { InlineTextEditor } from "./components/InlineTextEditor";
 import { LayersPanel } from "./components/LayersPanel";
+import type { SortState } from "./components/columnDrag";
 import type { PaletteState } from "./components/Palette";
 import { DataPanel } from "./components/DataPanel";
 import { Inspector } from "./components/Inspector";
@@ -47,7 +48,7 @@ import { TemplateStage } from "./components/TemplateStage";
 import { LayoutStage, type InstanceInfo, type InstanceSelection } from "./components/LayoutStage";
 import { itemFrame } from "./components/ItemShape";
 import { DataTable } from "./components/DataTable";
-import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
+import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, reorderColumns, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
 import { PrintSheets } from "./components/PrintSheets";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -91,6 +92,7 @@ function App() {
   const instanceOverrides = D.overrides;
   const setVariants = part("variants", "variants"), setRules = part("rules", "rules"), setTemplate = part("template", "template"), setSheet = part("sheet", "sheet");
   const recordHistory = { value: records, set: part("records"), ...shared };
+  const [dataSort, setDataSort] = useState<SortState>(null);
   const editRecords = (update: (rows: RecordRow[]) => RecordRow[], coalesce?: string) => recordHistory.set(update, { coalesce });
   const itemsDoc = { value: D.items, set: part("items"), ...shared };
   const overrideDoc = { value: instanceOverrides, set: part("overrides"), ...shared };
@@ -709,7 +711,8 @@ function App() {
       const used = items.some((item) => item.field === column);
       if (window.confirm(`Delete the “${column}” column?${used ? " Text linked to it will show “—”." : ""}`)) editRecords((rows) => removeColumn(rows, column));
     },
-    onSort: (column: string, direction: 1 | -1) => editRecords((rows) => sortRows(rows, column, direction)),
+    onSort: (column: string, direction: 1 | -1) => { editRecords((rows) => sortRows(rows, column, direction)); setDataSort({ column, dir: direction }); },
+    onReorderColumn: (column: string, target: string, after: boolean) => editRecords((rows) => reorderColumns(rows, column, target, after)),
     onPaste: (id: string, column: string, grid: string[][]) => editRecords((rows) => pasteGrid(rows, fields, id, column, grid)),
     onExport: () => {
       const link = document.createElement("a");
@@ -885,7 +888,7 @@ function App() {
           <DataTable
             rows={records} columns={fields} fileName={fileName}
             canUndo={recordHistory.canUndo} canRedo={recordHistory.canRedo} onUndo={recordHistory.undo} onRedo={recordHistory.redo}
-            onImport={importData} {...dataActions}
+            onImport={importData} sort={dataSort} {...dataActions}
           />
         </main>
       )}
@@ -998,6 +1001,7 @@ function App() {
               onPick={(index) => { setRecordIndex(index); if (stack) patchView({ pan: panForPage(sheet.repeatMode === "same" ? index : Math.floor(index / slots), view.zoom) }); if (!window.matchMedia(WIDE_QUERY).matches) setRecordsOpen(false); }} onClose={() => setRecordsOpen(false)}
               onCellPointerDown={startFieldDrag} justDragged={() => justDragged.current} dragging={!!fieldDrag}
               pageOf={workspace === "layout" ? (index) => (sheet.repeatMode === "same" ? index : Math.floor(index / slots)) : undefined} currentPage={currentPage}
+              sort={dataSort} onSort={dataActions.onSort} onReorderColumn={dataActions.onReorderColumn}
             />
             <RecordBar
               label={pagedNav ? "Sheet" : "Record"}

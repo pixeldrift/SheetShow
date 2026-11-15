@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ChevronDown, ChevronsUpDown, Eye, EyeOff, FileImage, Filter, Group, Hash, Lock, Square, Type, Unlock } from "lucide-react";
+import { ChevronDown, ChevronsUpDown, Database, Eye, EyeOff, FileImage, Filter, Group, Hash, Lock, Square, Type, Unlock } from "lucide-react";
 import type { DesignItem } from "../types";
 import { fieldDisplayName } from "../lib/data";
+import { isLinked } from "./ItemShape";
 
 export const kindIcon = (item: DesignItem, size = 14) =>
   item.type === "text" ? (item.field?.startsWith("__") ? <Hash size={size} /> : <Type size={size} />) : item.type === "image" ? <FileImage size={size} /> : <Square size={size} />;
@@ -53,7 +54,7 @@ export function LayersPanel({ items, selectedItems, onSelect, onUpdate, onUpdate
         const itemRow = (item: DesignItem, indented: boolean) => (
           <div key={item.id} data-layer-id={item.id} className={`${selectedItems.some((x) => x.id === item.id) ? "layer-row selected" : "layer-row"}${indented ? " nested" : ""}${dropClass(item.id)}`} onClick={(e) => pick([item.id], e)}>
             <span className="layer-kind">{kindIcon(item, 13)}</span>
-            <span className="layer-label">{layerLabel(item)}{item.reference ? <em className="ref-tag">reference</em> : null}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
+            <span className="layer-label">{layerLabel(item)}{isLinked(item) ? <Database size={11} className="layer-linked" aria-label="Linked to your data" /> : null}{item.reference ? <em className="ref-tag">reference</em> : null}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
             <button className="mini-button" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { visible: item.visible === false }); }}>{item.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}</button>
             <button className="mini-button" title={item.locked ? "Unlock" : "Lock"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { locked: !item.locked }); }}>{item.locked ? <Lock size={13} /> : <Unlock size={13} />}</button>
             <span className="layer-grip" title="Drag to change the stacking order" aria-label="Drag to reorder" role="button" onClick={(e) => e.stopPropagation()} onPointerDown={startDrag(item.id, false)}><ChevronsUpDown size={14} /></span>
