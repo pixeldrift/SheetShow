@@ -290,7 +290,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
         const target = items.find((i) => i.id === dropTargetId);
         if (!target) return null;
         const { w, h } = itemFrame(target, record, meta, rawFields);
-        const b = 14 / zoom; // link badge on the top-right corner
+        const b = 22 / zoom; // link badge on the top-right corner
         return (
           <g transform={`translate(${target.x * PX_PER_IN} ${target.y * PX_PER_IN})${target.rotation ? ` rotate(${target.rotation} ${w / 2} ${h / 2})` : ""}`} pointerEvents="none">
             <rect width={w} height={h} fill="#d77d4e22" stroke="#d77d4e" strokeWidth={2.5 / zoom} rx={3 / zoom} />

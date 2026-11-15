@@ -42,16 +42,19 @@ Each row has a checkbox. Unticked records are skipped everywhere: the preview, t
 
 The bar at the bottom of the canvas shows the current record's values on one line, so you can see that the template is really linked to your data. Tap the bar to open the full list of records, then tap a row to preview it. You can **drag a cell** from that list onto the template to add it as a linked text.
 
-The **field names** button at the right of the bar swaps every linked text for its field name, such as `{name}`, so you can see at a glance what is variable and what is typed text.
+The **field names** button at the right of the bar swaps every linked text for its field name, such as `{{name}}`, so you can see at a glance what is variable and what is typed text.
 
 ## Designing a template
 
 - **Add things** with the toolbar: **Text**, **Rectangle**, **Image** and **Reference image**. Select a rectangle and use **This object is** in Properties to turn it into a text box or a photo placeholder, ready to link to your data. On a narrow screen the add buttons collapse into one **Add** menu.
-- **Link text to data**: select a text object and tap a field in the **Fields** drawer. Or type your own wording with merge fields, such as `{city}, {state} {zip}` or `${price}`.
+- **Link text to data**: drag a field from the **Fields** drawer. Over an existing text object it highlights with a link badge, and dropping links it; over empty canvas it adds a new linked text. Or select a text object and tap a field. Or type your own wording with fields in double braces, such as `{{city}}, {{state}} {{zip}}` or `${{price}}`. **Double-tap a text object** to edit it right on the canvas; linked text shows its `{{field}}` tokens while you edit, and tapping outside saves.
+- **Optional pieces**: a missing value shouldn’t leave stray punctuation. `{{#title}}, {{title}}{{/title}}` shows the comma and title only when there is one, and `{{^title}}No title{{/title}}` shows only when there isn’t. Extra spaces tidy themselves, so `{{first}} {{middle}} {{last}}` has no gap when the middle name is blank.
 - **Properties**: the **Properties** drawer holds the settings for the selected object. Number fields have small arrows, and you can **drag a field's label** (or its unit) left and right to scrub the value. Hold Shift to go ten times faster, or Alt for fine steps.
 - **Reference objects**: switch on **Reference only** for any object (or add a **Reference image**) to use it as a guide: a scan to trace, a mock-up to match. Reference objects are faded to 50% (change it if you like), never print, and a reference image is added locked at the bottom.
 - **Move, resize and rotate**: drag an object, use its square handles, or the round handle above it to rotate.
 - **Smart snapping** is on by default (the magnet button). As you drag or resize, an object’s edges and centre snap to the edges and centres of other objects, the page and your guides, and a pink line shows what lines up. **Equal spacing** also snaps an object midway between two others, or repeats the gap between two objects beside it, with the gaps marked. Hold <kbd>Ctrl/⌘</kbd> to move freely. The magnet turns all snapping on or off; the small arrow beside it lets you pick what snaps: other objects, equal spacing, the page, guides, and the grid (while it is showing).
+- **Arrange** the stacking order with the arrow buttons (send to back, back one, forward one, bring to front), or Ctrl/⌘ + [ and ] (add Shift to go all the way). Layers can also be dragged by their handle.
+- **Move the tool bars**: the edit, align and arrange tools float on the canvas. Drag one by its handle to put it anywhere, or drop it on the toolbar at the top (or press its pin) to dock it; drag the divider before a docked group down to float it again.
 - **Align** with the bar at the bottom of the canvas. One object aligns to the template; several align to each other.
 - **Group** objects with Ctrl/⌘+G so they move, turn and resize together. Alt-click or double-click picks a single member.
 - **Layers** (in Properties) lists everything in stacking order, with show, hide, lock and reorder.
@@ -69,7 +72,7 @@ Background, border and border size sit on one line. **Padding** and **Rounding**
 
 Open **Add image** to drop in pictures, a folder or a .zip. They are kept in this browser's image library, and **Download all as ZIP** saves them.
 
-A **data-driven picture** shows a different image for each record. Point it at a column that holds a filename, or build a pattern such as `{band}.jpg`. SheetShow finds the closest matching file, flags anything uncertain for you to review, and prints a warning before printing if any picture is missing. Web addresses work too.
+A **data-driven picture** shows a different image for each record. Point it at a column that holds a filename, or build a pattern such as `{{band}}.jpg`. SheetShow finds the closest matching file, flags anything uncertain for you to review, and prints a warning before printing if any picture is missing. Web addresses work too.
 
 ## Making decisions from your data
 
@@ -82,6 +85,7 @@ A **data-driven picture** shows a different image for each record. Point it at a
 - **Label stock**: pick an Avery sheet in either the Template or the Page layout settings and both are set together. Change either one afterwards if you need something custom.
 - **Sort** the sheets by any field, add **crop marks**, and preview with the toolbar's print preview button.
 - **Printer calibration**: if your printer lands a little off, nudge the whole page in the Page layout settings. Save the setting for that printer, and print the calibration sheet to measure.
+- **One record per sheet**: in Page layout settings choose “One record per sheet” to fill each sheet with copies of a single record, with a sheet for every record, handy for a page of return-address labels per person. The arrows under the canvas turn sheets, and picking a record in the records list jumps to its sheet.
 - **Printing** checks your pictures and text first. Choose **Save as PDF** in the print dialog to make a PDF.
 
 ## Saving your work

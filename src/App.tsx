@@ -178,12 +178,13 @@ function App() {
   const selectedItems = useMemo(() => items.filter((item) => selectedIds.includes(item.id)), [items, selectedIds]);
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
   const slots = sheet.columns * sheet.rows;
-  const pageCount = sheet.repeatMode === "same" ? 1 : Math.max(1, Math.ceil(activeRecords.length / slots));
-  const currentPage = sheet.repeatMode === "same" ? 0 : Math.floor(recordIndex / slots);
+  // "Repeat same record" prints one full sheet per record; "next record" fills each sheet with the following records.
+  const pageCount = sheet.repeatMode === "same" ? Math.max(1, activeRecords.length) : Math.max(1, Math.ceil(activeRecords.length / slots));
+  const currentPage = sheet.repeatMode === "same" ? recordIndex : Math.floor(recordIndex / slots);
   const overflow =
     sheet.marginX + sheet.columns * template.width + (sheet.columns - 1) * sheet.gapX > sheet.pageWidth + 0.005 ||
     sheet.marginY + sheet.rows * template.height + (sheet.rows - 1) * sheet.gapY > sheet.pageHeight + 0.005;
-  const pagedNav = workspace === "layout" && sheet.repeatMode === "next";
+  const pagedNav = workspace === "layout"; // in page view the arrows turn pages
 
   // ── Alternating templates + per-record edits ────────────────────────────
   /** The items one record renders: its template (chosen by the rules) with that record's hand edits applied. */
@@ -194,7 +195,7 @@ function App() {
     // Order: the template, then conditional rules for this record, then this record's hand edits (which win).
     return { variantId: id, items: applyOverride(applyConditions(base, record, metaFor(index)), override), override };
   };
-  const metaFor = (index: number) => ({ recordNumber: index + 1, pageNumber: sheet.repeatMode === "same" ? 1 : Math.floor(index / slots) + 1, recordCount: activeRecords.length, pageCount });
+  const metaFor = (index: number) => ({ recordNumber: index + 1, pageNumber: sheet.repeatMode === "same" ? index + 1 : Math.floor(index / slots) + 1, recordCount: activeRecords.length, pageCount });
   const indexOfRecord = (recordId: string) => activeRecords.findIndex((r) => r[ID] === recordId);
 
   const updateInstance = (recordId: string, change: (current: InstanceOverride) => InstanceOverride | null, coalesce?: string) =>
@@ -729,7 +730,7 @@ function App() {
 
   // ── Records ─────────────────────────────────────────────────────────────
   const stepRecord = (delta: number) => {
-    if (pagedNav) setRecordIndex(clamp(currentPage + delta, 0, pageCount - 1) * slots);
+    if (pagedNav) setRecordIndex(clamp(currentPage + delta, 0, pageCount - 1) * (sheet.repeatMode === "same" ? 1 : slots));
     else setRecordIndex((index) => clamp(index + delta, 0, Math.max(0, activeRecords.length - 1)));
   };
 
@@ -928,6 +929,7 @@ function App() {
               open={recordsOpen} records={activeRecords} fields={fields} current={recordIndex} excluded={records.length - activeRecords.length}
               onPick={(index) => { setRecordIndex(index); if (!window.matchMedia(WIDE_QUERY).matches) setRecordsOpen(false); }} onClose={() => setRecordsOpen(false)}
               onCellPointerDown={startFieldDrag} justDragged={() => justDragged.current} dragging={!!fieldDrag}
+              pageOf={workspace === "layout" ? (index) => (sheet.repeatMode === "same" ? index : Math.floor(index / slots)) : undefined} currentPage={currentPage}
             />
             <RecordBar
               label={pagedNav ? "Sheet" : "Record"}

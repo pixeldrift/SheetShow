@@ -18,7 +18,7 @@ export function PrintSheets({ kind = "sheets", offset, sheet, records, templateW
         <div key={page} className="print-page" style={{ width: `${sheet.pageWidth}in`, height: `${sheet.pageHeight}in` }}>
           <LayoutStage
             offset={offset} sheet={sheet} records={records} templateWidth={templateWidth} templateHeight={templateHeight} instanceFor={instanceFor}
-            slotRecord={(slot) => (sheet.repeatMode === "same" ? recordIndex : page * slots + slot)}
+            slotRecord={(slot) => (sheet.repeatMode === "same" ? page : page * slots + slot)}
             pageNumber={page + 1} pageCount={pageCount} showGrid={false} preview
           />
         </div>

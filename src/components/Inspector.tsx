@@ -426,8 +426,8 @@ function PageSetup({ templateWidth, templateHeight, onPreset, sheet, onSheet, pa
       </Section>
       <Section title="DATA ASSIGNMENT">
         <div className="mode-options">
-          <button className={sheet.repeatMode === "same" ? "mode-option active" : "mode-option"} onClick={() => onSheet({ repeatMode: "same" })}><Copy size={15} /><span><strong>Repeat same record</strong><small>Fill the sheet with one record</small></span></button>
-          <button className={sheet.repeatMode === "next" ? "mode-option active" : "mode-option"} onClick={() => onSheet({ repeatMode: "next" })}><ListFilter size={15} /><span><strong>Next record each time</strong><small>Advance through your data</small></span></button>
+          <button className={sheet.repeatMode === "same" ? "mode-option active" : "mode-option"} onClick={() => onSheet({ repeatMode: "same" })}><Copy size={15} /><span><strong>One record per sheet</strong><small>Fill each sheet with one record, a sheet for every record</small></span></button>
+          <button className={sheet.repeatMode === "next" ? "mode-option active" : "mode-option"} onClick={() => onSheet({ repeatMode: "next" })}><ListFilter size={15} /><span><strong>Next record each time</strong><small>Fill the sheet with consecutive records</small></span></button>
         </div>
       </Section>
       {overflow && <p className="warning"><AlertTriangle size={14} /> This grid doesn’t fit on the page. Reduce the margins, spacing, or the number of rows and columns.</p>}

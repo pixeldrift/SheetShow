@@ -873,3 +873,6 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 /* On-canvas text editing */
 .inline-editor{z-index:40;box-sizing:border-box;resize:none;overflow:hidden;border:0;outline:2px solid var(--accent);outline-offset:0;border-radius:2px;background:rgba(255,255,255,.92);box-shadow:0 4px 18px #27372d33;margin:0;-webkit-user-select:text;user-select:text;font-size:inherit}
 @media(pointer:coarse){.inline-editor{font-size:revert-layer}}
+.drawer-table tr.on-page td{background:#faf5ef}
+.drawer-table tr.current td{background:var(--accent-soft)}
+.sheet-no{display:block;font-size:8px;font-weight:700;color:#b9916f;letter-spacing:.3px}

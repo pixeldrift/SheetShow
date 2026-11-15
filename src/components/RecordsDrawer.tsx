@@ -16,12 +16,15 @@ type Props = {
   /** A drag just ended, so the click that follows it shouldn't also pick the row. */
   justDragged: () => boolean;
   dragging: boolean;
+  /** Page view: which sheet each record prints on, so picking a record turns to its sheet and the current sheet's records are marked. */
+  pageOf?: (index: number) => number;
+  currentPage?: number;
 };
 
 const ROW = 34;
 
 /** A slide-up list of the records being previewed: scroll, tap a row to preview it, drag a cell onto the template. */
-export function RecordsDrawer({ open, records, fields, current, excluded, onPick, onClose, onCellPointerDown, justDragged, dragging }: Props) {
+export function RecordsDrawer({ open, records, fields, current, excluded, onPick, onClose, onCellPointerDown, justDragged, dragging, pageOf, currentPage }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
   const [height, setHeight] = useState(240);
@@ -54,8 +57,8 @@ export function RecordsDrawer({ open, records, fields, current, excluded, onPick
             {records.slice(start, end).map((record, i) => {
               const index = start + i;
               return (
-                <tr key={index} className={index === current ? "current" : ""} style={{ height: ROW }} onClick={() => { if (!justDragged()) onPick(index); }}>
-                  <td className="num">{index + 1}</td>
+                <tr key={index} className={`${index === current ? "current" : ""}${pageOf && pageOf(index) === currentPage ? " on-page" : ""}`} style={{ height: ROW }} onClick={() => { if (!justDragged()) onPick(index); }}>
+                  <td className="num">{index + 1}{pageOf && <small className="sheet-no" title="The sheet this record prints on">s{pageOf(index) + 1}</small>}</td>
                   {fields.map((f) => (
                     <td key={f} className="cell-drag" onPointerDown={(e) => onCellPointerDown(f, e)} title={`Drag onto the template to add ${prettyField(f)}`}>
                       <span>{record[f] ?? ""}</span>{index === current && f === fields[0] && <GripVertical size={11} className="grip" />}
