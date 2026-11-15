@@ -817,3 +817,8 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .left-panel,.right-panel{overflow:hidden;animation:panel-in .22s cubic-bezier(.2,.8,.3,1)}
 .left-panel>*{min-width:var(--left-w)}.right-panel>*{min-width:var(--right-w)}
 @media(prefers-reduced-motion:reduce){.left-panel,.right-panel{animation:none}}
+
+/* iOS Safari zooms the whole page when a focused field's text is under 16px: on touch screens every field is at least that. */
+@media(pointer:coarse){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea,[contenteditable="true"]{font-size:max(16px,1em)!important}
+}
