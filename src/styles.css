@@ -6,7 +6,7 @@
   --line:#e7e7e0; --line-2:#efeee9; --surface:#fff; --canvas:#f3f2ee;
   --accent:#cf7949; --accent-ink:#b96d42; --accent-soft:#f8eee7; --accent-line:#e8c3aa;
   --danger:#b86e5c; --radius:7px;
-  --left-w:232px; --right-w:252px;
+  --left-w:188px; --right-w:252px;
   font-family:'DM Sans',system-ui,sans-serif; color:var(--ink); background:#f4f3ef;
   font-synthesis:none; text-rendering:optimizeLegibility;
 }
@@ -224,8 +224,9 @@ h2,h3,p{margin:0}
 /* ── Narrow screens: drawers float over the canvas ──────────────────────── */
 @media(max-width:850px){
   .panel{position:absolute;top:0;bottom:0;z-index:50;box-shadow:0 4px 24px #1c2b2030}
-  .left-panel{left:0;width:min(82vw,290px)}
-  .right-panel{right:0;width:min(88vw,330px)}
+  :root{--left-w:clamp(168px,50vw,188px);--right-w:clamp(184px,50vw,252px)}
+  .left-panel{left:0;width:var(--left-w)}
+  .right-panel{right:0;width:var(--right-w)}
   .title-input,.save-dot{display:none}
   .topbar{gap:12px;padding:0 12px}
   .topbar-center{gap:8px}
@@ -812,7 +813,6 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .layer-row.drop-below{box-shadow:0 2px 0 0 var(--accent)}
 
 /* Drawers: slide open, and the button that opened one steps aside */
-:root{--left-w:188px}
 @keyframes panel-in{from{width:0}}
 .left-panel,.right-panel{overflow:hidden;animation:panel-in .22s cubic-bezier(.2,.8,.3,1)}
 .left-panel>*{min-width:var(--left-w)}.right-panel>*{min-width:var(--right-w)}
@@ -822,3 +822,13 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 @media(pointer:coarse){
   input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea,[contenteditable="true"]{font-size:max(16px,1em)!important}
 }
+
+.convert-row .with-chevron{display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
+.convert-row .with-chevron .caret{margin-left:auto}
+.convert-row{display:block}
+.convert-row .with-chevron{white-space:nowrap}
+.format-row{flex-wrap:wrap}
+@media(max-width:850px){.stack-narrow{grid-template-columns:1fr}}
+.format-row .pair:has(.align-buttons){flex:0 0 auto}
+.format-row .pair{flex:1 1 84px}
+@media(max-width:850px){.pad-round-row{grid-template-columns:1fr}.field-with-twirl .number-input{min-width:60px}}

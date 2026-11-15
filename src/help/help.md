@@ -51,6 +51,7 @@ The **field names** button at the right of the bar swaps every linked text for i
 - **Properties**: the **Properties** drawer holds the settings for the selected object. Number fields have small arrows, and you can **drag a field's label** (or its unit) left and right to scrub the value. Hold Shift to go ten times faster, or Alt for fine steps.
 - **Reference objects**: switch on **Reference only** for any object (or add a **Reference image**) to use it as a guide: a scan to trace, a mock-up to match. Reference objects are faded to 50% (change it if you like), never print, and a reference image is added locked at the bottom.
 - **Move, resize and rotate**: drag an object, use its square handles, or the round handle above it to rotate.
+- **Smart snapping** is on by default (the magnet button). As you drag or resize, an object’s edges and centre snap to the edges and centres of other objects, the page and your guides, and a pink line shows what lines up. Hold <kbd>Ctrl/⌘</kbd> to move freely. When the grid is showing, objects also snap to the grid.
 - **Align** with the bar at the bottom of the canvas. One object aligns to the template; several align to each other.
 - **Group** objects with Ctrl/⌘+G so they move, turn and resize together. Alt-click or double-click picks a single member.
 - **Layers** (in Properties) lists everything in stacking order, with show, hide, lock and reorder.

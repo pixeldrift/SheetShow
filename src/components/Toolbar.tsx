@@ -56,7 +56,7 @@ export function Toolbar(p: Props) {
         {p.workspace === "template" && toggle(p.multi, "Multi-select (tap items to add, drag to box-select)", p.onMulti, <BoxSelect size={15} />)}
         {toggle(p.showGrid, "Show grid", p.onGrid, <Grid2X2 size={15} />)}
         {toggle(p.showRulers, "Show rulers", p.onRulers, <Ruler size={15} />)}
-        {toggle(p.snap, "Snap to grid and guides", p.onSnap, <Magnet size={15} />)}
+        {toggle(p.snap, "Smart snapping: line up with other objects, the page and guides (hold Ctrl/⌘ to move freely)", p.onSnap, <Magnet size={15} />)}
         {toggle(p.preview, "Print preview", p.onPreview, <FileSearch size={16} />)}
       </div>
       <div className="toolbar-spacer" />

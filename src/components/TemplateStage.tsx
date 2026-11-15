@@ -1,8 +1,9 @@
-import { PointerEvent, RefObject, useRef } from "react";
+import { PointerEvent, RefObject, useRef, useState } from "react";
 import type { DesignItem, Guide, RecordMeta, RecordRow } from "../types";
 import { PX_PER_IN, round } from "../lib/data";
-import { boundsOf, centerOf, rotateAbout, type Box, type Transform } from "../lib/align";
+import { aabb, boundsOf, centerOf, rotateAbout, type Box, type Transform } from "../lib/align";
 import { ItemShape, itemFrame } from "./ItemShape";
+import { smartSnap, type SnapLine } from "../lib/smartSnap";
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
@@ -40,8 +41,8 @@ type Props = {
 };
 
 type Drag =
-  | { kind: "move"; primary: string; startX: number; startY: number; origins: Map<string, { x: number; y: number }>; w: number; h: number }
-  | { kind: "resize"; id: string; handle: Handle; startX: number; startY: number; box: Box; rotation: number; keepAspect: boolean }
+  | { kind: "move"; primary: string; startX: number; startY: number; origins: Map<string, { x: number; y: number }>; w: number; h: number; box: Box; targets: Box[] }
+  | { kind: "resize"; id: string; handle: Handle; startX: number; startY: number; box: Box; rotation: number; keepAspect: boolean; targets: Box[] }
   | { kind: "rotate"; id: string }
   | { kind: "scale-group"; handle: Handle; startX: number; startY: number; box: Box; origins: DesignItem[]; keepAspect: boolean }
   | { kind: "rotate-group"; origins: DesignItem[]; center: { x: number; y: number }; startAngle: number };
@@ -64,16 +65,20 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
   /** A double-click on a grouped object picks just that object, but only once the pointer is released without having moved (otherwise it was a quick click-and-drag of the group). */
   const pendingSingle = useRef<string | null>(null);
   const scale = PX_PER_IN * zoom;
+  /** Smart-snap guide lines shown while dragging. */
+  const [snapLines, setSnapLines] = useState<SnapLine[]>([]);
+  /** An item's box as drawn (text can be taller than its box), including rotation. */
+  const framedBox = (item: DesignItem): Box => aabb(item.type === "text" ? { ...item, h: itemFrame(item, record, meta, rawFields).h / PX_PER_IN } : item);
+  /** Everything a dragged object can snap to: the page, and every other visible, non-reference object. */
+  const snapTargets = (exclude: string[]): Box[] => [
+    { x: 0, y: 0, w: width, h: height },
+    ...items.filter((i) => i.visible !== false && !i.reference && !exclude.includes(i.id)).map(framedBox),
+  ];
+  const guideLines = { x: guides.filter((g) => g.axis === "x").map((g) => g.position), y: guides.filter((g) => g.axis === "y").map((g) => g.position) };
+  const reach = 6 / scale; // snapping pulls from 6 screen pixels away, at any zoom
 
-  const snapAxis = (value: number, size: number, axis: "x" | "y") => {
-    // Snap the item's start, centre or end to a guide, otherwise to the 0.05" grid.
-    const lines = guides.filter((guide) => guide.axis === axis).map((guide) => guide.position);
-    for (const offset of [0, size / 2, size]) {
-      const hit = lines.find((line) => Math.abs(line - (value + offset)) < GUIDE_REACH);
-      if (hit !== undefined) return hit - offset;
-    }
-    return Math.round(value / SNAP_STEP) * SNAP_STEP;
-  };
+  /** Grid snapping, used only while the grid is showing. */
+  const gridSnap = (value: number) => Math.round(value / SNAP_STEP) * SNAP_STEP;
 
   const startMove = (event: PointerEvent<SVGGElement>, item: DesignItem) => {
     if (preview) return;
@@ -96,7 +101,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     const movable = items.filter((candidate) => ids.includes(candidate.id) && !candidate.locked);
     if (!movable.length || item.locked) return;
     event.preventDefault();
-    drag.current = { kind: "move", primary: item.id, startX: event.clientX, startY: event.clientY, w: item.w, h: item.h, origins: new Map(movable.map((m) => [m.id, { x: m.x, y: m.y }])) };
+    drag.current = { kind: "move", primary: item.id, startX: event.clientX, startY: event.clientY, w: item.w, h: item.h, origins: new Map(movable.map((m) => [m.id, { x: m.x, y: m.y }])), box: boundsOf(movable.map((m) => ({ ...m, ...(m.type === "text" ? { h: itemFrame(m, record, meta, rawFields).h / PX_PER_IN } : {}) }))), targets: snapTargets(movable.map((m) => m.id)) };
     (event.currentTarget as SVGGElement).setPointerCapture(event.pointerId);
   };
 
@@ -106,7 +111,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     event.preventDefault();
     const corner = handle.length === 2;
     const frame = itemFrame(item, record, meta, rawFields); // start from what's drawn, which can be taller than item.h for wrapped text
-    drag.current = { kind: "resize", id: item.id, handle, startX: event.clientX, startY: event.clientY, box: { x: item.x, y: item.y, w: item.w, h: frame.h / PX_PER_IN }, rotation: item.rotation ?? 0, keepAspect: corner && (item.type === "image" || event.shiftKey) };
+    drag.current = { kind: "resize", id: item.id, handle, startX: event.clientX, startY: event.clientY, box: { x: item.x, y: item.y, w: item.w, h: frame.h / PX_PER_IN }, rotation: item.rotation ?? 0, keepAspect: corner && (item.type === "image" || event.shiftKey), targets: snapTargets([item.id]) };
     (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
   };
 
@@ -169,7 +174,15 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       if (pendingSingle.current && Math.hypot(event.clientX - d.startX, event.clientY - d.startY) > 4) pendingSingle.current = null;
       const origin = d.origins.get(d.primary) ?? [...d.origins.values()][0];
       let x = origin.x + dx, y = origin.y + dy;
-      if (snap) { x = snapAxis(x, d.w, "x"); y = snapAxis(y, d.h, "y"); }
+      const smart = snap && !event.ctrlKey && !event.metaKey; // hold Ctrl/⌘ to move freely
+      if (smart) {
+        // Snap the whole selection's edges and centre to other objects, the page and guides; the grid only when it is showing.
+        const r = smartSnap({ x: d.box.x + dx, y: d.box.y + dy, w: d.box.w, h: d.box.h }, d.targets, guideLines, reach);
+        x += r.dx; y += r.dy;
+        if (showGrid && r.dx === 0) x = gridSnap(x);
+        if (showGrid && r.dy === 0) y = gridSnap(y);
+        setSnapLines(r.lines);
+      } else if (snapLines.length) setSnapLines([]);
       const shiftX = x - origin.x, shiftY = y - origin.y;
       onMove([...d.origins].map(([id, o]) => ({ id, x: round(o.x + shiftX), y: round(o.y + shiftY) })));
       return;
@@ -205,16 +218,26 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     const before = turn(anchor(box.w, box.h)), after = turn(anchor(w, h));
     const cx = box.x + box.w / 2 + before.x - after.x, cy = box.y + box.h / 2 + before.y - after.y;
     let x = cx - w / 2, y = cy - h / 2;
-    if (snap && !d.keepAspect && !rotation) {
-      const right = Math.round((x + w) / SNAP_STEP) * SNAP_STEP, bottom = Math.round((y + h) / SNAP_STEP) * SNAP_STEP;
-      x = Math.round(x / SNAP_STEP) * SNAP_STEP; y = Math.round(y / SNAP_STEP) * SNAP_STEP;
-      w = Math.max(MIN_SIZE, right - x); h = Math.max(MIN_SIZE, bottom - y);
-    }
+    if (snap && !d.keepAspect && !rotation && !event.ctrlKey && !event.metaKey) {
+      // Only the edges being dragged snap: to other objects, the page and guides, else to the grid when it is showing.
+      const use = { x: handle.includes("e") ? [2] : handle.includes("w") ? [0] : [], y: handle.includes("s") ? [2] : handle.includes("n") ? [0] : [] };
+      const r = smartSnap({ x, y, w, h }, d.targets, guideLines, reach, use);
+      let left = x, top = y, right = x + w, bottom = y + h;
+      if (handle.includes("e")) right += r.dx; if (handle.includes("w")) left += r.dx;
+      if (handle.includes("s")) bottom += r.dy; if (handle.includes("n")) top += r.dy;
+      if (showGrid) {
+        if (r.dx === 0) { if (handle.includes("e")) right = gridSnap(right); if (handle.includes("w")) left = gridSnap(left); }
+        if (r.dy === 0) { if (handle.includes("s")) bottom = gridSnap(bottom); if (handle.includes("n")) top = gridSnap(top); }
+      }
+      x = left; y = top; w = Math.max(MIN_SIZE, right - left); h = Math.max(MIN_SIZE, bottom - top);
+      setSnapLines(r.lines);
+    } else if (snapLines.length) setSnapLines([]);
     onResize(d.id, { x: round(x), y: round(y), w: round(w), h: round(h) });
   };
 
   const endDrag = () => {
     if (pendingSingle.current) { onSelect([pendingSingle.current]); pendingSingle.current = null; }
+    if (snapLines.length) setSnapLines([]);
     if (drag.current) { drag.current = null; onDragEnd(); }
   };
 
@@ -244,6 +267,10 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       {items.filter((item) => item.visible !== false && !(preview && item.reference)).map((item) => (
         <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} raw={rawFields} onPointerDown={(event) => startMove(event, item)} />
       ))}
+      {/* Smart-snap guides while dragging: a thin line wherever an edge or centre lines up with something else. */}
+      {snapLines.map((l, i) => l.axis === "x"
+        ? <line key={i} x1={l.at * PX_PER_IN} x2={l.at * PX_PER_IN} y1={l.from * PX_PER_IN} y2={l.to * PX_PER_IN} stroke="#e2337f" strokeWidth={1 / zoom} pointerEvents="none" />
+        : <line key={i} y1={l.at * PX_PER_IN} y2={l.at * PX_PER_IN} x1={l.from * PX_PER_IN} x2={l.to * PX_PER_IN} stroke="#e2337f" strokeWidth={1 / zoom} pointerEvents="none" />)}
       {!preview && group.length > 1 && (() => {
         const box = boundsOf(group), reach = 30 / zoom;
         const x = box.x * PX_PER_IN, y = box.y * PX_PER_IN, w = box.w * PX_PER_IN, h = box.h * PX_PER_IN;

@@ -116,7 +116,7 @@ function App() {
   const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
   const [showGrid, setShowGrid] = useState(false);
   const [showRulers, setShowRulers] = useState(true);
-  const [snap, setSnap] = useState(false);
+  const [snap, setSnap] = useState(true);
   const [preview, setPreview] = useState(false);
   const [printing, setPrinting] = useState<null | "sheets" | "calibration">(null);
   const printer = usePrinterCalibration();

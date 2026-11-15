@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
-  ChevronDown, ChevronsUpDown, Group, Ungroup,
+  ChevronDown, ChevronsUpDown, Shapes, Group, Ungroup,
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
   Hash, Image as ImageIcon, Italic, Underline, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   X, Filter,
@@ -216,6 +216,9 @@ function MultiProperties({ count, onRotateBy, onDuplicate, onDelete, group, grou
 
 function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, imageTools, fitNote, instanceMode, onFitReview }: { instanceMode?: boolean; onFitReview?: () => void; fitNote?: { text: string; bad: boolean } | null; imageTools: ImageTools; item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary }) {
   const patch = (p: Partial<DesignItem>, key?: string) => onUpdate(item.id, p, key ?? `prop:${item.id}:${Object.keys(p).join()}`);
+  const [convertAt, setConvertAt] = useState<{ x: number; y: number; w: number } | null>(null);
+  const convertRef = useRef<HTMLButtonElement>(null);
+  const convert = (action: () => void) => { setConvertAt(null); action(); };
   return (
     <>
       <div className="property-heading">
@@ -224,9 +227,19 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
       </div>
 
       <div className="convert-row">
-        {item.type !== "rect" && <button className="button" onClick={() => patch({ type: "rect", text: undefined, field: undefined, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><Square size={14} /> Convert to shape</button>}
-        {item.type !== "text" && <button className="button" onClick={() => patch({ type: "text", text: item.text ?? "Text", fontSize: item.fontSize ?? 11, color: item.color ?? "#34443d", weight: item.weight ?? 500, wrap: true, padding: item.padding ?? 0.08, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><TextCursorInput size={14} /> Convert to text box</button>}
-        {item.type !== "image" && <button className="button" onClick={() => patch({ type: "image", imageSource: defaultImageSource(imageTools.columns), text: undefined, field: undefined }, `kind:${item.id}`)}><ImageIcon size={14} /> Convert to photo box</button>}
+        <button ref={convertRef} className="button wide with-chevron" aria-haspopup="menu" aria-expanded={!!convertAt} onClick={() => { const r = convertRef.current?.getBoundingClientRect(); setConvertAt(convertAt || !r ? null : { x: r.left, y: r.bottom + 4, w: r.width }); }}>
+          <Shapes size={14} /> Convert to… <ChevronDown size={13} className="caret" />
+        </button>
+        {convertAt && (
+          <>
+            <div className="menu-scrim" onClick={() => setConvertAt(null)} />
+            <div className="menu" role="menu" style={{ position: "fixed", left: convertAt.x, top: convertAt.y, minWidth: convertAt.w }}>
+              {item.type !== "rect" && <button role="menuitem" onClick={() => convert(() => patch({ type: "rect", text: undefined, field: undefined, imageSource: undefined, assetId: undefined }, `kind:${item.id}`))}><Square size={14} /> <span>Shape</span></button>}
+              {item.type !== "text" && <button role="menuitem" onClick={() => convert(() => patch({ type: "text", text: item.text ?? "Text", fontSize: item.fontSize ?? 11, color: item.color ?? "#34443d", weight: item.weight ?? 500, wrap: true, padding: item.padding ?? 0.08, imageSource: undefined, assetId: undefined }, `kind:${item.id}`))}><TextCursorInput size={14} /> <span>Text box</span></button>}
+              {item.type !== "image" && <button role="menuitem" onClick={() => convert(() => patch({ type: "image", imageSource: defaultImageSource(imageTools.columns), text: undefined, field: undefined }, `kind:${item.id}`))}><ImageIcon size={14} /> <span>Photo box</span></button>}
+            </div>
+          </>
+        )}
       </div>
 
       {item.type === "text" && (
@@ -270,7 +283,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
               </Pair>
               <Pair label="Line height"><NumberField value={item.lineHeight ?? 1.2} min={0.6} max={4} step={0.05} places={2} onChange={(n) => patch({ lineHeight: n })} /></Pair>
             </div>
-            <div className="two-col spaced">
+            <div className="two-col stack-narrow spaced">
               <Pair label="Autoscale">
                 <select className="select" value={item.autoFit ?? "off"} onChange={(e) => patch({ autoFit: e.target.value as DesignItem["autoFit"] })}>
                   <option value="off">Fixed size</option>
