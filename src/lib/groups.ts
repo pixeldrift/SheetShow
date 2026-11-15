@@ -128,3 +128,19 @@ export function moveLayerTo(list: DesignItem[], id: string, targetId: string, ab
   all.splice(above ? to + 1 : to, 0, moving);
   return all.flat();
 }
+
+export type ArrangeMode = "front" | "back" | "up" | "down";
+/** Stacking order for a selection: to the very front/back, or one step up/down (groups move as one block). */
+export function reorderSelection(list: DesignItem[], ids: string[], mode: ArrangeMode): DesignItem[] {
+  const all = blocks(list);
+  const picked = all.map((b) => b.some((i) => ids.includes(i.id)));
+  if (!picked.some(Boolean)) return list;
+  if (mode === "front" || mode === "back") {
+    const chosen = all.filter((_, i) => picked[i]), rest = all.filter((_, i) => !picked[i]);
+    return (mode === "front" ? [...rest, ...chosen] : [...chosen, ...rest]).flat();
+  }
+  const order = all.map((_, i) => i), flags = [...picked];
+  if (mode === "up") for (let i = all.length - 2; i >= 0; i--) { if (flags[i] && !flags[i + 1]) { [order[i], order[i + 1]] = [order[i + 1], order[i]]; [flags[i], flags[i + 1]] = [flags[i + 1], flags[i]]; } }
+  else for (let i = 1; i < all.length; i++) { if (flags[i] && !flags[i - 1]) { [order[i], order[i - 1]] = [order[i - 1], order[i]]; [flags[i], flags[i - 1]] = [flags[i - 1], flags[i]]; } }
+  return order.map((i) => all[i]).flat();
+}

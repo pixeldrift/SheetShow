@@ -3,6 +3,7 @@ import { Copy, Download, FilePlus2, Plus, Redo2, Search, Trash2, Undo2, Upload }
 import type { RecordRow } from "../types";
 import { prettyField } from "../lib/data";
 import { ID, isIncluded } from "../lib/records";
+import { SortArrow, useColumnHeaders, type SortState } from "./columnDrag";
 
 const ROW_H = 38;
 const OVERSCAN = 8;
@@ -22,6 +23,8 @@ type Props = {
   onRenameColumn: (column: string) => void;
   onDeleteColumn: (column: string) => void;
   onSort: (column: string, direction: 1 | -1) => void;
+  sort: SortState;
+  onReorderColumn: (column: string, target: string, after: boolean) => void;
   onPaste: (id: string, column: string, grid: string[][]) => void;
   onImport: (file: File) => void;
   onExport: () => void;
@@ -32,6 +35,8 @@ type Show = "all" | "included" | "excluded";
 /** The data source as an editable table, with a per-row "print this record" switch. */
 export function DataTable(p: Props) {
   const { rows, columns } = p;
+  // Click a header to sort by it, click again to reverse; drag a header to move the column.
+  const { headerProps } = useColumnHeaders((column) => p.onSort(column, p.sort?.column === column && p.sort.dir === 1 ? -1 : 1), p.onReorderColumn);
   const [query, setQuery] = useState("");
   const [show, setShow] = useState<Show>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -134,8 +139,8 @@ export function DataTable(p: Props) {
               <th className="col-include" title="Include in print"><input type="checkbox" aria-label="Include all shown records" checked={allIncluded} ref={(el) => { if (el) el.indeterminate = !allIncluded && someIncluded; }} onChange={() => p.onInclude(visibleIds, !allIncluded)} /></th>
               <th className="col-num">#</th>
               {columns.map((column) => (
-                <th key={column}>
-                  <div className="th-inner"><span title={column}>{prettyField(column)}</span><button className="mini-button" aria-label={`Column options for ${column}`} onClick={() => setMenu(menu === column ? null : column)}>⋯</button></div>
+                <th key={column} {...headerProps(column)} title="Click to sort · click again to reverse · drag to move the column">
+                  <div className="th-inner"><span title={column}>{prettyField(column)}<SortArrow sort={p.sort} column={column} /></span><button className="mini-button" aria-label={`Column options for ${column}`} onClick={() => setMenu(menu === column ? null : column)}>⋯</button></div>
                   {menu === column && (
                     <>
                       <div className="menu-scrim" onClick={() => setMenu(null)} />

@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzip } from "fflate";
 import type { Asset, Project } from "../types";
 import { zipFiles } from "./importImages";
+import { upgradeProject } from "./merge";
 
 const KEY = "sheetshow:project:v1";
 
@@ -13,7 +14,7 @@ export function loadProject(): Project | null {
   try {
     const raw = localStorage.getItem(KEY);
     const parsed = raw ? JSON.parse(raw) : null;
-    return isProject(parsed) ? { ...parsed, fonts: parsed.fonts ?? [], sheet: { ...parsed.sheet, cropMarks: parsed.sheet.cropMarks ?? false } } : null;
+    return isProject(parsed) ? upgradeProject({ ...parsed, fonts: parsed.fonts ?? [], sheet: { ...parsed.sheet, cropMarks: parsed.sheet.cropMarks ?? false } }) : null;
   } catch { return null; }
 }
 

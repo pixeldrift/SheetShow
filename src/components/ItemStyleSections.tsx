@@ -34,7 +34,7 @@ export function PictureSection({ item, patch, tools }: { item: DesignItem; patch
   const attention = useMemo(() => (source ? tools.records.filter((r) => needsReview(library.resolver.resolve(item, r))).length : 0), [source, item, tools.records, library.resolver]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const useData = () => patch({ imageSource: defaultImageSource(columns) });
-  const insertField = (field: string) => source?.mode === "pattern" && patch({ imageSource: { mode: "pattern", pattern: source.pattern + `{${field}}` } });
+  const insertField = (field: string) => source?.mode === "pattern" && patch({ imageSource: { mode: "pattern", pattern: source.pattern + `{{${field}}}` } });
 
   return (
     <Section title="PICTURE">
@@ -54,7 +54,7 @@ export function PictureSection({ item, patch, tools }: { item: DesignItem; patch
       {source && (
         <>
           <Pair label="Find the picture using">
-            <select className="select" value={source.mode} onChange={(e) => patch({ imageSource: e.target.value === "column" ? { mode: "column", column: columns.find((c) => /^(image|photo|picture|pic|img|file|filename)/i.test(c)) ?? columns[0] ?? "" } : { mode: "pattern", pattern: `{${columns[0] ?? "name"}}` } })}>
+            <select className="select" value={source.mode} onChange={(e) => patch({ imageSource: e.target.value === "column" ? { mode: "column", column: columns.find((c) => /^(image|photo|picture|pic|img|file|filename)/i.test(c)) ?? columns[0] ?? "" } : { mode: "pattern", pattern: `{{${columns[0] ?? "name"}}}` } })}>
               <option value="pattern">A filename pattern</option><option value="column">A column with the filename or URL</option>
             </select>
           </Pair>
@@ -63,12 +63,12 @@ export function PictureSection({ item, patch, tools }: { item: DesignItem; patch
           ) : (
             <div className="spaced-block">
               <Pair label="Pattern">
-                <input className="property-input mono" value={source.pattern} spellCheck={false} onChange={(e) => patch({ imageSource: { mode: "pattern", pattern: e.target.value } }, `pattern:${item.id}`)} placeholder="{band}.jpg" />
+                <input className="property-input mono" value={source.pattern} spellCheck={false} onChange={(e) => patch({ imageSource: { mode: "pattern", pattern: e.target.value } }, `pattern:${item.id}`)} placeholder="{{band}}.jpg" />
               </Pair>
               <div className="chip-row">
-                {columns.slice(0, 12).map((c) => <button key={c} className="field-chip" onClick={() => insertField(c)} title={`Insert {${c}}`}>+ {prettyField(c)}</button>)}
+                {columns.slice(0, 12).map((c) => <button key={c} className="field-chip" onClick={() => insertField(c)} title={`Insert {{${c}}}`}>+ {prettyField(c)}</button>)}
               </div>
-              <p className="hint">Put fields in braces. Add transforms with a bar: <code>{"{name|lower}"}</code>, <code>{"{species|slug}"}</code>. Separate fallbacks with <code>||</code>. A web address works too: <code>https://example.com/{"{band}"}.jpg</code>. Transforms: {TRANSFORM_NAMES.join(", ")}.</p>
+              <p className="hint">Put fields in double braces. Add transforms with a bar: <code>{"{{name|lower}}"}</code>, <code>{"{{species|slug}}"}</code>. Separate fallbacks with <code>||</code>. A web address works too: <code>https://example.com/{"{{band}}"}.jpg</code>. Transforms: {TRANSFORM_NAMES.join(", ")}.</p>
               {patternFields(source.pattern).some((f) => !columns.includes(f)) && <p className="hint warn">Unknown field: {patternFields(source.pattern).filter((f) => !columns.includes(f)).join(", ")}</p>}
             </div>
           )}
@@ -172,15 +172,26 @@ export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Pa
       </div>
 
       {/* Padding (text boxes) and rounding: one number each, drag it to scrub or tap to type; the twirl reveals one box per side or corner. */}
-      <div className={`pad-round-row${item.type === "text" ? "" : " one"}`}>
+      {/* Each twirl-down opens its boxes right under its own field. With either open, the two fields stack so that is unambiguous. */}
+      <div className={`pad-round-row${item.type === "text" ? "" : " one"}${pads || corners ? " stacked" : ""}`}>
         {item.type === "text" && (
+          <div className="pad-round-cell">
           <Pair label="Padding (in)">
             <div className="field-with-twirl">
               <NumberField value={mixedPad ? 0 : paddings[0]} min={0} max={2} step={0.01} places={2} onChange={(n) => patch({ padding: n, paddings: undefined })} />
               <button type="button" className="twirl-button" aria-expanded={pads} aria-label="Padding for each side" title="Padding for each side" onClick={() => setPads((o) => !o)}><ChevronRight size={13} style={{ transform: pads ? "rotate(90deg)" : undefined }} /></button>
             </div>
           </Pair>
+            {pads && item.type === "text" && (
+              <div className="corner-grid">
+                {["Top", "Right", "Bottom", "Left"].map((name, index) => (
+                  <Pair key={name} label={name}><NumberField value={paddings[index]} min={0} max={2} step={0.01} places={2} unit="in" onChange={(n) => setPad(index, n)} /></Pair>
+                ))}
+              </div>
+            )}
+          </div>
         )}
+        <div className="pad-round-cell">
         <Pair label="Rounding">
           <div className="field-with-twirl">
             <NumberField value={mixed ? 0 : radii[0]} min={0} max={max} step={radiusStep} places={1} onChange={(n) => patch({ radius: n, radii: undefined })} />
@@ -191,21 +202,15 @@ export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Pa
             <button type="button" className="twirl-button" aria-expanded={corners} aria-label="Rounding for each corner" title="Rounding for each corner" onClick={() => setCorners((o) => !o)}><ChevronRight size={13} style={{ transform: corners ? "rotate(90deg)" : undefined }} /></button>
           </div>
         </Pair>
+          {corners && (
+            <div className="corner-grid">
+              {CORNER_NAMES.map((name, i) => (
+                <Pair key={name} label={name}><NumberField value={radii[CORNER_INDEX[i]]} min={0} max={max} step={radiusStep} places={1} unit={unit === "pct" ? "%" : "px"} onChange={(n) => setCorner(CORNER_INDEX[i], n)} /></Pair>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-      {pads && item.type === "text" && (
-        <div className="corner-grid">
-          {["Top", "Right", "Bottom", "Left"].map((name, index) => (
-            <Pair key={name} label={name}><NumberField value={paddings[index]} min={0} max={2} step={0.01} places={2} unit="in" onChange={(n) => setPad(index, n)} /></Pair>
-          ))}
-        </div>
-      )}
-      {corners && (
-        <div className="corner-grid">
-          {CORNER_NAMES.map((name, i) => (
-            <Pair key={name} label={name}><NumberField value={radii[CORNER_INDEX[i]]} min={0} max={max} step={radiusStep} places={1} unit={unit === "pct" ? "%" : "px"} onChange={(n) => setCorner(CORNER_INDEX[i], n)} /></Pair>
-          ))}
-        </div>
-      )}
       {item.type !== "text" && (
         <div className="icon-row spaced-block">
           <button className="wide-icon" onClick={makeCircle} title="Make it round: sets the shape square and the corners fully round"><Circle size={15} /> Circle</button>
@@ -242,10 +247,11 @@ export function EffectsSection({ item, patch }: { item: DesignItem; patch: Patch
   const setOutline = (change: Partial<{ color: string; width: number }>) => patch({ textStroke: { ...ol, ...change } });
   return (
     <Section title="EFFECTS">
-      <div className="slider-row first">
-        <span>Opacity</span>
-        <input type="range" min="0" max="100" step="1" value={Math.round((item.opacity ?? 1) * 100)} aria-label="Opacity" onChange={(e) => patch({ opacity: Number(e.target.value) / 100 })} />
-        <output>{Math.round((item.opacity ?? 1) * 100)}%</output>
+      <div className="opacity-block">
+        <Pair label="Opacity">
+          <NumberField value={Math.round((item.opacity ?? 1) * 100)} min={0} max={100} step={1} places={0} unit="%" onChange={(n) => patch({ opacity: n / 100 })} />
+        </Pair>
+        <input type="range" min="0" max="100" step="1" value={Math.round((item.opacity ?? 1) * 100)} aria-label="Opacity" onChange={(ev) => patch({ opacity: Number(ev.target.value) / 100 })} />
       </div>
       {item.type === "text" && (
         <Effect title="Outline" on={!!stroke} onToggle={(on) => patch({ textStroke: on ? ol : undefined })}>

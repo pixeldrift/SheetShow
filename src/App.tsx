@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Braces, ChevronLeft, ChevronRight, Redo2, SlidersHorizontal, Undo2 } from "lucide-react";
 import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { DesignItem, Guide, InstanceOverride, ItemPatch, LabelPreset, Project, RecordRow, Sheet, Variant, VariantRule, View, Workspace } from "./types";
+import { upgradeProject } from "./lib/merge";
 import { DEFAULT_SNAP_OPTIONS, type SnapOptions } from "./lib/smartSnap";
-import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid, valueFor } from "./lib/data";
+import { PX_PER_IN, clamp, fieldDisplayName, specialFields, starterItems, starterRecords, uid, valueFor } from "./lib/data";
 import { applyOverride, hasEdits, pickVariant, toItemPatch } from "./lib/instances";
 import { applyConditions } from "./lib/conditions";
-import { cloneItems, expandToGroups, groupItems, moveLayerTo, nextGroupName, renameGroup as renameGroupIn, ungroupItems, unitsOf } from "./lib/groups";
+import { cloneItems, expandToGroups, groupItems, moveLayerTo, reorderSelection, type ArrangeMode, nextGroupName, renameGroup as renameGroupIn, ungroupItems, unitsOf } from "./lib/groups";
 import { instanceIssues, itemLabel, recordLabel, type Issue } from "./lib/audit";
 import { checkImageUrls } from "./lib/webImages";
 import { layoutText } from "./lib/text";
@@ -33,6 +34,11 @@ import { Topbar } from "./components/Topbar";
 import { Toolbar } from "./components/Toolbar";
 import { EditBar } from "./components/EditBar";
 import { AlignBar } from "./components/AlignBar";
+import { ArrangeBar } from "./components/ArrangeBar";
+import { InlineTextEditor } from "./components/InlineTextEditor";
+import { LayersPanel } from "./components/LayersPanel";
+import type { SortState } from "./components/columnDrag";
+import type { PaletteState } from "./components/Palette";
 import { DataPanel } from "./components/DataPanel";
 import { Inspector } from "./components/Inspector";
 import { RecordBar } from "./components/RecordBar";
@@ -42,7 +48,7 @@ import { TemplateStage } from "./components/TemplateStage";
 import { LayoutStage, type InstanceInfo, type InstanceSelection } from "./components/LayoutStage";
 import { itemFrame } from "./components/ItemShape";
 import { DataTable } from "./components/DataTable";
-import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
+import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, reorderColumns, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
 import { PrintSheets } from "./components/PrintSheets";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -86,6 +92,7 @@ function App() {
   const instanceOverrides = D.overrides;
   const setVariants = part("variants", "variants"), setRules = part("rules", "rules"), setTemplate = part("template", "template"), setSheet = part("sheet", "sheet");
   const recordHistory = { value: records, set: part("records"), ...shared };
+  const [dataSort, setDataSort] = useState<SortState>(null);
   const editRecords = (update: (rows: RecordRow[]) => RecordRow[], coalesce?: string) => recordHistory.set(update, { coalesce });
   const itemsDoc = { value: D.items, set: part("items"), ...shared };
   const overrideDoc = { value: instanceOverrides, set: part("overrides"), ...shared };
@@ -93,6 +100,8 @@ function App() {
   const [activeVariant, setActiveVariant] = useState(variants[0].id);
   const variantId = itemsDoc.value[activeVariant] ? activeVariant : variants[0].id; // the template being edited
   const items = itemsDoc.value[variantId] ?? [];
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   /** Edits the template being shown, so the rest of the editor keeps working with one plain list of items. */
   const history = {
     set: (update: (list: DesignItem[]) => DesignItem[], options?: { coalesce?: string }) =>
@@ -110,6 +119,8 @@ function App() {
   const [clipboard, setClipboard] = useState<DesignItem[]>([]);
   const [saveState, setSaveState] = useState<"saved" | "error">("saved");
   const [fieldDrag, setFieldDrag] = useState<{ field: string; x: number; y: number } | null>(null);
+  /** The existing text object a dragged field would link to if dropped now. */
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const justDragged = useRef(false);
   // A freshly imported file waiting for the person to confirm how its columns map onto the template.
   const [pendingImport, setPendingImport] = useState<{ records: RecordRow[]; fileName: string; stage: "choose" | "map" } | null>(null);
@@ -117,6 +128,17 @@ function App() {
   const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
   const [showGrid, setShowGrid] = useState(false);
   const [showRulers, setShowRulers] = useState(true);
+  // Tool palettes (edit, align, arrange): floating on the canvas or docked in the toolbar, remembered in this browser.
+  const [palettes, setPalettes] = useState<Record<string, PaletteState>>(() => {
+    try { return JSON.parse(localStorage.getItem("sheetshow.palettes") ?? "{}"); } catch { return {}; }
+  });
+  const palette = (id: string): PaletteState => palettes[id] ?? { docked: false };
+  const setPalette = (id: string) => (state: PaletteState) => setPalettes((all) => {
+    const next = { ...all, [id]: state };
+    try { localStorage.setItem("sheetshow.palettes", JSON.stringify(next)); } catch { /* storage unavailable */ }
+    return next;
+  });
+  const canDock = window.matchMedia(WIDE_QUERY).matches;
   const [snap, setSnap] = useState(true);
   const [snapOptions, setSnapOptions] = useState<SnapOptions>(() => {
     try { return { ...DEFAULT_SNAP_OPTIONS, ...JSON.parse(localStorage.getItem("sheetshow.snapOptions") ?? "{}") }; } catch { return DEFAULT_SNAP_OPTIONS; }
@@ -159,12 +181,13 @@ function App() {
   const selectedItems = useMemo(() => items.filter((item) => selectedIds.includes(item.id)), [items, selectedIds]);
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
   const slots = sheet.columns * sheet.rows;
-  const pageCount = sheet.repeatMode === "same" ? 1 : Math.max(1, Math.ceil(activeRecords.length / slots));
-  const currentPage = sheet.repeatMode === "same" ? 0 : Math.floor(recordIndex / slots);
+  // "Repeat same record" prints one full sheet per record; "next record" fills each sheet with the following records.
+  const pageCount = sheet.repeatMode === "same" ? Math.max(1, activeRecords.length) : Math.max(1, Math.ceil(activeRecords.length / slots));
+  const currentPage = sheet.repeatMode === "same" ? recordIndex : Math.floor(recordIndex / slots);
   const overflow =
     sheet.marginX + sheet.columns * template.width + (sheet.columns - 1) * sheet.gapX > sheet.pageWidth + 0.005 ||
     sheet.marginY + sheet.rows * template.height + (sheet.rows - 1) * sheet.gapY > sheet.pageHeight + 0.005;
-  const pagedNav = workspace === "layout" && sheet.repeatMode === "next";
+  const pagedNav = workspace === "layout"; // in page view the arrows turn pages
 
   // ── Alternating templates + per-record edits ────────────────────────────
   /** The items one record renders: its template (chosen by the rules) with that record's hand edits applied. */
@@ -175,7 +198,7 @@ function App() {
     // Order: the template, then conditional rules for this record, then this record's hand edits (which win).
     return { variantId: id, items: applyOverride(applyConditions(base, record, metaFor(index)), override), override };
   };
-  const metaFor = (index: number) => ({ recordNumber: index + 1, pageNumber: sheet.repeatMode === "same" ? 1 : Math.floor(index / slots) + 1, recordCount: activeRecords.length, pageCount });
+  const metaFor = (index: number) => ({ recordNumber: index + 1, pageNumber: sheet.repeatMode === "same" ? index + 1 : Math.floor(index / slots) + 1, recordCount: activeRecords.length, pageCount });
   const indexOfRecord = (recordId: string) => activeRecords.findIndex((r) => r[ID] === recordId);
 
   const updateInstance = (recordId: string, change: (current: InstanceOverride) => InstanceOverride | null, coalesce?: string) =>
@@ -227,26 +250,58 @@ function App() {
   })();
 
   // ── View: per-workspace zoom / pan / fit ───────────────────────────────
+  // ── Page view: one sheet, or every sheet in a scrolling column or a grid ──
+  const [pageView, setPageView] = useState<"single" | "scroll" | "grid">("single");
+  const stack = workspace === "layout" && pageView !== "single";
+  const GAP = 0.35; // inches between sheets
+  const stackCols = pageView === "grid" ? (pageCount <= 1 ? 1 : pageCount <= 4 ? 2 : pageCount <= 9 ? 3 : 4) : 1;
+  const stackRows = Math.ceil(pageCount / stackCols);
+  const stackW = stackCols * sheet.pageWidth + (stackCols - 1) * GAP;
+  const stackH = stackRows * sheet.pageHeight + (stackRows - 1) * GAP;
+  const pagePos = (k: number) => ({ x: (k % stackCols) * (sheet.pageWidth + GAP), y: Math.floor(k / stackCols) * (sheet.pageHeight + GAP) });
+  /** The pan that brings sheet k into view: its top near the top of the window when it is taller than the window, else its middle. */
+  const panForPage = (k: number, zoom: number) => {
+    const scale = PX_PER_IN * zoom, pos = pagePos(Math.max(0, Math.min(pageCount - 1, k)));
+    const vh = viewportRef.current?.clientHeight ?? 600;
+    const x = -(pos.x + sheet.pageWidth / 2 - stackW / 2) * scale;
+    const tall = sheet.pageHeight * scale > vh - 70;
+    const y = tall ? 40 - vh / 2 - (pos.y - stackH / 2) * scale : -(pos.y + sheet.pageHeight / 2 - stackH / 2) * scale;
+    return { x, y };
+  };
+  /** In a scrolling column or grid: the sheet nearest the middle of the window. */
+  const visiblePage = (() => {
+    if (!stack) return currentPage;
+    const scale = PX_PER_IN * view.zoom;
+    const cx = stackW / 2 - view.pan.x / scale, cy = stackH / 2 - view.pan.y / scale;
+    const col = Math.max(0, Math.min(stackCols - 1, Math.floor(cx / (sheet.pageWidth + GAP))));
+    const row = Math.max(0, Math.min(stackRows - 1, Math.floor(cy / (sheet.pageHeight + GAP))));
+    return Math.min(pageCount - 1, row * stackCols + col);
+  })();
   const patchView = useCallback((patch: Partial<View>) => setViews((v) => ({ ...v, [workspace]: { ...v[workspace], ...patch } })), [workspace]);
-  const widthOf = (w: Workspace) => (w === "template" ? template.width : sheet.pageWidth);
-  const heightOf = (w: Workspace) => (w === "template" ? template.height : sheet.pageHeight);
+  const widthOf = (w: Workspace) => (w === "template" ? template.width : stack ? stackW : sheet.pageWidth);
+  const heightOf = (w: Workspace) => (w === "template" ? template.height : stack ? stackH : sheet.pageHeight);
 
   const fitZoom = (w: Workspace) => {
     const el = viewportRef.current;
     const availW = Math.max(120, (el?.clientWidth ?? 800) - 110);
     const availH = Math.max(120, (el?.clientHeight ?? 600) - 150);
-    return Number(clamp(Math.min(availW / (widthOf(w) * PX_PER_IN), availH / (heightOf(w) * PX_PER_IN)), MIN_ZOOM, MAX_ZOOM).toFixed(2));
+    // A scrolling column fits the sheet's width (you scroll for the rest); everything else fits whole.
+    const fitH = w === "layout" && pageView === "scroll" ? Infinity : availH / (heightOf(w) * PX_PER_IN);
+    return Number(clamp(Math.min(availW / (widthOf(w) * PX_PER_IN), fitH), MIN_ZOOM, MAX_ZOOM).toFixed(2));
   };
 
   // First visit to a workspace (or after its size changed from a preset): fit and centre it.
   useLayoutEffect(() => {
-    if (!view.fitted && viewportRef.current) patchView({ zoom: fitZoom(workspace), pan: { x: 0, y: 0 }, fitted: true });
-  }, [workspace, view.fitted]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!view.fitted && viewportRef.current) { const zoom = fitZoom(workspace); patchView({ zoom, pan: pageView === "scroll" && stack ? panForPage(currentPage, zoom) : { x: 0, y: 0 }, fitted: true }); }
+  }, [workspace, view.fitted]);
+  // Changing how sheets are shown (or how many there are) refits.
+  useEffect(() => { setViews((v) => ({ ...v, layout: { ...v.layout, fitted: false } })); }, [pageView, pageCount, sheet.pageWidth, sheet.pageHeight]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setZoom = (zoom: number) => patchView({ zoom: clamp(zoom, MIN_ZOOM, MAX_ZOOM) });
   const toggleZoomPreset = () => {
     const fit = fitZoom(workspace);
-    patchView({ zoom: Math.abs(view.zoom - fit) < 0.02 ? 1 : fit, pan: { x: 0, y: 0 } });
+    const zoom = Math.abs(view.zoom - fit) < 0.02 ? 1 : fit;
+    patchView({ zoom, pan: pageView === "scroll" && stack ? panForPage(visiblePage, zoom) : { x: 0, y: 0 } });
   };
 
   const switchWorkspace = (next: Workspace) => {
@@ -382,6 +437,27 @@ function App() {
     setSelectedIds((current) => (additive ? [...new Set([...current, ...withGroups])] : withGroups));
   };
 
+  // ── Editing a text object in place ──
+  const [inlineEdit, setInlineEdit] = useState<{ id: string; draft: string } | null>(null);
+  const startInlineEdit = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (!item || item.type !== "text") return;
+    // Linked text is edited as its tokens, so the preview pauses and field names can be typed or mixed with other words.
+    setInlineEdit({ id, draft: item.field ? `{{${item.field.startsWith("__") ? fieldDisplayName(item.field) : item.field}}}` : item.text ?? "" });
+  };
+  const finishInlineEdit = (save: boolean) => {
+    const edit = inlineEdit;
+    setInlineEdit(null);
+    const item = edit && items.find((i) => i.id === edit.id);
+    if (!edit || !item || !save) return;
+    const whole = edit.draft.trim().match(/^\{\{\s*([^{}|#^/]+?)\s*\}\}$/); // exactly one field: keep it a real link
+    const named = whole && [...fields, ...specialFields.map((f) => f.key)].find((f) => f === whole[1] || fieldDisplayName(f).toLowerCase() === whole[1].toLowerCase());
+    const next = named ? { field: named, text: fieldDisplayName(named) } : { field: undefined, text: edit.draft };
+    if (next.field === item.field && next.text === item.text) return;
+    updateItem(item.id, next);
+  };
+  useEffect(() => { if (inlineEdit && workspace !== "template") finishInlineEdit(true); }); // leaving the template saves the edit
+  const arrange = (mode: ArrangeMode) => history.set((list) => reorderSelection(list, selectedIds, mode));
   const reorderLayer = (id: string, targetId: string, above: boolean, asGroup: boolean) => history.set((list) => moveLayerTo(list, id, targetId, above, asGroup));
 
   const bindField = (field: string) => {
@@ -528,6 +604,7 @@ function App() {
       window.removeEventListener("pointercancel", end);
       window.removeEventListener("touchmove", blockScroll);
       setFieldDrag(null);
+      setDropTargetId(null);
     };
     function move(e: PointerEvent) {
       if (e.pointerId !== pointerId) return;
@@ -535,7 +612,12 @@ function App() {
         if (touch) { cleanup(); return; } // finger moved first: the user is scrolling the list
         begin();
       }
-      if (active) setFieldDrag({ field, x: e.clientX, y: e.clientY });
+      if (active) {
+        setFieldDrag({ field, x: e.clientX, y: e.clientY });
+        const over = document.elementFromPoint(e.clientX, e.clientY);
+        const id = over?.closest(".viewport") ? over.closest("[data-item-id]")?.getAttribute("data-item-id") : null;
+        setDropTargetId(id && itemsRef.current.find((i) => i.id === id)?.type === "text" ? id : null);
+      }
     }
     function end(e: PointerEvent) {
       if (e.pointerId !== pointerId) return;
@@ -565,7 +647,8 @@ function App() {
     return () => window.clearTimeout(timer);
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const applyProject = async (project: Project, images?: { asset: Asset; blob: Blob }[]) => {
+  const applyProject = async (raw: Project, images?: { asset: Asset; blob: Blob }[]) => {
+    const project = upgradeProject(raw);
     if (images) await library.replaceAll(images);
     const vs = project.variants?.length ? project.variants : [{ id: "a", name: "Template A", items: project.items }];
     doc.reset({
@@ -628,7 +711,8 @@ function App() {
       const used = items.some((item) => item.field === column);
       if (window.confirm(`Delete the “${column}” column?${used ? " Text linked to it will show “—”." : ""}`)) editRecords((rows) => removeColumn(rows, column));
     },
-    onSort: (column: string, direction: 1 | -1) => editRecords((rows) => sortRows(rows, column, direction)),
+    onSort: (column: string, direction: 1 | -1) => { editRecords((rows) => sortRows(rows, column, direction)); setDataSort({ column, dir: direction }); },
+    onReorderColumn: (column: string, target: string, after: boolean) => editRecords((rows) => reorderColumns(rows, column, target, after)),
     onPaste: (id: string, column: string, grid: string[][]) => editRecords((rows) => pasteGrid(rows, fields, id, column, grid)),
     onExport: () => {
       const link = document.createElement("a");
@@ -682,7 +766,11 @@ function App() {
 
   // ── Records ─────────────────────────────────────────────────────────────
   const stepRecord = (delta: number) => {
-    if (pagedNav) setRecordIndex(clamp(currentPage + delta, 0, pageCount - 1) * slots);
+    if (pagedNav) {
+      const page = clamp((stack ? visiblePage : currentPage) + delta, 0, pageCount - 1);
+      setRecordIndex(Math.min(Math.max(0, activeRecords.length - 1), page * (sheet.repeatMode === "same" ? 1 : slots)));
+      if (stack) patchView({ pan: panForPage(page, view.zoom) });
+    }
     else setRecordIndex((index) => clamp(index + delta, 0, Math.max(0, activeRecords.length - 1)));
   };
 
@@ -751,6 +839,7 @@ function App() {
       else if (mod && key === "x") { if (has) { event.preventDefault(); cutSelected(); } }
       else if (mod && key === "v") { if (clipboard.length) { event.preventDefault(); pasteItems(); } }
       else if (mod && key === "d") { if (has) { event.preventDefault(); duplicateSelected(); } }
+      else if (mod && (event.code === "BracketRight" || event.code === "BracketLeft")) { if (has) { event.preventDefault(); arrange(event.code === "BracketRight" ? (event.shiftKey ? "front" : "up") : (event.shiftKey ? "back" : "down")); } }
       else if (mod && key === "g") { event.preventDefault(); if (event.shiftKey) ungroupSelected(); else groupSelected(); }
       else if (key === "delete" || key === "backspace") { if (has) { event.preventDefault(); deleteSelected(); } }
       else if (key === "escape") setSelectedIds([]);
@@ -770,6 +859,21 @@ function App() {
   const meta = { recordNumber: recordIndex + 1, pageNumber: currentPage + 1, recordCount: activeRecords.length, pageCount };
   /** The template as the previewed record sees it: conditional rules applied, rule-hidden objects kept (faded) so they stay selectable. */
   const displayItems = applyConditions(items, currentRecord, meta, !preview);
+  const toolDefs = workspace === "template" ? [
+    { id: "edit", always: true, node: (
+      <EditBar canGroup={canGroup} canUngroup={canUngroup} onGroup={groupSelected} onUngroup={ungroupSelected}
+        hasSelection={selectedItems.length > 0} canPaste={clipboard.length > 0} canUndo={history.canUndo} canRedo={history.canRedo}
+        onUndo={history.undo} onRedo={history.redo} onDelete={deleteSelected} onCut={cutSelected} onCopy={copySelected} onPaste={pasteItems}
+        palette={palette("edit")} onPalette={setPalette("edit")} canDock={canDock} />) },
+    { id: "align", always: false, node: <AlignBar units={unitsOf(items, selectedIds).length} onAlign={align} onDistribute={distribute} palette={palette("align")} onPalette={setPalette("align")} canDock={canDock} /> },
+    { id: "arrange", always: false, node: <ArrangeBar onArrange={arrange} palette={palette("arrange")} onPalette={setPalette("arrange")} canDock={canDock} /> },
+  ].filter((t) => !preview || t.id === "edit") : [];
+  const dockedNow = (id: string) => palette(id).docked && canDock;
+  // Floating palettes show when there is something to act on; docked ones stay put in the toolbar.
+  const templateTools = {
+    floating: toolDefs.filter((t) => !dockedNow(t.id) && (t.always || selectedItems.length > 0)).map((t) => <Fragment key={t.id}>{t.node}</Fragment>),
+    docked: toolDefs.filter((t) => dockedNow(t.id)).map((t) => <Fragment key={t.id}>{t.node}</Fragment>),
+  };
   const caption = workspace === "template"
     ? { title: variants.length > 1 ? `INDIVIDUAL TEMPLATE · ${variants.find((v) => v.id === variantId)?.name.toUpperCase()}` : "INDIVIDUAL TEMPLATE", detail: `${template.width.toFixed(2)} × ${template.height.toFixed(2)} in` }
     : { title: "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet${printer.x || printer.y ? ` · printer offset ${printer.x >= 0 ? "+" : ""}${printer.x.toFixed(3)}, ${printer.y >= 0 ? "+" : ""}${printer.y.toFixed(3)} in` : ""}` };
@@ -784,7 +888,7 @@ function App() {
           <DataTable
             rows={records} columns={fields} fileName={fileName}
             canUndo={recordHistory.canUndo} canRedo={recordHistory.canRedo} onUndo={recordHistory.undo} onRedo={recordHistory.redo}
-            onImport={importData} {...dataActions}
+            onImport={importData} sort={dataSort} {...dataActions}
           />
         </main>
       )}
@@ -798,12 +902,17 @@ function App() {
           preview={preview} onPreview={() => setPreview((v) => !v)}
           multi={multiMode} onMulti={() => setMultiMode((v) => !v)}
           zoom={view.zoom} onZoom={setZoom} onZoomPreset={toggleZoomPreset}
-          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })} onAddReference={() => setLibraryDialog({ kind: "insert", reference: true })}
+          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })} onAddReference={() => setLibraryDialog({ kind: "insert", reference: true })} docked={templateTools.docked} pageView={pageView} onPageView={setPageView} pageCount={pageCount}
         />
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
           {dataOpen && (
-            <DataPanel fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)} />
+            <DataPanel fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
+              layerCount={(inLayoutEdit ? instItems : items).length}
+              layers={<LayersPanel items={inLayoutEdit ? instItems : items} selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems} flat={!!instanceBanner}
+                onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
+                onUpdate={inLayoutEdit && instRecord ? (id, patch) => setInstanceItem(instRecord[ID], id, toItemPatch(patch)) : updateItem}
+                onUpdateMany={updateMany} onReorder={reorderLayer} />} />
           )}
 
           <div className="editor-content">
@@ -814,22 +923,47 @@ function App() {
                 onView={patchView}
                 widthIn={widthOf(workspace)}
                 heightIn={heightOf(workspace)}
-                showRulers={showRulers}
-                guides={guides[workspace]}
+                showRulers={showRulers && !stack}
+                guides={stack ? [] : guides[workspace]}
                 onGuides={(update) => setGuides((g) => ({ ...g, [workspace]: update(g[workspace]) }))}
                 onRulerDoubleClick={() => { setSelectedIds([]); setInspectorOpen(true); }}
                 onBackgroundClick={() => { setSelectedIds([]); setInstanceSel(null); }}
                 marqueeMode={multiMode && workspace === "template"}
                 onMarquee={workspace === "template" ? onMarquee : undefined}
-                paperClassName={preview ? "preview" : ""}
+                paperClassName={`${preview ? "preview" : ""}${stack ? " stack" : ""}`}
               >
                 {workspace === "template" ? (
                   <TemplateStage
-                    items={displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
-                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
-                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup}
+                    items={inlineEdit ? displayItems.map((i) => (i.id === inlineEdit.id ? { ...i, text: "", field: undefined } : i)) : displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
+                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} dropTargetId={dropTargetId} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
+                    onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup} onEditText={startInlineEdit}
                   />
                 ) : (
+                  stack ? (
+                    <div className="page-stack" style={{ width: stackW * PX_PER_IN, height: stackH * PX_PER_IN }}>
+                      {Array.from({ length: pageCount }, (_, K) => {
+                        const pos = pagePos(K);
+                        const near = pageCount <= 10 || Math.abs(K - visiblePage) <= (pageView === "grid" ? stackCols * 2 : 2);
+                        return (
+                          <div key={K} className="stack-sheet" style={{ left: pos.x * PX_PER_IN, top: pos.y * PX_PER_IN }}>
+                            {near ? (
+                              <LayoutStage
+                      sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
+                      slotRecord={(slot) => (sheet.repeatMode === "same" ? K : K * slots + slot)}
+                      pageNumber={K + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
+                      offset={printer} edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
+                      onSelect={(sel) => { setInstanceSel(sel); setEditingText(null); if (sel) setInspectorOpen(true); }}
+                      onStartEdit={(sel) => { const item = instanceFor(activeRecords[indexOfRecord(sel.recordId)], indexOfRecord(sel.recordId), 0).items.find((i) => i.id === sel.itemId); if (item?.type === "text") { setInstanceSel(sel); setEditingText(sel); } else if (item?.type === "image") { setInstanceSel(sel); setLibraryDialog({ kind: "pick", itemId: sel.itemId, target: "asset" }); } }}
+                      onCommitText={commitInstanceText} onCancelEdit={() => setEditingText(null)}
+                      onDropFiles={dropPictureOnSlot} onToggleOff={toggleInstanceOff} onResetInstance={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
+                    />
+                            ) : <div className="layout-page placeholder" style={{ width: sheet.pageWidth * PX_PER_IN, height: sheet.pageHeight * PX_PER_IN }}>Sheet {K + 1}</div>}
+                            <span className="sheet-label">Sheet {K + 1}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
                   <LayoutStage
                     sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
                     slotRecord={(slot) => (sheet.repeatMode === "same" ? recordIndex : currentPage * slots + slot)}
@@ -840,6 +974,7 @@ function App() {
                     onCommitText={commitInstanceText} onCancelEdit={() => setEditingText(null)}
                     onDropFiles={dropPictureOnSlot} onToggleOff={toggleInstanceOff} onResetInstance={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
                   />
+                  )
                 )}
               </Viewport>
 
@@ -851,30 +986,26 @@ function App() {
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
-              {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields drawer (your data columns)" : "Show the Fields drawer (your data columns)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
+              {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields and Layers drawer" : "Show the Fields and Layers drawer (your data columns, and every object in the design)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
                 <Braces size={15} /><span>Fields</span><ChevronRight size={13} className="toggle-arrow" />
               </button>}
               {!inspectorOpen && <button className="drawer-toggle right" title={inspectorOpen ? "Hide the Properties drawer" : "Show the Properties drawer (settings, layers)"} aria-label={inspectorOpen ? "Hide properties" : "Show properties"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>
                 <SlidersHorizontal size={15} /><span>Properties</span><ChevronLeft size={13} className="toggle-arrow" />
               </button>}
-              {workspace === "template" && !preview && selectedItems.length > 0 && <AlignBar units={unitsOf(items, selectedIds).length} onAlign={align} onDistribute={distribute} />}
-              {workspace === "template" && (
-                <EditBar
-                  canGroup={canGroup} canUngroup={canUngroup} onGroup={groupSelected} onUngroup={ungroupSelected}
-                  hasSelection={selectedItems.length > 0} canPaste={clipboard.length > 0} canUndo={history.canUndo} canRedo={history.canRedo}
-                  onUndo={history.undo} onRedo={history.redo} onDelete={deleteSelected} onCut={cutSelected} onCopy={copySelected} onPaste={pasteItems}
-                />
-              )}
+              {templateTools.floating}
+              {inlineEdit && workspace === "template" && (() => { const it = items.find((i) => i.id === inlineEdit.id); return it ? <InlineTextEditor item={it} svgRef={svgRef} zoom={view.zoom} draft={inlineEdit.draft} onChange={(draft) => setInlineEdit({ id: inlineEdit.id, draft })} onCommit={() => finishInlineEdit(true)} onCancel={() => finishInlineEdit(false)} /> : null; })()}
             </div>
 
             <RecordsDrawer
               open={recordsOpen} records={activeRecords} fields={fields} current={recordIndex} excluded={records.length - activeRecords.length}
-              onPick={(index) => { setRecordIndex(index); if (!window.matchMedia(WIDE_QUERY).matches) setRecordsOpen(false); }} onClose={() => setRecordsOpen(false)}
+              onPick={(index) => { setRecordIndex(index); if (stack) patchView({ pan: panForPage(sheet.repeatMode === "same" ? index : Math.floor(index / slots), view.zoom) }); if (!window.matchMedia(WIDE_QUERY).matches) setRecordsOpen(false); }} onClose={() => setRecordsOpen(false)}
               onCellPointerDown={startFieldDrag} justDragged={() => justDragged.current} dragging={!!fieldDrag}
+              pageOf={workspace === "layout" ? (index) => (sheet.repeatMode === "same" ? index : Math.floor(index / slots)) : undefined} currentPage={currentPage}
+              sort={dataSort} onSort={dataActions.onSort} onReorderColumn={dataActions.onReorderColumn}
             />
             <RecordBar
               label={pagedNav ? "Sheet" : "Record"}
-              position={pagedNav ? currentPage + 1 : recordIndex + 1}
+              position={pagedNav ? (stack ? visiblePage : currentPage) + 1 : recordIndex + 1}
               total={pagedNav ? pageCount : activeRecords.length}
               preview={fields.map((f) => (currentRecord[f] ?? "").trim()).filter(Boolean).join(" · ")}
               onStep={stepRecord}

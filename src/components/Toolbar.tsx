@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { BoxSelect, ChevronDown, FileSearch, Grid2X2, ImagePlus, Magnet, PencilLine, Plus, Ruler, ScanLine, Square, Type } from "lucide-react";
+import { BoxSelect, ChevronDown, FileSearch, FileText, LayoutGrid, Rows3, Grid2X2, ImagePlus, Magnet, PencilLine, Plus, Ruler, ScanLine, Square, Type } from "lucide-react";
 import { MAX_ZOOM, MIN_ZOOM } from "./Viewport";
 import { ZoomField } from "./ZoomField";
 import type { SnapOptions } from "../lib/smartSnap";
@@ -16,6 +16,10 @@ type Props = {
   zoom: number; onZoom: (zoom: number) => void; onZoomPreset: () => void;
   multi: boolean; onMulti: () => void;
   onAddText: () => void; onAddShape: () => void; onAddImage: () => void; onAddReference: () => void;
+  /** Tool palettes docked into this toolbar. */
+  docked?: React.ReactNode;
+  /** Page layout: show one sheet, every sheet in a scrolling column, or a grid of sheets. */
+  pageView?: "single" | "scroll" | "grid"; onPageView?: (view: "single" | "scroll" | "grid") => void; pageCount?: number;
 };
 
 export function Toolbar(p: Props) {
@@ -66,6 +70,14 @@ export function Toolbar(p: Props) {
         </span>
         {toggle(p.preview, "Print preview", p.onPreview, <FileSearch size={16} />)}
       </div>
+      {p.workspace === "layout" && p.onPageView && (
+        <div className="seg-mini view-modes" role="group" aria-label="How sheets are shown">
+          <button className={p.pageView === "single" ? "active" : ""} aria-pressed={p.pageView === "single"} title="One sheet at a time" aria-label="One sheet at a time" onClick={() => p.onPageView!("single")}><FileText size={14} /></button>
+          <button className={p.pageView === "scroll" ? "active" : ""} aria-pressed={p.pageView === "scroll"} title="All sheets, scrolling down the page" aria-label="All sheets in a column" onClick={() => p.onPageView!("scroll")}><Rows3 size={14} /></button>
+          <button className={p.pageView === "grid" ? "active" : ""} aria-pressed={p.pageView === "grid"} title="All sheets in a grid" aria-label="All sheets in a grid" onClick={() => p.onPageView!("grid")}><LayoutGrid size={14} /></button>
+        </div>
+      )}
+      {p.docked}
       <div className="toolbar-spacer" />
       <div className="zoom-control">
         <input aria-label="Zoom level" className="zoom-slider" type="range" min={Math.log(MIN_ZOOM)} max={Math.log(MAX_ZOOM)} step="0.01" value={Math.log(p.zoom)} onChange={(e) => p.onZoom(Math.exp(Number(e.target.value)))} />

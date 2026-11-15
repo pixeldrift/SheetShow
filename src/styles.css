@@ -820,7 +820,7 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 
 /* iOS Safari zooms the whole page when a focused field's text is under 16px: on touch screens every field is at least that. */
 @media(pointer:coarse){
-  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea,[contenteditable="true"]{font-size:max(16px,1em)!important}
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea:not(.inline-editor),[contenteditable="true"]{font-size:max(16px,1em)!important}
 }
 
 .convert-row .with-chevron{display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
@@ -844,3 +844,70 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .snap-menu input{margin-top:2px;accent-color:var(--accent)}
 .snap-menu .snap-master{border-bottom:1px solid var(--line-2);border-radius:0;margin-bottom:4px;padding-bottom:9px;font-weight:700}
 .snap-menu .dim{opacity:.5}
+
+/* Opacity: a number you can scrub, with a full-width slider under it */
+.opacity-block{display:flex;flex-direction:column;gap:8px}
+.opacity-block input[type=range]{width:100%;accent-color:var(--accent);height:22px;margin:0}
+
+/* Field chips: raised, rounded, with the grab handle on the right (the left edge is where the browser's back gesture lives) */
+.field-list{gap:6px}
+.field-row{min-height:36px;padding:0 6px 0 7px;border:1px solid #e3e5de;border-radius:10px;background:#fff;box-shadow:0 1px 0 #26372d0d;cursor:grab}
+.field-row.special{background:#fffaf5;border-color:#f0dcc8}
+.field-row .field-grip{margin-left:auto;display:grid;place-items:center;color:#b4bab1}
+.field-row:active{cursor:grabbing;box-shadow:0 3px 10px #26372d1f}
+.field-row .field-add{display:none}
+
+/* ── Palettes: tool groups that float on the canvas or dock into the top toolbar ── */
+.palette-grip{flex:none;width:18px;height:28px;display:grid;place-items:center;color:#b4bab1;cursor:grab;touch-action:none;margin-left:-3px}
+.palette-grip:active{cursor:grabbing}
+.palette-grip.docked{width:14px;height:24px;margin:0 2px;position:relative;cursor:grab}
+.palette-grip.docked::before{content:"";position:absolute;left:6px;top:2px;bottom:2px;width:1px;background:#dcded6}
+.palette-grip.docked:hover::before{background:var(--accent);width:2px;left:5px}
+.palette.docked{display:inline-flex;align-items:center;gap:2px;flex:none}
+.palette.docked .align-to{display:none}
+.palette-pin{width:24px!important;height:24px!important;color:#b4bab1}
+.arrange-bar{position:absolute;z-index:6;left:50%;bottom:114px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:3px 6px;background:rgba(255,255,255,.96);border:1px solid #e5e6df;border-radius:10px;box-shadow:0 3px 14px #27372d20}
+.arrange-bar .tool-button{width:32px;height:30px}
+@media(max-width:620px){.arrange-bar{bottom:106px}}
+
+/* On-canvas text editing */
+.inline-editor{z-index:40;box-sizing:border-box;resize:none;overflow:hidden;border:0;outline:2px solid var(--accent);outline-offset:0;border-radius:2px;background:rgba(255,255,255,.92);box-shadow:0 4px 18px #27372d33;margin:0;-webkit-user-select:text;user-select:text;font-size:inherit}
+@media(pointer:coarse){.inline-editor{font-size:revert-layer}}
+.drawer-table tr.on-page td{background:#faf5ef}
+.drawer-table tr.current td{background:var(--accent-soft)}
+.sheet-no{display:block;font-size:8px;font-weight:700;color:#b9916f;letter-spacing:.3px}
+
+/* ── Drawer headers: the left one carries Fields | Layers tabs; the right one names what it shows ── */
+.tabs-heading{display:flex;align-items:center;gap:2px;padding:0 4px 0 8px;border-bottom:1px solid var(--line)}
+.head-tab{height:48px;display:flex;align-items:center;gap:6px;padding:0 9px;border:0;border-bottom:2px solid transparent;background:transparent;font:700 12px Manrope,sans-serif;color:#8f968d;margin-bottom:-1px}
+.head-tab.active{color:#b86e46;border-bottom-color:var(--accent)}
+.head-close{margin-left:auto;width:30px;height:30px}
+.two-line{gap:10px;justify-content:flex-start!important;height:56px!important;padding:0 8px 0 14px!important;border-bottom:1px solid var(--line)!important}
+.two-line .head-icon{flex:none;width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:#bd7147;display:grid;place-items:center}
+.two-line .head-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;text-align:left}
+.two-line .head-text strong{font:700 13px Manrope,sans-serif;color:#46564c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.two-line .head-text small{font-size:10px;color:#9aa198;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.layer-list{padding-top:6px}
+
+/* ── All sheets: a scrolling column or a grid ── */
+.paper.stack{background:transparent;box-shadow:none}
+.page-stack{position:relative}
+.stack-sheet{position:absolute;box-shadow:0 8px 28px #28382d1c,0 1px 3px #28382d17;background:#fff}
+.stack-sheet .layout-page.placeholder{display:grid;place-items:center;color:#c0c5bc;font:700 40px Manrope,sans-serif}
+.sheet-label{position:absolute;left:0;top:-22px;font-size:12px;font-weight:700;letter-spacing:.6px;color:#9ba198;text-transform:uppercase;pointer-events:none}
+.view-modes{margin-left:8px;flex:none}
+.view-modes button{min-width:30px;padding:0 6px;display:grid;place-items:center}
+.layer-linked{margin-left:5px;color:#7d9a86;vertical-align:-1px;flex:none}
+
+/* Sortable, movable column headers */
+th.sortable{cursor:pointer;touch-action:pan-y}
+th.sortable:hover{background:#f6f1ea}
+th.sortable .sort-arrow{margin-left:5px;font-size:9px;color:var(--accent)}
+th.col-dragging{opacity:.45}
+th.drop-before::before,th.drop-after::after{content:"";position:absolute;top:0;bottom:0;width:3px;background:var(--accent);z-index:3}
+th.drop-before::before{left:-1px}th.drop-after::after{right:-1px}
+
+/* Clipped, not just hidden: a browser can't scroll these to reveal a focused or clicked element, which would shove the canvas out of place. */
+.editor-content,.viewport,.canvas-frame,.app-shell{overflow:hidden;overflow:clip}
+.pad-round-cell{min-width:0}
+.pad-round-row.stacked{grid-template-columns:1fr;gap:12px}

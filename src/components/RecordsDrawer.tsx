@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, GripVertical } from "lucide-react";
 import type { RecordRow } from "../types";
 import { prettyField } from "../lib/data";
+import { SortArrow, useColumnHeaders, type SortState } from "./columnDrag";
 
 type Props = {
   open: boolean;
@@ -16,12 +17,19 @@ type Props = {
   /** A drag just ended, so the click that follows it shouldn't also pick the row. */
   justDragged: () => boolean;
   dragging: boolean;
+  /** Page view: which sheet each record prints on, so picking a record turns to its sheet and the current sheet's records are marked. */
+  pageOf?: (index: number) => number;
+  sort: SortState;
+  onSort: (column: string, dir: 1 | -1) => void;
+  onReorderColumn: (column: string, target: string, after: boolean) => void;
+  currentPage?: number;
 };
 
 const ROW = 34;
 
 /** A slide-up list of the records being previewed: scroll, tap a row to preview it, drag a cell onto the template. */
-export function RecordsDrawer({ open, records, fields, current, excluded, onPick, onClose, onCellPointerDown, justDragged, dragging }: Props) {
+export function RecordsDrawer({ open, records, fields, current, excluded, onPick, onClose, onCellPointerDown, justDragged, dragging, pageOf, currentPage, sort, onSort, onReorderColumn }: Props) {
+  const { headerProps } = useColumnHeaders((column) => onSort(column, sort?.column === column && sort.dir === 1 ? -1 : 1), onReorderColumn);
   const scroller = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
   const [height, setHeight] = useState(240);
@@ -48,14 +56,14 @@ export function RecordsDrawer({ open, records, fields, current, excluded, onPick
       </div>
       <div className="drawer-scroll" ref={scroller} onScroll={(e) => setTop(e.currentTarget.scrollTop)} data-scroll>
         <table className="drawer-table">
-          <thead><tr><th className="num">#</th>{fields.map((f) => <th key={f}>{prettyField(f)}</th>)}</tr></thead>
+          <thead><tr><th className="num">#</th>{fields.map((f) => <th key={f} {...headerProps(f)} title="Click to sort · click again to reverse · drag to move the column">{prettyField(f)}<SortArrow sort={sort} column={f} /></th>)}</tr></thead>
           <tbody>
             {start > 0 && <tr aria-hidden style={{ height: start * ROW }}><td colSpan={fields.length + 1} /></tr>}
             {records.slice(start, end).map((record, i) => {
               const index = start + i;
               return (
-                <tr key={index} className={index === current ? "current" : ""} style={{ height: ROW }} onClick={() => { if (!justDragged()) onPick(index); }}>
-                  <td className="num">{index + 1}</td>
+                <tr key={index} className={`${index === current ? "current" : ""}${pageOf && pageOf(index) === currentPage ? " on-page" : ""}`} style={{ height: ROW }} onClick={() => { if (!justDragged()) onPick(index); }}>
+                  <td className="num">{index + 1}{pageOf && <small className="sheet-no" title="The sheet this record prints on">s{pageOf(index) + 1}</small>}</td>
                   {fields.map((f) => (
                     <td key={f} className="cell-drag" onPointerDown={(e) => onCellPointerDown(f, e)} title={`Drag onto the template to add ${prettyField(f)}`}>
                       <span>{record[f] ?? ""}</span>{index === current && f === fields[0] && <GripVertical size={11} className="grip" />}

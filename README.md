@@ -26,7 +26,11 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Template gallery (File menu → New from template…) with live thumbnails; drop your own `.json` projects into `src/templates/` to add more
 - Groups: select several objects and group them (Ctrl/⌘+G). A group moves, turns, resizes (text included), aligns and copies as one; Alt-click or double-click picks a single member; collapsible rows in Layers
 - Conditional objects: show, hide or restyle any object by rule (e.g. a ribbon only for VIPs, a symbol by meal choice), with AND / OR / NOT conditions
-- Merge fields inside text, e.g. `{city}, {state} {zip}` or `${price}`
+- Merge fields inside text in double braces, e.g. `{{city}}, {{state}} {{zip}}` or `${{price}}`, with optional sections (`{{#title}}, {{title}}{{/title}}`) and automatic space tidying
+- Sortable, movable data columns (click a heading to sort, click again to reverse, drag to reorder); tracking and pair-kerning controls for text
+- Double-tap a text object to edit it right on the canvas (linked text switches to its `{{field}}` tokens while you edit)
+- Movable, dockable tool palettes (edit, align, arrange) and stacking-order shortcuts (Ctrl/⌘+[ and ])
+- One full sheet per record ("return address page for everyone in the class")
 - Scrubbable number fields (drag a label), stepper arrows, corner radius by % or px with per-corner values, text boxes and photo placeholders
 - One undo history for everything, an alignment bar on the canvas, a records drawer with a live linked-data preview, and a field-names view
 - Importing data asks whether to replace, add to, or merge (with duplicate removal and column matching)
@@ -83,7 +87,7 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
 - [x] Column mapping when importing a new data file
 - [x] **Variable images**
   - [x] Image library: drop / browse / folder / zip / multi-select (stored in the browser), download all as a ZIP
-  - [x] Picture objects bound to a column or a filename/URL pattern, with `{field|transform}` variables and `||` fallbacks
+  - [x] Picture objects bound to a column or a filename/URL pattern, with `{{field|transform}}` variables and `||` fallbacks
   - [x] Exact → normalised → fuzzy matching, a match-review screen with manual overrides, placeholder picture
   - [x] Web sources via URL patterns (hotlinked, falling back to library pictures if a download fails)
   - [x] Project bundle (.zip) that carries the pictures; pre-print warning for pictures with no match
@@ -125,3 +129,5 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
 ## License
 
 To be determined.
+- [ ] **Rework the per-record override interface** (the data is fine; the UI for finding, making and reviewing overrides needs a rethink)
+- [x] Page view showing every sheet in a scrolling column or a grid, as well as one sheet at a time

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { BadgeCheck, Braces, ChevronDown, ChevronLeft, Database, FileText, Hash, MousePointer2, Plus, Search, Type } from "lucide-react";
+import { BadgeCheck, Braces, ChevronDown, ChevronLeft, Database, FileText, Hash, GripVertical, Layers, MousePointer2, Search, Type } from "lucide-react";
 import { specialFields, prettyField } from "../lib/data";
 
 type Props = {
@@ -14,9 +14,13 @@ type Props = {
   onFieldPointerDown: (field: string, event: React.PointerEvent) => void;
   dragging: boolean;
   onClose: () => void;
+  /** The layer list, shown on its own tab beside the fields. */
+  layers: React.ReactNode;
+  layerCount: number;
 };
 
-export function DataPanel({ fileName, fields, recordCount, totalRecords, hasTextSelected, onImport, onField, onFieldPointerDown, dragging, onClose }: Props) {
+export function DataPanel({ fileName, fields, recordCount, totalRecords, hasTextSelected, onImport, onField, onFieldPointerDown, dragging, onClose, layers, layerCount }: Props) {
+  const [tab, setTab] = useState<"fields" | "layers">("fields");
   const fileRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
@@ -26,20 +30,21 @@ export function DataPanel({ fileName, fields, recordCount, totalRecords, hasText
   const row = (field: string, label: string, icon: React.ReactNode, special = false) => (
     <button key={field} className={special ? "field-row special" : "field-row"} onPointerDown={(e) => onFieldPointerDown(field, e)} onClick={() => onField(field)}
       title={hasTextSelected ? "Click to bind the selected text" : "Click to add as a new text object"}>
-      <span className="field-grip" aria-hidden>⠿</span>
       <span className="field-type">{icon}</span>
       <span className="field-name">{label}</span>
-      <span className="field-add"><Plus size={13} /></span>
+      <span className="field-grip" aria-hidden><GripVertical size={14} /></span>
     </button>
   );
 
   return (
     <aside className={dragging ? "panel left-panel dragging" : "panel left-panel"} aria-label="Data fields">
-      <button type="button" className="panel-heading clickable" title="Close this drawer" aria-label="Close Fields" onClick={onClose}>
-        <h2><Braces size={15} className="heading-icon" /> Fields</h2>
-        <ChevronLeft size={17} className="heading-chevron" />
-      </button>
+      <div className="panel-heading tabs-heading" role="tablist">
+        <button role="tab" aria-selected={tab === "fields"} className={tab === "fields" ? "head-tab active" : "head-tab"} onClick={() => setTab("fields")} title="Your data columns: drag one onto the design"><Braces size={14} /> Fields</button>
+        <button role="tab" aria-selected={tab === "layers"} className={tab === "layers" ? "head-tab active" : "head-tab"} onClick={() => setTab("layers")} title="Every object in the design, front to back"><Layers size={14} /> Layers <span className="count-pill">{layerCount}</span></button>
+        <button type="button" className="icon-button head-close" title="Close this drawer" aria-label="Close drawer" onClick={onClose}><ChevronLeft size={17} /></button>
+      </div>
       {/* Everything below the heading scrolls. */}
+      {tab === "layers" ? <div className="panel-body" data-scroll>{layers}</div> : (
       <div className="panel-body" data-scroll>
         <div className="section-title"><Database size={14} /> DATA SOURCE <button className="text-action" onClick={() => fileRef.current?.click()}>Change</button></div>
         <div className="source-card">
@@ -59,6 +64,7 @@ export function DataPanel({ fileName, fields, recordCount, totalRecords, hasText
 
         <div className="drag-hint"><MousePointer2 size={13} /> Drag (touch: press and hold, then drag) a field onto your design, or select text and tap a field to link it.</div>
       </div>
+      )}
     </aside>
   );
 }
