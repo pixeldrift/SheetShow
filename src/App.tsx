@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Braces, ChevronLeft, ChevronRight, Redo2, SlidersHorizontal, Undo2 } from "lucide-react";
 import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
@@ -8,7 +8,7 @@ import { DEFAULT_SNAP_OPTIONS, type SnapOptions } from "./lib/smartSnap";
 import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid, valueFor } from "./lib/data";
 import { applyOverride, hasEdits, pickVariant, toItemPatch } from "./lib/instances";
 import { applyConditions } from "./lib/conditions";
-import { cloneItems, expandToGroups, groupItems, moveLayerTo, nextGroupName, renameGroup as renameGroupIn, ungroupItems, unitsOf } from "./lib/groups";
+import { cloneItems, expandToGroups, groupItems, moveLayerTo, reorderSelection, type ArrangeMode, nextGroupName, renameGroup as renameGroupIn, ungroupItems, unitsOf } from "./lib/groups";
 import { instanceIssues, itemLabel, recordLabel, type Issue } from "./lib/audit";
 import { checkImageUrls } from "./lib/webImages";
 import { layoutText } from "./lib/text";
@@ -33,6 +33,8 @@ import { Topbar } from "./components/Topbar";
 import { Toolbar } from "./components/Toolbar";
 import { EditBar } from "./components/EditBar";
 import { AlignBar } from "./components/AlignBar";
+import { ArrangeBar } from "./components/ArrangeBar";
+import type { PaletteState } from "./components/Palette";
 import { DataPanel } from "./components/DataPanel";
 import { Inspector } from "./components/Inspector";
 import { RecordBar } from "./components/RecordBar";
@@ -93,6 +95,8 @@ function App() {
   const [activeVariant, setActiveVariant] = useState(variants[0].id);
   const variantId = itemsDoc.value[activeVariant] ? activeVariant : variants[0].id; // the template being edited
   const items = itemsDoc.value[variantId] ?? [];
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   /** Edits the template being shown, so the rest of the editor keeps working with one plain list of items. */
   const history = {
     set: (update: (list: DesignItem[]) => DesignItem[], options?: { coalesce?: string }) =>
@@ -110,6 +114,8 @@ function App() {
   const [clipboard, setClipboard] = useState<DesignItem[]>([]);
   const [saveState, setSaveState] = useState<"saved" | "error">("saved");
   const [fieldDrag, setFieldDrag] = useState<{ field: string; x: number; y: number } | null>(null);
+  /** The existing text object a dragged field would link to if dropped now. */
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const justDragged = useRef(false);
   // A freshly imported file waiting for the person to confirm how its columns map onto the template.
   const [pendingImport, setPendingImport] = useState<{ records: RecordRow[]; fileName: string; stage: "choose" | "map" } | null>(null);
@@ -117,6 +123,17 @@ function App() {
   const [inspectorOpen, setInspectorOpen] = useState(() => window.matchMedia(WIDE_QUERY).matches);
   const [showGrid, setShowGrid] = useState(false);
   const [showRulers, setShowRulers] = useState(true);
+  // Tool palettes (edit, align, arrange): floating on the canvas or docked in the toolbar, remembered in this browser.
+  const [palettes, setPalettes] = useState<Record<string, PaletteState>>(() => {
+    try { return JSON.parse(localStorage.getItem("sheetshow.palettes") ?? "{}"); } catch { return {}; }
+  });
+  const palette = (id: string): PaletteState => palettes[id] ?? { docked: false };
+  const setPalette = (id: string) => (state: PaletteState) => setPalettes((all) => {
+    const next = { ...all, [id]: state };
+    try { localStorage.setItem("sheetshow.palettes", JSON.stringify(next)); } catch { /* storage unavailable */ }
+    return next;
+  });
+  const canDock = window.matchMedia(WIDE_QUERY).matches;
   const [snap, setSnap] = useState(true);
   const [snapOptions, setSnapOptions] = useState<SnapOptions>(() => {
     try { return { ...DEFAULT_SNAP_OPTIONS, ...JSON.parse(localStorage.getItem("sheetshow.snapOptions") ?? "{}") }; } catch { return DEFAULT_SNAP_OPTIONS; }
@@ -382,6 +399,7 @@ function App() {
     setSelectedIds((current) => (additive ? [...new Set([...current, ...withGroups])] : withGroups));
   };
 
+  const arrange = (mode: ArrangeMode) => history.set((list) => reorderSelection(list, selectedIds, mode));
   const reorderLayer = (id: string, targetId: string, above: boolean, asGroup: boolean) => history.set((list) => moveLayerTo(list, id, targetId, above, asGroup));
 
   const bindField = (field: string) => {
@@ -528,6 +546,7 @@ function App() {
       window.removeEventListener("pointercancel", end);
       window.removeEventListener("touchmove", blockScroll);
       setFieldDrag(null);
+      setDropTargetId(null);
     };
     function move(e: PointerEvent) {
       if (e.pointerId !== pointerId) return;
@@ -535,7 +554,12 @@ function App() {
         if (touch) { cleanup(); return; } // finger moved first: the user is scrolling the list
         begin();
       }
-      if (active) setFieldDrag({ field, x: e.clientX, y: e.clientY });
+      if (active) {
+        setFieldDrag({ field, x: e.clientX, y: e.clientY });
+        const over = document.elementFromPoint(e.clientX, e.clientY);
+        const id = over?.closest(".viewport") ? over.closest("[data-item-id]")?.getAttribute("data-item-id") : null;
+        setDropTargetId(id && itemsRef.current.find((i) => i.id === id)?.type === "text" ? id : null);
+      }
     }
     function end(e: PointerEvent) {
       if (e.pointerId !== pointerId) return;
@@ -751,6 +775,7 @@ function App() {
       else if (mod && key === "x") { if (has) { event.preventDefault(); cutSelected(); } }
       else if (mod && key === "v") { if (clipboard.length) { event.preventDefault(); pasteItems(); } }
       else if (mod && key === "d") { if (has) { event.preventDefault(); duplicateSelected(); } }
+      else if (mod && (event.code === "BracketRight" || event.code === "BracketLeft")) { if (has) { event.preventDefault(); arrange(event.code === "BracketRight" ? (event.shiftKey ? "front" : "up") : (event.shiftKey ? "back" : "down")); } }
       else if (mod && key === "g") { event.preventDefault(); if (event.shiftKey) ungroupSelected(); else groupSelected(); }
       else if (key === "delete" || key === "backspace") { if (has) { event.preventDefault(); deleteSelected(); } }
       else if (key === "escape") setSelectedIds([]);
@@ -770,6 +795,21 @@ function App() {
   const meta = { recordNumber: recordIndex + 1, pageNumber: currentPage + 1, recordCount: activeRecords.length, pageCount };
   /** The template as the previewed record sees it: conditional rules applied, rule-hidden objects kept (faded) so they stay selectable. */
   const displayItems = applyConditions(items, currentRecord, meta, !preview);
+  const toolDefs = workspace === "template" ? [
+    { id: "edit", always: true, node: (
+      <EditBar canGroup={canGroup} canUngroup={canUngroup} onGroup={groupSelected} onUngroup={ungroupSelected}
+        hasSelection={selectedItems.length > 0} canPaste={clipboard.length > 0} canUndo={history.canUndo} canRedo={history.canRedo}
+        onUndo={history.undo} onRedo={history.redo} onDelete={deleteSelected} onCut={cutSelected} onCopy={copySelected} onPaste={pasteItems}
+        palette={palette("edit")} onPalette={setPalette("edit")} canDock={canDock} />) },
+    { id: "align", always: false, node: <AlignBar units={unitsOf(items, selectedIds).length} onAlign={align} onDistribute={distribute} palette={palette("align")} onPalette={setPalette("align")} canDock={canDock} /> },
+    { id: "arrange", always: false, node: <ArrangeBar onArrange={arrange} palette={palette("arrange")} onPalette={setPalette("arrange")} canDock={canDock} /> },
+  ].filter((t) => !preview || t.id === "edit") : [];
+  const dockedNow = (id: string) => palette(id).docked && canDock;
+  // Floating palettes show when there is something to act on; docked ones stay put in the toolbar.
+  const templateTools = {
+    floating: toolDefs.filter((t) => !dockedNow(t.id) && (t.always || selectedItems.length > 0)).map((t) => <Fragment key={t.id}>{t.node}</Fragment>),
+    docked: toolDefs.filter((t) => dockedNow(t.id)).map((t) => <Fragment key={t.id}>{t.node}</Fragment>),
+  };
   const caption = workspace === "template"
     ? { title: variants.length > 1 ? `INDIVIDUAL TEMPLATE · ${variants.find((v) => v.id === variantId)?.name.toUpperCase()}` : "INDIVIDUAL TEMPLATE", detail: `${template.width.toFixed(2)} × ${template.height.toFixed(2)} in` }
     : { title: "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet${printer.x || printer.y ? ` · printer offset ${printer.x >= 0 ? "+" : ""}${printer.x.toFixed(3)}, ${printer.y >= 0 ? "+" : ""}${printer.y.toFixed(3)} in` : ""}` };
@@ -798,7 +838,7 @@ function App() {
           preview={preview} onPreview={() => setPreview((v) => !v)}
           multi={multiMode} onMulti={() => setMultiMode((v) => !v)}
           zoom={view.zoom} onZoom={setZoom} onZoomPreset={toggleZoomPreset}
-          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })} onAddReference={() => setLibraryDialog({ kind: "insert", reference: true })}
+          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })} onAddReference={() => setLibraryDialog({ kind: "insert", reference: true })} docked={templateTools.docked}
         />
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
@@ -826,7 +866,7 @@ function App() {
                 {workspace === "template" ? (
                   <TemplateStage
                     items={displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
-                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
+                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} dropTargetId={dropTargetId} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
                     onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup}
                   />
                 ) : (
@@ -857,14 +897,7 @@ function App() {
               {!inspectorOpen && <button className="drawer-toggle right" title={inspectorOpen ? "Hide the Properties drawer" : "Show the Properties drawer (settings, layers)"} aria-label={inspectorOpen ? "Hide properties" : "Show properties"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>
                 <SlidersHorizontal size={15} /><span>Properties</span><ChevronLeft size={13} className="toggle-arrow" />
               </button>}
-              {workspace === "template" && !preview && selectedItems.length > 0 && <AlignBar units={unitsOf(items, selectedIds).length} onAlign={align} onDistribute={distribute} />}
-              {workspace === "template" && (
-                <EditBar
-                  canGroup={canGroup} canUngroup={canUngroup} onGroup={groupSelected} onUngroup={ungroupSelected}
-                  hasSelection={selectedItems.length > 0} canPaste={clipboard.length > 0} canUndo={history.canUndo} canRedo={history.canRedo}
-                  onUndo={history.undo} onRedo={history.redo} onDelete={deleteSelected} onCut={cutSelected} onCopy={copySelected} onPaste={pasteItems}
-                />
-              )}
+              {templateTools.floating}
             </div>
 
             <RecordsDrawer

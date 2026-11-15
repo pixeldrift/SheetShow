@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { BadgeCheck, Braces, ChevronDown, ChevronLeft, Database, FileText, Hash, MousePointer2, Plus, Search, Type } from "lucide-react";
+import { BadgeCheck, Braces, ChevronDown, ChevronLeft, Database, FileText, Hash, GripVertical, MousePointer2, Search, Type } from "lucide-react";
 import { specialFields, prettyField } from "../lib/data";
 
 type Props = {
@@ -26,10 +26,9 @@ export function DataPanel({ fileName, fields, recordCount, totalRecords, hasText
   const row = (field: string, label: string, icon: React.ReactNode, special = false) => (
     <button key={field} className={special ? "field-row special" : "field-row"} onPointerDown={(e) => onFieldPointerDown(field, e)} onClick={() => onField(field)}
       title={hasTextSelected ? "Click to bind the selected text" : "Click to add as a new text object"}>
-      <span className="field-grip" aria-hidden>⠿</span>
       <span className="field-type">{icon}</span>
       <span className="field-name">{label}</span>
-      <span className="field-add"><Plus size={13} /></span>
+      <span className="field-grip" aria-hidden><GripVertical size={14} /></span>
     </button>
   );
 

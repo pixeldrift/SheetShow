@@ -242,10 +242,11 @@ export function EffectsSection({ item, patch }: { item: DesignItem; patch: Patch
   const setOutline = (change: Partial<{ color: string; width: number }>) => patch({ textStroke: { ...ol, ...change } });
   return (
     <Section title="EFFECTS">
-      <div className="slider-row first">
-        <span>Opacity</span>
-        <input type="range" min="0" max="100" step="1" value={Math.round((item.opacity ?? 1) * 100)} aria-label="Opacity" onChange={(e) => patch({ opacity: Number(e.target.value) / 100 })} />
-        <output>{Math.round((item.opacity ?? 1) * 100)}%</output>
+      <div className="opacity-block">
+        <Pair label="Opacity">
+          <NumberField value={Math.round((item.opacity ?? 1) * 100)} min={0} max={100} step={1} places={0} unit="%" onChange={(n) => patch({ opacity: n / 100 })} />
+        </Pair>
+        <input type="range" min="0" max="100" step="1" value={Math.round((item.opacity ?? 1) * 100)} aria-label="Opacity" onChange={(ev) => patch({ opacity: Number(ev.target.value) / 100 })} />
       </div>
       {item.type === "text" && (
         <Effect title="Outline" on={!!stroke} onToggle={(on) => patch({ textStroke: on ? ol : undefined })}>

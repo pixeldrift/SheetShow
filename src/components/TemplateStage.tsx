@@ -24,6 +24,8 @@ type Props = {
   snap: boolean;
   /** Which kinds of snapping are on (while `snap`, the master switch, is on). */
   snapOptions: SnapOptions;
+  /** A text object a dragged field would link to if dropped now: drawn with a highlighted border and a link badge. */
+  dropTargetId?: string | null;
   guides: Guide[];
   /** Tapping toggles selection (multi-select mode) instead of replacing it. */
   multi: boolean;
@@ -61,7 +63,7 @@ const GUIDE_REACH = 0.08;
 const MIN_SIZE = 0.05;
 
 /** Editable template canvas. Items may be dragged anywhere, including past the template edge and over the rulers. */
-export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, snapOptions, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd }: Props) {
+export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, snapOptions, dropTargetId, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd }: Props) {
   const drag = useRef<Drag | null>(null);
   const lastTap = useRef<{ id: string; at: number } | null>(null);
   /** A double-click on a grouped object picks just that object, but only once the pointer is released without having moved (otherwise it was a quick click-and-drag of the group). */
@@ -275,6 +277,21 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       {items.filter((item) => item.visible !== false && !(preview && item.reference)).map((item) => (
         <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} raw={rawFields} onPointerDown={(event) => startMove(event, item)} />
       ))}
+      {dropTargetId && (() => {
+        const target = items.find((i) => i.id === dropTargetId);
+        if (!target) return null;
+        const { w, h } = itemFrame(target, record, meta, rawFields);
+        const b = 14 / zoom; // link badge on the top-right corner
+        return (
+          <g transform={`translate(${target.x * PX_PER_IN} ${target.y * PX_PER_IN})${target.rotation ? ` rotate(${target.rotation} ${w / 2} ${h / 2})` : ""}`} pointerEvents="none">
+            <rect width={w} height={h} fill="#d77d4e22" stroke="#d77d4e" strokeWidth={2.5 / zoom} rx={3 / zoom} />
+            <g transform={`translate(${w - b * 0.6} ${-b * 0.6}) scale(${b / 24})`}>
+              <circle cx="12" cy="12" r="13" fill="#d77d4e" stroke="#fff" strokeWidth="2" />
+              <g fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" transform="translate(3.5 3.5) scale(.71)"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></g>
+            </g>
+          </g>
+        );
+      })()}
       {/* Smart-snap guides while dragging: a thin line wherever an edge or centre lines up with something else. */}
       {snapLines.map((l, i) => l.gap ? (
         // An equal-spacing marker: the measured gap with a tick at each end.

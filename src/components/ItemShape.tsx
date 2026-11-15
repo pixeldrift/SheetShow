@@ -148,6 +148,8 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
       </g>
       {/* Outline sits exactly on the frame edge, so the resize handles (centred on the same edge) attach to it. */}
       {editor && !outline && <rect className="hover-outline" width={w} height={h} fill="none" stroke={ACCENT} strokeWidth={1 / zoom} pointerEvents="none" />}
+      {/* Fully transparent objects keep a faint dashed outline so they can still be found and selected. */}
+      {editor && (item.opacity ?? 1) < 0.05 && <rect width={w} height={h} fill="transparent" stroke="#8f968d" strokeWidth={1 / zoom} strokeDasharray={`${3 / zoom} ${3 / zoom}`} pointerEvents="all" />}
       {source._ruleHidden && editor && <rect width={w} height={h} fill="none" stroke="#8f968d" strokeWidth={1 / zoom} strokeDasharray={`${3 / zoom} ${3 / zoom}`} pointerEvents="none" />}
       {overridden && !outline && <rect width={w} height={h} fill="none" stroke={OVERRIDE} strokeWidth={1.5 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} pointerEvents="none" />}
       {outline && <rect width={w} height={h} fill="none" stroke={outline === "primary" && overridden ? OVERRIDE : ACCENT} strokeWidth={(outline === "primary" ? 1.5 : 1) / zoom} strokeOpacity={outline === "primary" ? 1 : 0.7} pointerEvents="none" />}

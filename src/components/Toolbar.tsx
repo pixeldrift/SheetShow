@@ -16,6 +16,8 @@ type Props = {
   zoom: number; onZoom: (zoom: number) => void; onZoomPreset: () => void;
   multi: boolean; onMulti: () => void;
   onAddText: () => void; onAddShape: () => void; onAddImage: () => void; onAddReference: () => void;
+  /** Tool palettes docked into this toolbar. */
+  docked?: React.ReactNode;
 };
 
 export function Toolbar(p: Props) {
@@ -66,6 +68,7 @@ export function Toolbar(p: Props) {
         </span>
         {toggle(p.preview, "Print preview", p.onPreview, <FileSearch size={16} />)}
       </div>
+      {p.docked}
       <div className="toolbar-spacer" />
       <div className="zoom-control">
         <input aria-label="Zoom level" className="zoom-slider" type="range" min={Math.log(MIN_ZOOM)} max={Math.log(MAX_ZOOM)} step="0.01" value={Math.log(p.zoom)} onChange={(e) => p.onZoom(Math.exp(Number(e.target.value)))} />
