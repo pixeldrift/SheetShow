@@ -820,7 +820,7 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 
 /* iOS Safari zooms the whole page when a focused field's text is under 16px: on touch screens every field is at least that. */
 @media(pointer:coarse){
-  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea:not(.inline-editor),[contenteditable="true"]{font-size:max(16px,1em)!important}
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea:not(.inline-editor),[contenteditable="true"]:not(.inline-editor){font-size:max(16px,1em)!important}
 }
 
 .convert-row .with-chevron{display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
@@ -911,3 +911,42 @@ th.drop-before::before{left:-1px}th.drop-after::after{right:-1px}
 .editor-content,.viewport,.canvas-frame,.app-shell{overflow:hidden;overflow:clip}
 .pad-round-cell{min-width:0}
 .pad-round-row.stacked{grid-template-columns:1fr;gap:12px}
+
+/* ── Token editor: {{tokens}} as chips (the one under the caret turns into text) or as colour-coded text ── */
+.token-editor{--tk-field:#3f7a58;--tk-field-soft:#e4f0e7;--tk-field-line:#a9cdb6;--tk-cond:#c2622d;--tk-cond-soft:#fbe9dc;--tk-cond-mid:#f6d6bf;--tk-cond-line:#e3a97f;--tk-str:#3568a8;--tk-brace:#9aa59d;--tk-bad:#c43a3a;
+  white-space:pre-wrap;overflow-wrap:anywhere;outline:none;cursor:text;-webkit-user-select:text;user-select:text}
+.token-editor:empty::before{content:attr(data-placeholder);color:#a5aaa1;pointer-events:none}
+.property-input.textarea.token-editor{height:auto;min-height:76px;padding:8px 28px 8px 9px;line-height:1.55;font-size:12px;display:block}
+.property-input.textarea.token-editor:focus{border-color:#d69a77}
+.token-box{position:relative}
+.token-mode-toggle{position:absolute;top:4px;right:4px;width:22px;height:22px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:#a0a79e;padding:0;z-index:2}
+.token-mode-toggle[aria-pressed="true"]{color:#b86e46;background:#f8f3ed}
+.inline-mode-toggle{z-index:41;width:24px;height:24px;border:1px solid #e5e6df;background:#fff;color:#78847a;box-shadow:0 2px 8px #27372d26}
+.token-editor .br{color:var(--tk-brace)}
+.token-editor .kw{color:var(--tk-cond);font-weight:500}
+.token-editor .op{font-weight:700}
+.token-editor .q{color:var(--tk-str)}
+.token-editor .fn{color:var(--tk-field)}
+.token-editor .mk{color:var(--tk-cond);font-weight:700}
+.token-editor .open .fn,.token-editor .close .fn{color:var(--tk-cond)}
+/* chips */
+.te-chip{display:inline-flex;align-items:center;gap:4px;padding:0 8px;margin:0 1px;border-radius:999px;font-size:.84em;line-height:1.5;vertical-align:.04em;border:1px solid transparent;white-space:nowrap;cursor:pointer;-webkit-user-select:all;user-select:all}
+.te-chip small{font-size:.9em;color:var(--tk-brace)}
+.te-chip.ins{background:var(--tk-field-soft);border-color:var(--tk-field-line)}
+.te-chip.ins::before{content:"";width:.85em;height:.85em;flex:none;background:var(--tk-field);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cellipse cx='12' cy='5' rx='9' ry='3'/%3E%3Cpath d='M3 5v14a9 3 0 0 0 18 0V5'/%3E%3Cpath d='M3 12a9 3 0 0 0 18 0'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cellipse cx='12' cy='5' rx='9' ry='3'/%3E%3Cpath d='M3 5v14a9 3 0 0 0 18 0V5'/%3E%3Cpath d='M3 12a9 3 0 0 0 18 0'/%3E%3C/svg%3E") center/contain no-repeat}
+.te-chip.open{background:var(--tk-cond-mid);border-color:var(--tk-cond-line)}
+.te-chip.else{border:1px dashed var(--tk-cond-line)}
+.te-chip.close{background:var(--tk-cond-soft);border-color:var(--tk-cond-line);padding:0 7px}
+.te-chip.bad{border-color:var(--tk-bad);box-shadow:0 0 0 1px var(--tk-bad)}
+.te-chip.bad.ins{background:#fbe4e4}
+/* tokens shown as text: colour-coded, and the one being edited gets an outline */
+.te-raw{font-family:ui-monospace,"JetBrains Mono",Menlo,monospace;font-size:.86em;border-radius:4px;padding:1px 2px}
+.te-raw.active{background:#fff;box-shadow:0 0 0 1.5px var(--tk-field-line)}
+.te-raw.active.open,.te-raw.active.else,.te-raw.active.close{box-shadow:0 0 0 1.5px var(--tk-cond-line)}
+.te-raw.bad{text-decoration:underline wavy var(--tk-bad);text-underline-offset:3px}
+@media (prefers-color-scheme: dark){.te-raw.active{background:#fff}}
+/* On the canvas the text can be huge, so tokens keep a steady size of their own */
+.inline-editor .te-chip{font-size:13px;line-height:1.5;padding:0 8px;vertical-align:middle}
+.inline-editor .te-raw{font-size:15px}

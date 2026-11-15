@@ -825,7 +825,7 @@ function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const tag = (event.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (event.target as HTMLElement).isContentEditable) return;
       const mod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
       const has = selectedItems.length > 0;
@@ -993,7 +993,7 @@ function App() {
                 <SlidersHorizontal size={15} /><span>Properties</span><ChevronLeft size={13} className="toggle-arrow" />
               </button>}
               {templateTools.floating}
-              {inlineEdit && workspace === "template" && (() => { const it = items.find((i) => i.id === inlineEdit.id); return it ? <InlineTextEditor item={it} svgRef={svgRef} zoom={view.zoom} draft={inlineEdit.draft} onChange={(draft) => setInlineEdit({ id: inlineEdit.id, draft })} onCommit={() => finishInlineEdit(true)} onCancel={() => finishInlineEdit(false)} /> : null; })()}
+              {inlineEdit && workspace === "template" && (() => { const it = items.find((i) => i.id === inlineEdit.id); return it ? <InlineTextEditor item={it} svgRef={svgRef} zoom={view.zoom} draft={inlineEdit.draft} onChange={(draft) => setInlineEdit({ id: inlineEdit.id, draft })} onCommit={() => finishInlineEdit(true)} onCancel={() => finishInlineEdit(false)} fields={fields} /> : null; })()}
             </div>
 
             <RecordsDrawer

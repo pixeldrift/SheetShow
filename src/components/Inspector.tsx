@@ -16,6 +16,10 @@ import { VariantsSection } from "./VariantSections";
 import { ConditionsSection } from "./ConditionsSection";
 import { PrinterCalibrationSection } from "./PrinterCalibrationSection";
 import { defaultImageSource } from "../lib/images";
+import { mergeIssues } from "../lib/merge";
+import { TokenEditor } from "./TokenEditor";
+import { TokenModeToggle } from "./TokenModeToggle";
+import { useTokenMode } from "../lib/tokenMode";
 import { StockPicker } from "./StockPicker";
 import type { PrinterCalibration } from "../hooks/usePrinterCalibration";
 
@@ -151,6 +155,7 @@ function MultiProperties({ count, onRotateBy, onDuplicate, onDelete, group, grou
 
 function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, imageTools, fitNote, instanceMode, onFitReview }: { instanceMode?: boolean; onFitReview?: () => void; fitNote?: { text: string; bad: boolean } | null; imageTools: ImageTools; item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary }) {
   const patch = (p: Partial<DesignItem>, key?: string) => onUpdate(item.id, p, key ?? `prop:${item.id}:${Object.keys(p).join()}`);
+  const [tokenMode, toggleTokenMode] = useTokenMode();
   const [convertAt, setConvertAt] = useState<{ x: number; y: number; w: number } | null>(null);
   const convertRef = useRef<HTMLButtonElement>(null);
   const convert = (action: () => void) => { setConvertAt(null); action(); };
@@ -181,9 +186,18 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
                 <button onClick={() => patch({ field: undefined, text: fieldDisplayName(item.field!) })} title="Unlink and keep as static text"><Link2Off size={13} /> Unlink</button>
               </div>
             ) : (
-              <textarea className="property-input textarea" rows={3} value={item.text ?? ""} onChange={(e) => patch({ text: e.target.value })} placeholder="Enter text…" />
+              <div className="token-box">
+                <TokenEditor className="property-input textarea" value={item.text ?? ""} onChange={(text) => patch({ text })} mode={tokenMode} fields={imageTools.columns} ariaLabel="Text" placeholder="Enter text…" />
+                <TokenModeToggle mode={tokenMode} onToggle={toggleTokenMode} />
+              </div>
             )}
-            {!item.field && <p className="hint">Press Enter for a new line. Pick a field in the data drawer to link this text, or write your own wording with fields in double braces: <code>{"{{city}}, {{state}} {{zip}}"}</code>. Only show something when a value exists: <code>{"{{first}} {{last}}{{#title}}, {{title}}{{/title}}"}</code>. Extra spaces tidy themselves, so a missing middle name leaves no gap.</p>}
+            {!item.field && (
+              <>
+                <p className="hint">Press Enter for a new line. Pick a field in the Fields drawer to link this text, or write your own wording with fields in double braces: <code>{"{{city}}, {{state}} {{zip}}"}</code>. Extra spaces tidy themselves.</p>
+                <p className="hint">Only when there is a value: <code>{"{{first}} {{last}}{{?title}}, {{title}}{{/}}"}</code>. Compare with <code>=</code> <code>!=</code> <code>contains</code> <code>starts</code> <code>ends</code> (add <code>!</code> to negate a word), put <code>~</code> before a quoted value to match loosely (ignoring spaces and punctuation), join with <code>and</code> / <code>or</code>, and use <code>{"{{else}}"}</code>: <code>{"{{?type = \"VIP\"}}★{{else}}·{{/}}"}</code>.</p>
+                {mergeIssues(item.text ?? "", imageTools.columns).map((issue) => <p key={issue} className="hint warn">{issue}</p>)}
+              </>
+            )}
             <label className="check-row"><input type="checkbox" checked={item.wrap !== false} onChange={(e) => patch({ wrap: e.target.checked })} /> Wrap text to the box width</label>
           </Section>
           <Section title="TYPOGRAPHY">
