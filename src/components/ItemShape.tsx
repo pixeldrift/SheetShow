@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import type { DesignItem, RecordMeta, RecordRow } from "../types";
 import { useImages } from "./ImageContext";
-import { cornerRadii, isUniform, roundedRectPath, type Radii } from "../lib/shape";
+import { cornerRadii, isUniform, paddingsOf, roundedRectPath, type Radii } from "../lib/shape";
 import { fieldDisplayName } from "../lib/data";
 import { PX_PER_IN, valueFor } from "../lib/data";
 import { fontStack } from "../lib/fonts";
@@ -38,7 +38,7 @@ function layoutItem(source: DesignItem, record: RecordRow, meta: RecordMeta, raw
   if (source.type !== "text") return { item: source, w, boxH, h: boxH, fontSize: 0, lines: [] as string[], issue: null as TextLayout["issue"] };
   const layout = layoutText(source, raw ? rawText(source) : valueFor(source, record, meta), w, boxH);
   // Without auto-fit or truncation, wrapped text can run past the box, so the frame grows to cover it.
-  const expands = (source.autoFit ?? "off") === "off" && source.overflow !== "truncate";
+  const expands = (source.autoFit ?? "off") === "off" && (source.overflow ?? "spill") === "spill";
   const h = expands ? Math.max(boxH, layout.needH) : boxH;
   return { item: layout.item, w, boxH, h, fontSize: layout.fontPx, lines: layout.lines, issue: layout.issue };
 }
@@ -77,8 +77,8 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
   const { item, w, boxH, h, fontSize, lines } = layoutItem(source, record, meta, raw);
   const lineStep = fontSize * (item.lineHeight ?? 1.2);
   const anchor = item.align === "center" ? "middle" : item.align === "right" ? "end" : "start";
-  const pad = item.type === "text" ? Math.max(0, (item.padding ?? 0) * PX_PER_IN) : 0;
-  const textX = item.align === "center" ? w / 2 : item.align === "right" ? w - pad : pad;
+  const [padT, padR, , padL] = item.type === "text" ? paddingsOf(item).map((v) => v * PX_PER_IN) : [0, 0, 0, 0];
+  const textX = item.align === "center" ? padL + (w - padL - padR) / 2 : item.align === "right" ? w - padR : padL;
   const rotate = item.rotation ? ` rotate(${item.rotation} ${w / 2} ${h / 2})` : "";
   const editor = !!onPointerDown || !!interactive;
 
@@ -119,10 +119,11 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
       className={editor ? (item.locked ? "canvas-object locked" : "canvas-object") : undefined}
       onPointerDown={onPointerDown}
     >
-      {(shadow || item.type === "image") && (
+      {(shadow || item.type === "image" || (item.type === "text" && item.overflow === "clip")) && (
         <defs>
           {shadow && <filter id={`${uid}s`} x="-60%" y="-60%" width="220%" height="220%" colorInterpolationFilters="sRGB"><feDropShadow dx={shadow.x * PT} dy={shadow.y * PT} stdDeviation={Math.max(0, shadow.blur * PT) / 2} floodColor={shadow.color} floodOpacity={shadow.opacity} /></filter>}
           {item.type === "image" && <clipPath id={`${uid}c`}>{outlineShape(0, {})}</clipPath>}
+          {item.type === "text" && item.overflow === "clip" && <clipPath id={`${uid}t`}><rect width={w} height={boxH} /></clipPath>}
         </defs>
       )}
       <g opacity={(item.opacity ?? 1) * (source._ruleHidden ? 0.22 : 1)} filter={shadow ? `url(#${uid}s)` : undefined}>
@@ -138,10 +139,10 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
             {(item.fill || hasStroke) && outlineShape(strokePx / 2, { fill: item.fill ?? "none", stroke: hasStroke ? item.stroke : "none", strokeWidth: strokePx })}
             {/* Invisible hit area so thin text is easy to grab with a finger. */}
             {editor && <rect width={w} height={h} fill="transparent" />}
-            <text x={textX} y={pad + fontSize * 1.15} fontFamily={fontStack(item.fontFamily)} fontStyle={item.italic ? "italic" : "normal"} fontSize={fontSize} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={anchor}
+            <g clipPath={item.overflow === "clip" ? `url(#${uid}t)` : undefined}><text x={textX} y={padT + fontSize * 1.15} fontFamily={fontStack(item.fontFamily)} fontStyle={item.italic ? "italic" : "normal"} textDecoration={item.underline ? "underline" : undefined} fontSize={fontSize} fontWeight={item.weight ?? 500} fill={item.color ?? "#34443d"} textAnchor={anchor}
               {...(item.textStroke ? { stroke: item.textStroke.color, strokeWidth: item.textStroke.width * 2 * PT, paintOrder: "stroke", strokeLinejoin: "round" as const } : {})}>
               {lines.map((line, i) => <tspan key={i} x={textX} dy={i === 0 ? 0 : lineStep}>{line || "\u00a0"}</tspan>)}
-            </text>
+            </text></g>
           </>
         )}
       </g>
@@ -161,7 +162,7 @@ export function TemplateThumbnail({ items, record, meta, width, height, interact
 }) {
   return (
     <svg className="template-thumb" width={width * PX_PER_IN} height={height * PX_PER_IN} viewBox={`0 0 ${width * PX_PER_IN} ${height * PX_PER_IN}`}>
-      {items.filter((item) => item.visible !== false).map((item) => (
+      {items.filter((item) => item.visible !== false && !item.reference).map((item) => (
         <ItemShape key={item.id} item={item} record={record} meta={meta} interactive={interactive} zoom={zoom}
           outline={interactive && selectedItemId === item.id ? "primary" : undefined} overridden={overriddenIds?.has(item.id)} />
       ))}

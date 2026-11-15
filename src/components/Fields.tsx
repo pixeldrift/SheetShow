@@ -10,7 +10,7 @@ const PIXELS_PER_STEP = 5;
 /**
  * Number input that lets you type freely (e.g. "1.") and only commits valid numbers.
  * - Up/down arrows (click, or hold to repeat; Shift = ×10).
- * - Drag the label, or the unit, left and right to scrub the value (Shift = ×10, Alt = fine).
+ * - Drag the label, the unit or the number itself (when not being edited) left and right to scrub the value (Shift = ×10, Alt = fine); tap the number to type.
  * While you're typing it shows your draft; otherwise it always shows the real value. A change from elsewhere
  * (undo, a ±90° button) is adopted even if this field still has focus, as Safari doesn't blur it on button clicks.
  */
@@ -33,13 +33,18 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
     change(clamped);
   }, []);
 
-  /** Drag to scrub. Pointer moves are tracked on the window so the drag survives leaving the label. */
-  const startScrub: ScrubStart = useCallback((event) => {
+  /**
+   * Drag to scrub. Pointer moves are tracked on the window so the drag survives leaving the label.
+   * With `threshold`, a press that never moves that far counts as a tap and calls `onTap` (used by the number box itself: tap to type, drag to scrub).
+   */
+  const beginScrub = useCallback((event: React.PointerEvent, threshold = 0, onTap?: () => void) => {
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX, startValue = latest.current.value;
-    document.body.classList.add("scrubbing");
+    let dragging = threshold === 0;
+    if (dragging) document.body.classList.add("scrubbing");
     const move = (e: PointerEvent) => {
+      if (!dragging) { if (Math.abs(e.clientX - startX) < threshold) return; dragging = true; document.body.classList.add("scrubbing"); }
       const multiplier = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
       commit(startValue + Math.round((e.clientX - startX) / PIXELS_PER_STEP) * latest.current.step * multiplier);
     };
@@ -48,11 +53,13 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      if (!dragging) onTap?.();
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
   }, [commit]);
+  const startScrub: ScrubStart = useCallback((event) => beginScrub(event), [beginScrub]);
 
   useEffect(() => { register?.(startScrub); return () => register?.(null); }, [register, startScrub]);
 
@@ -73,6 +80,12 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
     <div className="number-input">
       <input
         type="number" inputMode="decimal" step={step} min={min} max={max} value={draft ?? format(value)}
+        onPointerDown={(e) => {
+          // Not editing yet: drag scrubs the value, a plain tap focuses the box for typing.
+          const input = e.currentTarget;
+          if (e.button !== 0 || document.activeElement === input) return;
+          beginScrub(e, 4, () => { input.focus(); input.select(); });
+        }}
         onFocus={() => setDraft(format(value))}
         onBlur={() => setDraft(null)}
         onChange={(e) => {

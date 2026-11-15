@@ -35,10 +35,10 @@ export function DataPanel({ fileName, fields, recordCount, totalRecords, hasText
 
   return (
     <aside className={dragging ? "panel left-panel dragging" : "panel left-panel"} aria-label="Data fields">
-      <div className="panel-heading">
+      <button type="button" className="panel-heading clickable" title="Close this drawer" aria-label="Close Fields" onClick={onClose}>
         <h2><Braces size={15} className="heading-icon" /> Fields</h2>
-        <button className="icon-button" title="Collapse data fields" aria-label="Collapse data fields" onClick={onClose}><ChevronLeft size={17} /></button>
-      </div>
+        <ChevronLeft size={17} className="heading-chevron" />
+      </button>
       {/* Everything below the heading scrolls. */}
       <div className="panel-body" data-scroll>
         <div className="section-title"><Database size={14} /> DATA SOURCE <button className="text-action" onClick={() => fileRef.current?.click()}>Change</button></div>

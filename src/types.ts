@@ -15,6 +15,7 @@ export type DesignItem = {
   color?: string;
   weight?: number;
   italic?: boolean;
+  underline?: boolean;
   lineHeight?: number;
   /** Wrap text to the box width (default true). */
   wrap?: boolean;
@@ -22,12 +23,14 @@ export type DesignItem = {
   rotation?: number;
   /** Text scaling: shrink to fit the box, shrink to fit one line's width, or fit exactly (grow or shrink). */
   autoFit?: "off" | "shrink" | "width" | "fit";
-  /** What happens to text that still doesn't fit: spill past the box (default) or cut off with an ellipsis. */
-  overflow?: "spill" | "truncate";
+  /** What happens to text that still doesn't fit: spill past the box (default), clip at the box edge, cut whole words/lines off, or cut off with an ellipsis ("truncate"). */
+  overflow?: "spill" | "clip" | "cut" | "truncate";
   /** Floor (pt) for the shrinking modes. */
   minFontSize?: number;
   /** Space (inches) between the text and the edge of its box; useful when the text has a background or frame. */
   padding?: number;
+  /** Individual paddings (top, right, bottom, left) in inches; overrides `padding`. */
+  paddings?: [number, number, number, number];
   /** Outline around the letters, in points, drawn outside the fill so text stays readable on busy backgrounds. */
   textStroke?: { color: string; width: number };
   imageFit?: "cover" | "contain";
@@ -64,6 +67,8 @@ export type DesignItem = {
   assetName?: string;
   visible?: boolean;
   locked?: boolean;
+  /** A guide for the designer (a scan, a mock-up): shown while designing, never printed. Usually semi-transparent. */
+  reference?: boolean;
 };
 
 export type Guide = { id: string; axis: "x" | "y"; position: number };

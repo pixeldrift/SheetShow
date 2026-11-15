@@ -23,3 +23,9 @@ export function convertRadius(value: number, from: "pct" | "px", to: "pct" | "px
   if (from === to) return value;
   return to === "px" ? Math.round((value / 100) * sidePx * 10) / 10 : Math.min(50, Math.round((value / Math.max(1, sidePx)) * 1000) / 10);
 }
+
+/** Padding (inches) as top, right, bottom, left. */
+export const paddingsOf = (item: DesignItem): [number, number, number, number] => {
+  const p = Math.max(0, item.padding ?? 0);
+  return item.paddings ?? [p, p, p, p];
+};

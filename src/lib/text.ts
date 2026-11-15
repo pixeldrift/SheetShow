@@ -1,5 +1,6 @@
 import type { DesignItem } from "../types";
 import { PX_PER_IN } from "./data";
+import { paddingsOf } from "./shape";
 import { fontStack } from "./fonts";
 
 let context: CanvasRenderingContext2D | null = null;
@@ -54,7 +55,7 @@ const TOL = 0.5;
 const sizeCache = new Map<string, { size: number; atMin: boolean }>();
 
 /** Shortens text to the box: as many lines as fit, with the last one ending in "…"; over-wide lines are trimmed too. */
-function truncate(lines: string[], item: DesignItem, w: number, h: number, ignoreHeight: boolean): string[] {
+function truncate(lines: string[], item: DesignItem, w: number, h: number, ignoreHeight: boolean, mark = true): string[] {
   const fontPx = fontSizePx(item), lh = item.lineHeight ?? 1.2;
   let keep = lines.length;
   if (!ignoreHeight) while (keep > 1 && textHeight(keep, fontPx, lh) > h + TOL) keep--;
@@ -63,10 +64,11 @@ function truncate(lines: string[], item: DesignItem, w: number, h: number, ignor
   const ellipsize = (line: string) => {
     if (ctx.measureText(line).width <= w + TOL) return line;
     let text = line.trimEnd();
-    while (text.length > 1 && ctx.measureText(text + "…").width > w) text = text.slice(0, -1).trimEnd();
-    return text + "…";
+    const dots = mark ? "…" : "";
+    while (text.length > 1 && ctx.measureText(text + dots).width > w) text = text.slice(0, -1).trimEnd();
+    return text + dots;
   };
-  const out = lines.slice(0, keep).map((line, i) => (i === keep - 1 && keep < lines.length ? ellipsize(line + " …") : ellipsize(line)));
+  const out = lines.slice(0, keep).map((line, i) => (mark && i === keep - 1 && keep < lines.length ? ellipsize(line + " …") : ellipsize(line)));
   return out;
 }
 
@@ -76,8 +78,8 @@ function truncate(lines: string[], item: DesignItem, w: number, h: number, ignor
  */
 export function layoutText(source: DesignItem, text: string, outerW: number, outerH: number): TextLayout {
   // Padding insets the text from its box (a text box with a background): lay out in the inner area, report the outer height.
-  const pad = Math.max(0, (source.padding ?? 0) * PX_PER_IN);
-  const w = Math.max(8, outerW - 2 * pad), h = Math.max(8, outerH - 2 * pad);
+  const [pt, pr, pb, pl] = paddingsOf(source).map((v) => v * PX_PER_IN);
+  const w = Math.max(8, outerW - pl - pr), h = Math.max(8, outerH - pt - pb);
   const mode = source.autoFit ?? "off";
   const lh = source.lineHeight ?? 1.2;
   let item: DesignItem = mode === "width" ? { ...source, wrap: false } : source;
@@ -113,8 +115,9 @@ export function layoutText(source: DesignItem, text: string, outerW: number, out
   const tooTall = mode !== "width" && needH > h + TOL;
   let issue: TextIssue | null = null;
   if (tooWide || tooTall) {
-    if (source.overflow === "truncate") { lines = truncate(lines, item, w, h, mode === "width"); issue = "truncated"; }
+    if (source.overflow === "truncate" || source.overflow === "cut") { lines = truncate(lines, item, w, h, mode === "width", source.overflow === "truncate"); issue = "truncated"; }
+    else if (source.overflow === "clip") issue = "truncated"; // drawn clipped at the box edge, so part of it is lost
     else issue = "spill";
   }
-  return { item, lines, fontPx, needH: needH + 2 * pad, issue, atMin };
+  return { item, lines, fontPx, needH: needH + pt + pb, issue, atMin };
 }

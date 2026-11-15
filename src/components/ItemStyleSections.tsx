@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import { ChevronRight, Circle, Droplets, Sparkles, X } from "lucide-react";
+import { ChevronRight, Circle, X } from "lucide-react";
 import type { DesignItem, RecordRow, Shadow } from "../types";
 import type { ImageLibrary } from "../hooks/useImageLibrary";
 import { TRANSFORM_NAMES, defaultImageSource, needsReview, patternFields } from "../lib/images";
 import { prettyField } from "../lib/data";
-import { convertRadius } from "../lib/shape";
+import { convertRadius, paddingsOf } from "../lib/shape";
 import { NumberField, Pair, Section } from "./Fields";
 
 type Patch = (patch: Partial<DesignItem>, key?: string) => void;
@@ -107,16 +107,38 @@ export function PictureSection({ item, patch, tools }: { item: DesignItem; patch
   );
 }
 
-/** Background, corner radius and frame: shared by shapes, pictures and text boxes. */
+/** A small on/off switch; `on` is the persistent state, nothing lingers after a tap. */
+export function Switch({ on, onChange, label }: { on: boolean; onChange: (on: boolean) => void; label: string }) {
+  return <button type="button" role="switch" aria-checked={on} aria-label={label} className="switch" onClick={() => onChange(!on)}><span /></button>;
+}
+
+/** A colour swatch that can optionally be cleared (shown as a slashed swatch when empty). */
+function ColorChip({ value, fallback, label, onChange, onClear }: { value?: string; fallback: string; label: string; onChange: (c: string) => void; onClear?: () => void }) {
+  return (
+    <span className={`color-chip${value ? "" : " empty"}`}>
+      <input type="color" aria-label={label} value={value ?? fallback} onChange={(e) => onChange(e.target.value)} />
+      {value && onClear && <button type="button" className="chip-clear" title={`Remove ${label.toLowerCase()}`} aria-label={`Remove ${label.toLowerCase()}`} onClick={onClear}><X size={9} /></button>}
+    </span>
+  );
+}
+
+const CORNER_NAMES = ["Top left", "Top right", "Bottom left", "Bottom right"];
+
+/** Background, border, padding and rounding: shared by shapes, pictures and text boxes. */
 export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Patch }) {
   const [corners, setCorners] = useState(!!item.radii);
+  const [pads, setPads] = useState(!!item.paddings);
   const hasStroke = !!item.stroke && item.stroke !== "none";
   const unit = item.radiusUnit ?? "pct";
   const sidePx = Math.min(item.w, item.h) * 96;
   const max = unit === "pct" ? 50 : Math.max(1, Math.floor(sidePx / 2));
   const radii = item.radii ?? ([item.radius ?? 0, item.radius ?? 0, item.radius ?? 0, item.radius ?? 0] as const);
   const mixed = !!item.radii && !item.radii.every((r) => r === item.radii![0]);
-  const label = item.type === "image" ? "CORNERS & FRAME" : item.type === "text" ? "BOX & FRAME" : "APPEARANCE";
+  const paddings = paddingsOf(item);
+  const mixedPad = !!item.paddings && !item.paddings.every((v) => v === item.paddings![0]);
+  const hasBackground = item.type === "rect" || item.type === "text";
+  const label = item.type === "image" ? "BORDER & CORNERS" : item.type === "text" ? "BOX" : "APPEARANCE";
+  const radiusStep = unit === "pct" ? 1 : 0.5;
   const setUnit = (next: "pct" | "px") => {
     if (next === unit) return;
     patch({
@@ -125,41 +147,62 @@ export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Pa
       ...(item.radii ? { radii: item.radii.map((r) => convertRadius(r, unit, next, sidePx)) as [number, number, number, number] } : {}),
     });
   };
+  // The four corners are listed top-left, top-right, bottom-left, bottom-right (reading order); radii are stored clockwise.
+  const CORNER_INDEX = [0, 1, 3, 2];
   const setCorner = (index: number, value: number) => { const next = [...radii] as [number, number, number, number]; next[index] = value; patch({ radii: next }); };
+  const setPad = (index: number, value: number) => { const next = [...paddings] as [number, number, number, number]; next[index] = value; patch({ paddings: next }); };
   const makeCircle = () => { const side = Math.min(item.w, item.h); patch({ radius: 50, radiusUnit: "pct", radii: undefined, w: side, h: side }); };
-  const cornerNames = ["Top left", "Top right", "Bottom right", "Bottom left"];
+  const borderSize = hasStroke ? item.strokeWidth ?? (item.type === "rect" ? 0.75 : 1) : 0;
 
   return (
     <Section title={label}>
-      {(item.type === "rect" || item.type === "text") && (
-        <div className="color-row first">
-          <span>{item.type === "text" ? "Background" : "Fill color"}</span>
-          <span className="inline-controls">
-            {item.type === "text" && item.fill && <button className="mini-button" title="Remove background" aria-label="Remove background" onClick={() => patch({ fill: undefined })}><X size={13} /></button>}
-            <input type="color" aria-label="Fill color" value={item.fill ?? (item.type === "text" ? "#ffffff" : "#e9eee9")} onChange={(e) => patch({ fill: e.target.value })} />
-          </span>
+      {/* Background, border colour and border size share one line. */}
+      <div className={`style-row${hasBackground ? "" : " two"}`}>
+        {hasBackground && (
+          <Pair label="Background">
+            <ColorChip value={item.fill} fallback={item.type === "text" ? "#ffffff" : "#e9eee9"} label="Background" onChange={(c) => patch({ fill: c })} onClear={item.type === "text" ? () => patch({ fill: undefined }) : undefined} />
+          </Pair>
+        )}
+        <Pair label="Border">
+          <ColorChip value={hasStroke ? item.stroke : undefined} fallback="#cbd5cc" label="Border" onChange={(c) => patch({ stroke: c, strokeWidth: item.strokeWidth ?? 1.5 })} onClear={() => patch({ stroke: "none" })} />
+        </Pair>
+        <Pair label="Border size">
+          <NumberField value={borderSize} min={0} max={40} step={0.25} places={2} unit="pt" onChange={(n) => (n <= 0 ? patch({ stroke: "none" }) : patch({ strokeWidth: n, stroke: hasStroke ? item.stroke : "#cbd5cc" }))} />
+        </Pair>
+      </div>
+
+      {/* Padding (text boxes) and rounding: one number each, drag it to scrub or tap to type; the twirl reveals one box per side or corner. */}
+      <div className={`pad-round-row${item.type === "text" ? "" : " one"}`}>
+        {item.type === "text" && (
+          <Pair label="Padding (in)">
+            <div className="field-with-twirl">
+              <NumberField value={mixedPad ? 0 : paddings[0]} min={0} max={2} step={0.01} places={2} onChange={(n) => patch({ padding: n, paddings: undefined })} />
+              <button type="button" className="twirl-button" aria-expanded={pads} aria-label="Padding for each side" title="Padding for each side" onClick={() => setPads((o) => !o)}><ChevronRight size={13} style={{ transform: pads ? "rotate(90deg)" : undefined }} /></button>
+            </div>
+          </Pair>
+        )}
+        <Pair label="Rounding">
+          <div className="field-with-twirl">
+            <NumberField value={mixed ? 0 : radii[0]} min={0} max={max} step={radiusStep} places={1} onChange={(n) => patch({ radius: n, radii: undefined })} />
+            <span className="seg-mini" role="group" aria-label="Rounding unit">
+              <button className={unit === "pct" ? "active" : ""} aria-pressed={unit === "pct"} onClick={() => setUnit("pct")}>%</button>
+              <button className={unit === "px" ? "active" : ""} aria-pressed={unit === "px"} onClick={() => setUnit("px")}>px</button>
+            </span>
+            <button type="button" className="twirl-button" aria-expanded={corners} aria-label="Rounding for each corner" title="Rounding for each corner" onClick={() => setCorners((o) => !o)}><ChevronRight size={13} style={{ transform: corners ? "rotate(90deg)" : undefined }} /></button>
+          </div>
+        </Pair>
+      </div>
+      {pads && item.type === "text" && (
+        <div className="corner-grid">
+          {["Top", "Right", "Bottom", "Left"].map((name, index) => (
+            <Pair key={name} label={name}><NumberField value={paddings[index]} min={0} max={2} step={0.01} places={2} unit="in" onChange={(n) => setPad(index, n)} /></Pair>
+          ))}
         </div>
       )}
-
-      {item.type === "text" && <div className="spaced-block"><Pair label="Padding"><NumberField value={item.padding ?? 0} min={0} max={2} step={0.01} places={2} unit="in" onChange={(n) => patch({ padding: n })} /></Pair></div>}
-
-      <div className="radius-head">
-        <span>Corner radius</span>
-        <div className="seg-mini" role="group" aria-label="Radius unit">
-          <button className={unit === "pct" ? "active" : ""} aria-pressed={unit === "pct"} onClick={() => setUnit("pct")}>%</button>
-          <button className={unit === "px" ? "active" : ""} aria-pressed={unit === "px"} onClick={() => setUnit("px")}>px</button>
-        </div>
-      </div>
-      <div className="radius-row">
-        <input type="range" min="0" max={max} step={unit === "pct" ? 1 : 0.5} value={mixed ? 0 : Math.min(max, radii[0])} aria-label="Corner radius" onChange={(e) => patch({ radius: Number(e.target.value), radii: undefined })} />
-        <NumberField value={mixed ? 0 : radii[0]} min={0} max={max} step={unit === "pct" ? 1 : 0.5} places={1} unit={unit === "pct" ? "%" : "px"} onChange={(n) => patch({ radius: n, radii: undefined })} />
-      </div>
-      {mixed && <p className="hint first">Corners differ. Move the slider to make them all the same.</p>}
-      <button className="twirl" aria-expanded={corners} onClick={() => setCorners((o) => !o)}><ChevronRight size={12} style={{ transform: corners ? "rotate(90deg)" : undefined }} /> Individual corners</button>
       {corners && (
         <div className="corner-grid">
-          {[0, 1, 3, 2].map((index) => (
-            <Pair key={index} label={cornerNames[index]}><NumberField value={radii[index]} min={0} max={max} step={unit === "pct" ? 1 : 0.5} places={1} unit={unit === "pct" ? "%" : "px"} onChange={(n) => setCorner(index, n)} /></Pair>
+          {CORNER_NAMES.map((name, i) => (
+            <Pair key={name} label={name}><NumberField value={radii[CORNER_INDEX[i]]} min={0} max={max} step={radiusStep} places={1} unit={unit === "pct" ? "%" : "px"} onChange={(n) => setCorner(CORNER_INDEX[i], n)} /></Pair>
           ))}
         </div>
       )}
@@ -169,68 +212,62 @@ export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Pa
           <button className="wide-icon" onClick={() => patch({ radius: 0, radii: undefined })}>Square corners</button>
         </div>
       )}
-
-      {/* Frame colour and thickness share one line. */}
-      <div className="frame-row">
-        <span>Frame</span>
-        <input type="color" aria-label="Frame color" value={hasStroke ? item.stroke! : "#ffffff"} onChange={(e) => patch({ stroke: e.target.value, strokeWidth: item.strokeWidth ?? 1.5 })} />
-        {hasStroke ? (
-          <>
-            <NumberField value={item.strokeWidth ?? (item.type === "rect" ? 0.75 : 1)} min={0.25} max={40} step={0.25} places={2} unit="pt" onChange={(n) => patch({ strokeWidth: n })} />
-            <button className="mini-button" title="Remove frame" aria-label="Remove frame" onClick={() => patch({ stroke: "none" })}><X size={13} /></button>
-          </>
-        ) : <span className="frame-none">none</span>}
-      </div>
     </Section>
   );
 }
 
 const SHADOW: Shadow = { x: 0, y: 2, blur: 5, color: "#000000", opacity: 0.35 };
-const GLOW: Shadow = { x: 0, y: 0, blur: 10, color: "#ffb347", opacity: 0.95 };
 
-/** Opacity plus a drop shadow / glow (a glow is just a shadow with no offset). */
+/** One effect: a twirl-down with its details, and a switch to turn it on. */
+function Effect({ title, on, onToggle, children }: { title: string; on: boolean; onToggle: (on: boolean) => void; children: React.ReactNode }) {
+  const [open, setOpen] = useState(on);
+  return (
+    <div className="effect-block">
+      <div className="switch-row">
+        <button type="button" className="twirl effect-twirl" aria-expanded={open} onClick={() => setOpen((o) => !o)}><ChevronRight size={12} style={{ transform: open ? "rotate(90deg)" : undefined }} /> {title}</button>
+        <Switch label={title} on={on} onChange={(next) => { onToggle(next); if (next) setOpen(true); }} />
+      </div>
+      {open && <div className={on ? undefined : "effect-off"}>{children}</div>}
+    </div>
+  );
+}
+
+/** Opacity first, then outline (text) and shadow with their details, and finally the reference switch. */
 export function EffectsSection({ item, patch }: { item: DesignItem; patch: Patch }) {
   const shadow = item.shadow;
   const stroke = item.textStroke;
-  const set = (change: Partial<Shadow>) => patch({ shadow: { ...(shadow ?? SHADOW), ...change } });
+  const sh = shadow ?? SHADOW;
+  const set = (change: Partial<Shadow>) => patch({ shadow: { ...sh, ...change } });
+  const ol = stroke ?? { color: "#ffffff", width: 2 };
+  const setOutline = (change: Partial<{ color: string; width: number }>) => patch({ textStroke: { ...ol, ...change } });
   return (
     <Section title="EFFECTS">
-      {item.type === "text" && (
-        <div className="outline-block">
-          <div className="color-row first"><span>Text outline</span>
-            <span className="inline-controls">
-              {stroke && <button className="mini-button" title="Remove outline" aria-label="Remove outline" onClick={() => patch({ textStroke: undefined })}><X size={13} /></button>}
-              <input type="color" aria-label="Outline color" value={stroke?.color ?? "#ffffff"} onChange={(e) => patch({ textStroke: { color: e.target.value, width: stroke?.width ?? 1.5 } })} />
-            </span>
-          </div>
-          {stroke && <div className="spaced-block"><Pair label="Outline thickness"><NumberField value={stroke.width} min={0.25} max={20} step={0.25} places={2} unit="pt" onChange={(n) => patch({ textStroke: { color: stroke.color, width: n } })} /></Pair></div>}
-          <div className="icon-row spaced-block">
-            <button className="wide-icon" title="White outline: readable on dark pictures" onClick={() => patch({ textStroke: { color: "#ffffff", width: 2 } })}><span className="swatch" style={{ background: "#fff" }} /> White</button>
-            <button className="wide-icon" title="Black outline: readable on light pictures" onClick={() => patch({ textStroke: { color: "#000000", width: 2 } })}><span className="swatch" style={{ background: "#000" }} /> Black</button>
-          </div>
-        </div>
-      )}
-      <div className="slider-row">
+      <div className="slider-row first">
         <span>Opacity</span>
         <input type="range" min="0" max="100" step="1" value={Math.round((item.opacity ?? 1) * 100)} aria-label="Opacity" onChange={(e) => patch({ opacity: Number(e.target.value) / 100 })} />
         <output>{Math.round((item.opacity ?? 1) * 100)}%</output>
       </div>
-      <div className="icon-row spaced-block">
-        <button className={shadow && shadow.x === 0 && shadow.y === 0 ? "wide-icon" : "wide-icon active"} aria-pressed={!!shadow && !(shadow.x === 0 && shadow.y === 0)} onClick={() => patch({ shadow: SHADOW })}><Droplets size={15} /> Shadow</button>
-        <button className={shadow && shadow.x === 0 && shadow.y === 0 ? "wide-icon active" : "wide-icon"} aria-pressed={!!shadow && shadow.x === 0 && shadow.y === 0} onClick={() => patch({ shadow: GLOW })}><Sparkles size={15} /> Glow</button>
-        {shadow && <button className="wide-icon" onClick={() => patch({ shadow: undefined })}>None</button>}
-      </div>
-      {shadow && (
-        <>
+      {item.type === "text" && (
+        <Effect title="Outline" on={!!stroke} onToggle={(on) => patch({ textStroke: on ? ol : undefined })}>
           <div className="two-col spaced">
-            <Pair label="Offset X"><NumberField value={shadow.x} min={-60} max={60} step={0.5} places={1} unit="pt" onChange={(n) => set({ x: n })} /></Pair>
-            <Pair label="Offset Y"><NumberField value={shadow.y} min={-60} max={60} step={0.5} places={1} unit="pt" onChange={(n) => set({ y: n })} /></Pair>
-            <Pair label="Blur"><NumberField value={shadow.blur} min={0} max={80} step={0.5} places={1} unit="pt" onChange={(n) => set({ blur: n })} /></Pair>
-            <Pair label="Strength"><NumberField value={Math.round(shadow.opacity * 100)} min={0} max={100} step={5} places={0} unit="%" onChange={(n) => set({ opacity: n / 100 })} /></Pair>
+            <Pair label="Color"><ColorChip value={ol.color} fallback="#ffffff" label="Outline color" onChange={(c) => setOutline({ color: c })} /></Pair>
+            <Pair label="Thickness"><NumberField value={ol.width} min={0.25} max={20} step={0.25} places={2} unit="pt" onChange={(n) => setOutline({ width: n })} /></Pair>
           </div>
-          <div className="color-row"><span>{shadow.x === 0 && shadow.y === 0 ? "Glow color" : "Shadow color"}</span><input type="color" value={shadow.color} onChange={(e) => set({ color: e.target.value })} /></div>
-        </>
+        </Effect>
       )}
+      <Effect title="Shadow" on={!!shadow} onToggle={(on) => patch({ shadow: on ? sh : undefined })}>
+        <div className="two-col spaced">
+          <Pair label="Offset X"><NumberField value={sh.x} min={-60} max={60} step={0.5} places={1} unit="pt" onChange={(n) => set({ x: n })} /></Pair>
+          <Pair label="Offset Y"><NumberField value={sh.y} min={-60} max={60} step={0.5} places={1} unit="pt" onChange={(n) => set({ y: n })} /></Pair>
+          <Pair label="Softness"><NumberField value={sh.blur} min={0} max={80} step={0.5} places={1} unit="pt" onChange={(n) => set({ blur: n })} /></Pair>
+          <Pair label="Opacity"><NumberField value={Math.round(sh.opacity * 100)} min={0} max={100} step={5} places={0} unit="%" onChange={(n) => set({ opacity: n / 100 })} /></Pair>
+        </div>
+        <div className="color-row"><span>Color</span><input type="color" aria-label="Shadow color" value={sh.color} onChange={(e) => set({ color: e.target.value })} /></div>
+      </Effect>
+      <div className="effect-block">
+        <div className="switch-row" title="A guide for you while designing (a scan, a mock-up). It is never printed and can be semi-transparent."><span>Reference only (won’t print)</span>
+          <Switch label="Reference only" on={!!item.reference} onChange={(on) => patch(on ? { reference: true, opacity: (item.opacity ?? 1) === 1 ? 0.5 : item.opacity } : { reference: undefined, opacity: item.opacity === 0.5 ? undefined : item.opacity })} /></div>
+      </div>
     </Section>
   );
 }

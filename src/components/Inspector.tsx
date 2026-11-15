@@ -1,8 +1,8 @@
 import { useState } from "react";
 import {
-  ChevronDown, Group, Ungroup,
-  AlignCenter, AlignLeft, AlignRight, AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
-  Hash, Image as ImageIcon, Italic, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
+  ChevronDown, ChevronsUpDown, Group, Ungroup,
+  AlignCenter, AlignLeft, AlignRight, AlertTriangle, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
+  Hash, Image as ImageIcon, Italic, Underline, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   X, Filter,
 } from "lucide-react";
 import type { DesignItem, LabelPreset, Sheet } from "../types";
@@ -49,7 +49,8 @@ type Props = {
   onUpdate: (id: string, patch: Partial<DesignItem>, coalesce?: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  onMoveLayer: (id: string, direction: -1 | 1, asGroup?: boolean) => void;
+  /** Drag-and-drop in the layer list: put `id` above/below `targetId`. */
+  onReorder: (id: string, targetId: string, above: boolean, asGroup: boolean) => void;
   templateWidth: number;
   templateHeight: number;
   onTemplateSize: (width: number, height: number) => void;
@@ -71,14 +72,37 @@ export function Inspector(props: Props) {
   const [tab, setTab] = useState<"properties" | "layers">("properties");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const flatLayers = !!props.instance; // hand-editing one record: groups aren't offered
+  // Drag a layer by its grip: the row under the pointer shows a line where it will land.
+  const [drag, setDrag] = useState<{ id: string; over: string; above: boolean } | null>(null);
+  const dropClass = (rowId: string) => (drag && drag.over === rowId && drag.id !== rowId ? (drag.above ? " drop-above" : " drop-below") : "");
+  const startDrag = (id: string, asGroup: boolean) => (event: React.PointerEvent) => {
+    event.preventDefault(); event.stopPropagation();
+    const target = (e: PointerEvent) => {
+      const row = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>("[data-layer-id]");
+      if (!row) return null;
+      const rect = row.getBoundingClientRect();
+      return { over: row.dataset.layerId!, above: e.clientY < rect.top + rect.height / 2 };
+    };
+    document.body.classList.add("scrubbing");
+    let last: { over: string; above: boolean } | null = null;
+    const move = (e: PointerEvent) => { last = target(e); setDrag(last ? { id, ...last } : null); };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+      document.body.classList.remove("scrubbing");
+      setDrag(null);
+      // The list is drawn top (front) to bottom (back), so "above" in the list means later in the stacking order.
+      if (last && last.over !== id) props.onReorder(id, last.over, last.above, asGroup);
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
   const title = tab === "layers" ? "Layers" : selectedItems.length > 1 ? (props.groups.wholeGroup ? `Group · ${selectedItems[0].groupName ?? ""}` : `${selectedItems.length} items`) : selected ? "Item properties" : workspace === "template" ? "Template setup" : "Page setup";
 
   return (
     <aside className="panel right-panel" aria-label="Properties and layers">
-      <div className="panel-heading">
+      <button type="button" className="panel-heading clickable" title="Close this drawer" aria-label={`Close ${title}`} onClick={onClose}>
         <h2><SlidersHorizontal size={15} className="heading-icon" /> {title}</h2>
-        <button className="icon-button" title="Collapse inspector" aria-label="Collapse inspector" onClick={onClose}><ChevronRight size={17} /></button>
-      </div>
+        <ChevronRight size={17} className="heading-chevron" />
+      </button>
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === "properties"} className={tab === "properties" ? "active" : ""} onClick={() => setTab("properties")}><SlidersHorizontal size={14} /> Properties</button>
         <button role="tab" aria-selected={tab === "layers"} className={tab === "layers" ? "active" : ""} onClick={() => setTab("layers")}><Layers size={14} /> Layers <span className="count-pill">{items.length}</span></button>
@@ -89,13 +113,12 @@ export function Inspector(props: Props) {
             {(() => {
               const pick = (ids: string[], e: React.MouseEvent) => { if (e.shiftKey || e.metaKey || e.ctrlKey) { const have = selectedItems.map((x) => x.id); onSelect(ids.every((id) => have.includes(id)) ? have.filter((id) => !ids.includes(id)) : [...new Set([...have, ...ids])]); } else { onSelect(ids); setTab("properties"); } };
               const itemRow = (item: DesignItem, indented: boolean) => (
-                <div key={item.id} className={`${selectedItems.some((x) => x.id === item.id) ? "layer-row selected" : "layer-row"}${indented ? " nested" : ""}`} onClick={(e) => pick([item.id], e)}>
+                <div key={item.id} data-layer-id={item.id} className={`${selectedItems.some((x) => x.id === item.id) ? "layer-row selected" : "layer-row"}${indented ? " nested" : ""}${dropClass(item.id)}`} onClick={(e) => pick([item.id], e)}>
                   <span className="layer-kind">{kindIcon(item, 13)}</span>
-                  <span className="layer-label">{layerLabel(item)}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
+                  <span className="layer-label">{layerLabel(item)}{item.reference ? <em className="ref-tag">reference</em> : null}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
                   <button className="mini-button" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { visible: item.visible === false }); }}>{item.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}</button>
                   <button className="mini-button" title={item.locked ? "Unlock" : "Lock"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { locked: !item.locked }); }}>{item.locked ? <Lock size={13} /> : <Unlock size={13} />}</button>
-                  <button className="mini-button" title="Bring forward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(item.id, 1); }}><ArrowUp size={13} /></button>
-                  <button className="mini-button" title="Send backward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(item.id, -1); }}><ArrowDown size={13} /></button>
+                  <span className="layer-grip" title="Drag to change the stacking order" aria-label="Drag to reorder" role="button" onClick={(e) => e.stopPropagation()} onPointerDown={startDrag(item.id, false)}><ChevronsUpDown size={14} /></span>
                 </div>
               );
               const rows: React.ReactNode[] = [];
@@ -109,14 +132,13 @@ export function Inspector(props: Props) {
                 const open = !collapsed.has(item.groupId);
                 const allHidden = members.every((m) => m.visible === false), allLocked = members.every((m) => m.locked);
                 rows.push(
-                  <div key={`g-${item.groupId}`} className={ids.every((id) => selectedItems.some((x) => x.id === id)) ? "layer-row group selected" : "layer-row group"} onClick={(e) => pick(ids, e)}>
+                  <div key={`g-${item.groupId}`} data-layer-id={ids[0]} className={`${ids.every((id) => selectedItems.some((x) => x.id === id)) ? "layer-row group selected" : "layer-row group"}${dropClass(ids[0])}`} onClick={(e) => pick(ids, e)}>
                     <button className="mini-button chev" aria-label={open ? "Collapse group" : "Expand group"} onClick={(e) => { e.stopPropagation(); setCollapsed((c) => { const n = new Set(c); if (n.has(item.groupId!)) n.delete(item.groupId!); else n.add(item.groupId!); return n; }); }}><ChevronDown size={13} style={{ transform: open ? undefined : "rotate(-90deg)" }} /></button>
                     <span className="layer-kind"><Group size={13} /></span>
                     <span className="layer-label">{item.groupName ?? "Group"} <em>{members.length}</em></span>
                     <button className="mini-button" title={allHidden ? "Show group" : "Hide group"} onClick={(e) => { e.stopPropagation(); props.groups.onUpdateMany(ids, { visible: allHidden }); }}>{allHidden ? <EyeOff size={13} /> : <Eye size={13} />}</button>
                     <button className="mini-button" title={allLocked ? "Unlock group" : "Lock group"} onClick={(e) => { e.stopPropagation(); props.groups.onUpdateMany(ids, { locked: !allLocked }); }}>{allLocked ? <Lock size={13} /> : <Unlock size={13} />}</button>
-                    <button className="mini-button" title="Bring group forward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(ids[0], 1, true); }}><ArrowUp size={13} /></button>
-                    <button className="mini-button" title="Send group backward" onClick={(e) => { e.stopPropagation(); props.onMoveLayer(ids[0], -1, true); }}><ArrowDown size={13} /></button>
+                    <span className="layer-grip" title="Drag to change the stacking order" aria-label="Drag group to reorder" role="button" onClick={(e) => e.stopPropagation()} onPointerDown={startDrag(ids[0], true)}><ChevronsUpDown size={14} /></span>
                   </div>,
                 );
                 if (open) members.forEach((m) => rows.push(itemRow(m, true)));
@@ -201,6 +223,12 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
         <div><strong>{item.type === "text" ? "Text object" : item.type === "image" ? "Image object" : "Shape object"}</strong><span>{item.field ? `Linked to ${fieldDisplayName(item.field)}` : item.type === "image" ? (item.imageSource ? "Data-driven picture" : "One picture") : "Static content"}</span></div>
       </div>
 
+      <div className="convert-row">
+        {item.type !== "rect" && <button className="button" onClick={() => patch({ type: "rect", text: undefined, field: undefined, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><Square size={14} /> Convert to shape</button>}
+        {item.type !== "text" && <button className="button" onClick={() => patch({ type: "text", text: item.text ?? "Text", fontSize: item.fontSize ?? 11, color: item.color ?? "#34443d", weight: item.weight ?? 500, wrap: true, padding: item.padding ?? 0.08, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><TextCursorInput size={14} /> Convert to text box</button>}
+        {item.type !== "image" && <button className="button" onClick={() => patch({ type: "image", imageSource: defaultImageSource(imageTools.columns), text: undefined, field: undefined }, `kind:${item.id}`)}><ImageIcon size={14} /> Convert to photo box</button>}
+      </div>
+
       {item.type === "text" && (
         <>
           <Section title="CONTENT">
@@ -219,57 +247,55 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
             <FontPicker value={item.fontFamily} library={fontLibrary} onPick={(family) => patch({ fontFamily: family })} />
             <div className="two-col spaced">
               <Pair label="Font size"><NumberField value={item.fontSize ?? 12} min={4} max={200} step={1} unit="pt" onChange={(n) => patch({ fontSize: n })} /></Pair>
+              <Pair label="Text color"><span className="color-chip"><input type="color" aria-label="Text color" value={item.color ?? "#34443d"} onChange={(e) => patch({ color: e.target.value })} /></span></Pair>
+            </div>
+            <div className="format-row">
               <Pair label="Weight">
-                <select className="select" value={item.weight ?? 500} onChange={(e) => patch({ weight: Number(e.target.value) })}>
-                  <option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option>
+                <select className="select" aria-label="Weight (bold)" value={item.weight ?? 500} onChange={(e) => patch({ weight: Number(e.target.value) })}>
+                  <option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option><option value="800">Extra bold</option>
                 </select>
               </Pair>
+              <div className="style-buttons" role="group" aria-label="Text style">
+                <button aria-label="Italic" title="Italic" aria-pressed={!!item.italic} onClick={() => patch({ italic: !item.italic })}><Italic size={15} /></button>
+                <button aria-label="Underline" title="Underline" aria-pressed={!!item.underline} onClick={() => patch({ underline: !item.underline })}><Underline size={15} /></button>
+              </div>
             </div>
-            <div className="spaced">
-              <Pair label="Auto scale">
+            <div className="format-row">
+              <Pair label="Alignment">
+                <div className="align-buttons" role="group" aria-label="Text alignment">
+                  {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([value, Icon]) => (
+                    <button key={value} aria-label={`Align ${value}`} aria-pressed={(item.align ?? "left") === value} className={(item.align ?? "left") === value ? "active" : ""} onClick={() => patch({ align: value })}><Icon size={15} /></button>
+                  ))}
+                </div>
+              </Pair>
+              <Pair label="Line height"><NumberField value={item.lineHeight ?? 1.2} min={0.6} max={4} step={0.05} places={2} onChange={(n) => patch({ lineHeight: n })} /></Pair>
+            </div>
+            <div className="two-col spaced">
+              <Pair label="Autoscale">
                 <select className="select" value={item.autoFit ?? "off"} onChange={(e) => patch({ autoFit: e.target.value as DesignItem["autoFit"] })}>
                   <option value="off">Fixed size</option>
-                  <option value="shrink">Shrink to fit box</option>
-                  <option value="width">Shrink to fit width (one line)</option>
-                  <option value="fit">Fit to box (grow or shrink)</option>
+                  <option value="shrink">Shrink to box</option>
+                  <option value="width">One line</option>
+                  <option value="fit">Fill the box</option>
                 </select>
               </Pair>
-            </div>
-            {item.autoFit && item.autoFit !== "off" && (
-              <>
-                <p className="hint">{item.autoFit === "shrink" ? "Text shrinks below the size above until it fits the box." : item.autoFit === "width" ? "Stays on one line and shrinks until it fits the width. Good for names." : "Text is sized to fill the box. Resize the box to change it."}</p>
-                <div className="two-col spaced"><Pair label="Never smaller than"><NumberField value={item.minFontSize ?? 4} min={2} max={200} step={0.5} places={1} unit="pt" onChange={(n) => patch({ minFontSize: n })} /></Pair></div>
-              </>
-            )}
-            <div className="spaced">
-              <Pair label="If it still doesn’t fit">
+              <Pair label="Overflow">
                 <select className="select" value={item.overflow ?? "spill"} onChange={(e) => patch({ overflow: e.target.value as DesignItem["overflow"] })}>
-                  <option value="spill">Let it spill past the box</option>
-                  <option value="truncate">Cut off with “…”</option>
+                  <option value="spill">Spill over</option>
+                  <option value="clip">Clip</option>
+                  <option value="cut">Truncate</option>
+                  <option value="truncate">Truncate…</option>
                 </select>
               </Pair>
             </div>
+            <p className="hint">{(item.autoFit ?? "off") === "off" ? "Text stays at the size above." : item.autoFit === "shrink" ? "Text shrinks below the size above until it fits the box." : item.autoFit === "width" ? "Stays on one line and shrinks until it fits the width. Good for names." : "Text is sized to fill the box. Resize the box to change it."} If it still doesn’t fit: {({ spill: "it spills past the box", clip: "it is clipped at the box edge", cut: "whole words are dropped", truncate: "it is cut off with “…”" } as const)[item.overflow ?? "spill"]}.</p>
+            {item.autoFit && item.autoFit !== "off" && (
+              <div className="two-col spaced"><Pair label="Never smaller than"><NumberField value={item.minFontSize ?? 4} min={2} max={200} step={0.5} places={1} unit="pt" onChange={(n) => patch({ minFontSize: n })} /></Pair></div>
+            )}
             {fitNote && <p className={`hint ${fitNote.bad ? "warn" : ""}`}>{fitNote.text}{fitNote.bad && !instanceMode && <> <button className="link-button" onClick={onFitReview}>Review…</button></>}</p>}
-            <div className="align-buttons">
-              {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([value, Icon]) => (
-                <button key={value} aria-label={`Align ${value}`} className={(item.align ?? "left") === value ? "active" : ""} onClick={() => patch({ align: value })}><Icon size={15} /></button>
-              ))}
-              <button aria-label="Italic" aria-pressed={!!item.italic} className={item.italic ? "active" : ""} onClick={() => patch({ italic: !item.italic })}><Italic size={15} /></button>
-            </div>
-            <div className="two-col spaced"><Pair label="Line height"><NumberField value={item.lineHeight ?? 1.2} min={0.6} max={4} step={0.05} places={2} onChange={(n) => patch({ lineHeight: n })} /></Pair></div>
-            <div className="color-row"><span>Text color</span><input type="color" value={item.color ?? "#34443d"} onChange={(e) => patch({ color: e.target.value })} /></div>
           </Section>
         </>
       )}
-
-      <Section title="THIS OBJECT IS">
-        <div className="two-col">
-          {item.type !== "rect" && <button className="button" onClick={() => patch({ type: "rect", text: undefined, field: undefined, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><Square size={14} /> Plain shape</button>}
-          {item.type !== "text" && <button className="button" onClick={() => patch({ type: "text", text: item.text ?? "Text", fontSize: item.fontSize ?? 11, color: item.color ?? "#34443d", weight: item.weight ?? 500, wrap: true, padding: item.padding ?? 0.08, imageSource: undefined, assetId: undefined }, `kind:${item.id}`)}><TextCursorInput size={14} /> Text box</button>}
-          {item.type !== "image" && <button className="button" onClick={() => patch({ type: "image", imageSource: defaultImageSource(imageTools.columns), text: undefined, field: undefined }, `kind:${item.id}`)}><ImageIcon size={14} /> Photo placeholder</button>}
-        </div>
-        <p className="hint">{item.type === "rect" ? "Turn this shape into a text box or a photo placeholder, then link it to your data." : "Switch what this object is. Its position, size and frame are kept."}</p>
-      </Section>
 
       {item.type === "image" && <PictureSection item={item} patch={patch} tools={imageTools} />}
       <ShapeStyleSection item={item} patch={patch} />
