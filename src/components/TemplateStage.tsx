@@ -3,7 +3,7 @@ import type { DesignItem, Guide, RecordMeta, RecordRow } from "../types";
 import { PX_PER_IN, round } from "../lib/data";
 import { aabb, boundsOf, centerOf, rotateAbout, type Box, type Transform } from "../lib/align";
 import { ItemShape, itemFrame } from "./ItemShape";
-import { smartSnap, type SnapLine } from "../lib/smartSnap";
+import { smartSnap, type SnapLine, type SnapOptions } from "../lib/smartSnap";
 
 type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
@@ -22,6 +22,8 @@ type Props = {
   selectedIds: string[];
   showGrid: boolean;
   snap: boolean;
+  /** Which kinds of snapping are on (while `snap`, the master switch, is on). */
+  snapOptions: SnapOptions;
   guides: Guide[];
   /** Tapping toggles selection (multi-select mode) instead of replacing it. */
   multi: boolean;
@@ -41,7 +43,7 @@ type Props = {
 };
 
 type Drag =
-  | { kind: "move"; primary: string; startX: number; startY: number; origins: Map<string, { x: number; y: number }>; w: number; h: number; box: Box; targets: Box[] }
+  | { kind: "move"; primary: string; startX: number; startY: number; origins: Map<string, { x: number; y: number }>; w: number; h: number; box: Box; targets: Box[]; spacing?: Box[] }
   | { kind: "resize"; id: string; handle: Handle; startX: number; startY: number; box: Box; rotation: number; keepAspect: boolean; targets: Box[] }
   | { kind: "rotate"; id: string }
   | { kind: "scale-group"; handle: Handle; startX: number; startY: number; box: Box; origins: DesignItem[]; keepAspect: boolean }
@@ -59,7 +61,7 @@ const GUIDE_REACH = 0.08;
 const MIN_SIZE = 0.05;
 
 /** Editable template canvas. Items may be dragged anywhere, including past the template edge and over the rulers. */
-export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd }: Props) {
+export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, snapOptions, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd }: Props) {
   const drag = useRef<Drag | null>(null);
   const lastTap = useRef<{ id: string; at: number } | null>(null);
   /** A double-click on a grouped object picks just that object, but only once the pointer is released without having moved (otherwise it was a quick click-and-drag of the group). */
@@ -71,10 +73,16 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
   const framedBox = (item: DesignItem): Box => aabb(item.type === "text" ? { ...item, h: itemFrame(item, record, meta, rawFields).h / PX_PER_IN } : item);
   /** Everything a dragged object can snap to: the page, and every other visible, non-reference object. */
   const snapTargets = (exclude: string[]): Box[] => [
-    { x: 0, y: 0, w: width, h: height },
-    ...items.filter((i) => i.visible !== false && !i.reference && !exclude.includes(i.id)).map(framedBox),
+    ...(snapOptions.page ? [{ x: 0, y: 0, w: width, h: height }] : []),
+    ...(snapOptions.objects ? items.filter((i) => i.visible !== false && !i.reference && !exclude.includes(i.id)).map(framedBox) : []),
   ];
-  const guideLines = { x: guides.filter((g) => g.axis === "x").map((g) => g.position), y: guides.filter((g) => g.axis === "y").map((g) => g.position) };
+  /** Objects that equal-spacing snapping measures gaps against. */
+  const spacingTargets = (exclude: string[]): Box[] | undefined =>
+    snapOptions.spacing ? items.filter((i) => i.visible !== false && !i.reference && !exclude.includes(i.id)).map(framedBox) : undefined;
+  const guideLines = snapOptions.guides
+    ? { x: guides.filter((g) => g.axis === "x").map((g) => g.position), y: guides.filter((g) => g.axis === "y").map((g) => g.position) }
+    : { x: [] as number[], y: [] as number[] };
+  const gridOn = showGrid && snapOptions.grid;
   const reach = 6 / scale; // snapping pulls from 6 screen pixels away, at any zoom
 
   /** Grid snapping, used only while the grid is showing. */
@@ -101,7 +109,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     const movable = items.filter((candidate) => ids.includes(candidate.id) && !candidate.locked);
     if (!movable.length || item.locked) return;
     event.preventDefault();
-    drag.current = { kind: "move", primary: item.id, startX: event.clientX, startY: event.clientY, w: item.w, h: item.h, origins: new Map(movable.map((m) => [m.id, { x: m.x, y: m.y }])), box: boundsOf(movable.map((m) => ({ ...m, ...(m.type === "text" ? { h: itemFrame(m, record, meta, rawFields).h / PX_PER_IN } : {}) }))), targets: snapTargets(movable.map((m) => m.id)) };
+    drag.current = { kind: "move", primary: item.id, startX: event.clientX, startY: event.clientY, w: item.w, h: item.h, origins: new Map(movable.map((m) => [m.id, { x: m.x, y: m.y }])), box: boundsOf(movable.map((m) => ({ ...m, ...(m.type === "text" ? { h: itemFrame(m, record, meta, rawFields).h / PX_PER_IN } : {}) }))), targets: snapTargets(movable.map((m) => m.id)), spacing: spacingTargets(movable.map((m) => m.id)) };
     (event.currentTarget as SVGGElement).setPointerCapture(event.pointerId);
   };
 
@@ -177,10 +185,10 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       const smart = snap && !event.ctrlKey && !event.metaKey; // hold Ctrl/⌘ to move freely
       if (smart) {
         // Snap the whole selection's edges and centre to other objects, the page and guides; the grid only when it is showing.
-        const r = smartSnap({ x: d.box.x + dx, y: d.box.y + dy, w: d.box.w, h: d.box.h }, d.targets, guideLines, reach);
+        const r = smartSnap({ x: d.box.x + dx, y: d.box.y + dy, w: d.box.w, h: d.box.h }, d.targets, guideLines, reach, undefined, d.spacing);
         x += r.dx; y += r.dy;
-        if (showGrid && r.dx === 0) x = gridSnap(x);
-        if (showGrid && r.dy === 0) y = gridSnap(y);
+        if (gridOn && r.dx === 0) x = gridSnap(x);
+        if (gridOn && r.dy === 0) y = gridSnap(y);
         setSnapLines(r.lines);
       } else if (snapLines.length) setSnapLines([]);
       const shiftX = x - origin.x, shiftY = y - origin.y;
@@ -225,7 +233,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       let left = x, top = y, right = x + w, bottom = y + h;
       if (handle.includes("e")) right += r.dx; if (handle.includes("w")) left += r.dx;
       if (handle.includes("s")) bottom += r.dy; if (handle.includes("n")) top += r.dy;
-      if (showGrid) {
+      if (gridOn) {
         if (r.dx === 0) { if (handle.includes("e")) right = gridSnap(right); if (handle.includes("w")) left = gridSnap(left); }
         if (r.dy === 0) { if (handle.includes("s")) bottom = gridSnap(bottom); if (handle.includes("n")) top = gridSnap(top); }
       }
@@ -268,7 +276,13 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
         <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} raw={rawFields} onPointerDown={(event) => startMove(event, item)} />
       ))}
       {/* Smart-snap guides while dragging: a thin line wherever an edge or centre lines up with something else. */}
-      {snapLines.map((l, i) => l.axis === "x"
+      {snapLines.map((l, i) => l.gap ? (
+        // An equal-spacing marker: the measured gap with a tick at each end.
+        <path key={i} d={l.axis === "x"
+          ? `M${l.from * PX_PER_IN} ${l.at * PX_PER_IN}H${l.to * PX_PER_IN}M${l.from * PX_PER_IN} ${l.at * PX_PER_IN - 4 / zoom}v${8 / zoom}M${l.to * PX_PER_IN} ${l.at * PX_PER_IN - 4 / zoom}v${8 / zoom}`
+          : `M${l.at * PX_PER_IN} ${l.from * PX_PER_IN}V${l.to * PX_PER_IN}M${l.at * PX_PER_IN - 4 / zoom} ${l.from * PX_PER_IN}h${8 / zoom}M${l.at * PX_PER_IN - 4 / zoom} ${l.to * PX_PER_IN}h${8 / zoom}`}
+          fill="none" stroke="#e2337f" strokeWidth={1 / zoom} pointerEvents="none" />
+      ) : l.axis === "x"
         ? <line key={i} x1={l.at * PX_PER_IN} x2={l.at * PX_PER_IN} y1={l.from * PX_PER_IN} y2={l.to * PX_PER_IN} stroke="#e2337f" strokeWidth={1 / zoom} pointerEvents="none" />
         : <line key={i} y1={l.at * PX_PER_IN} y2={l.at * PX_PER_IN} x1={l.from * PX_PER_IN} x2={l.to * PX_PER_IN} stroke="#e2337f" strokeWidth={1 / zoom} pointerEvents="none" />)}
       {!preview && group.length > 1 && (() => {

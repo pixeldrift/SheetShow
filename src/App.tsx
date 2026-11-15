@@ -4,6 +4,7 @@ import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { DesignItem, Guide, InstanceOverride, ItemPatch, LabelPreset, Project, RecordRow, Sheet, Variant, VariantRule, View, Workspace } from "./types";
+import { DEFAULT_SNAP_OPTIONS, type SnapOptions } from "./lib/smartSnap";
 import { PX_PER_IN, clamp, fieldDisplayName, starterItems, starterRecords, uid, valueFor } from "./lib/data";
 import { applyOverride, hasEdits, pickVariant, toItemPatch } from "./lib/instances";
 import { applyConditions } from "./lib/conditions";
@@ -117,6 +118,10 @@ function App() {
   const [showGrid, setShowGrid] = useState(false);
   const [showRulers, setShowRulers] = useState(true);
   const [snap, setSnap] = useState(true);
+  const [snapOptions, setSnapOptions] = useState<SnapOptions>(() => {
+    try { return { ...DEFAULT_SNAP_OPTIONS, ...JSON.parse(localStorage.getItem("sheetshow.snapOptions") ?? "{}") }; } catch { return DEFAULT_SNAP_OPTIONS; }
+  });
+  const changeSnapOptions = (next: SnapOptions) => { setSnapOptions(next); try { localStorage.setItem("sheetshow.snapOptions", JSON.stringify(next)); } catch { /* storage unavailable */ } };
   const [preview, setPreview] = useState(false);
   const [printing, setPrinting] = useState<null | "sheets" | "calibration">(null);
   const printer = usePrinterCalibration();
@@ -789,7 +794,7 @@ function App() {
           workspace={workspace} instanceMode={instanceMode} onInstanceMode={() => { setInstanceMode((v) => !v); setInstanceSel(null); setEditingText(null); }}
           showGrid={showGrid} onGrid={() => setShowGrid((v) => !v)}
           showRulers={showRulers} onRulers={() => setShowRulers((v) => !v)}
-          snap={snap} onSnap={() => setSnap((v) => !v)}
+          snap={snap} onSnap={() => setSnap((v) => !v)} snapOptions={snapOptions} onSnapOptions={changeSnapOptions}
           preview={preview} onPreview={() => setPreview((v) => !v)}
           multi={multiMode} onMulti={() => setMultiMode((v) => !v)}
           zoom={view.zoom} onZoom={setZoom} onZoomPreset={toggleZoomPreset}
@@ -821,7 +826,7 @@ function App() {
                 {workspace === "template" ? (
                   <TemplateStage
                     items={displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
-                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
+                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
                     onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup}
                   />
                 ) : (

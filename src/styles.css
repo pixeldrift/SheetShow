@@ -832,3 +832,15 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .format-row .pair:has(.align-buttons){flex:0 0 auto}
 .format-row .pair{flex:1 1 84px}
 @media(max-width:850px){.pad-round-row{grid-template-columns:1fr}.field-with-twirl .number-input{min-width:60px}}
+
+/* Snapping options: the magnet is the master toggle, the caret beside it opens the list */
+.split-tool{display:inline-flex;align-items:center}
+.split-tool .tool-button.toggle{border-top-right-radius:0;border-bottom-right-radius:0}
+.split-caret{width:16px!important;margin-left:-2px;border-top-left-radius:0!important;border-bottom-left-radius:0!important;color:#9aa198}
+.snap-menu{min-width:230px;padding:6px}
+.snap-menu label{display:flex;gap:9px;align-items:flex-start;padding:7px 8px;border-radius:7px;font-size:12px;cursor:pointer;color:#4c5a51}
+.snap-menu label span{display:flex;flex-direction:column;gap:2px}
+.snap-menu label small{font-size:10px;color:#9aa198}
+.snap-menu input{margin-top:2px;accent-color:var(--accent)}
+.snap-menu .snap-master{border-bottom:1px solid var(--line-2);border-radius:0;margin-bottom:4px;padding-bottom:9px;font-weight:700}
+.snap-menu .dim{opacity:.5}
