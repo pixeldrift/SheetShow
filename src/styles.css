@@ -966,12 +966,6 @@ html,body{touch-action:manipulation}
 
 /* ── Drawer gestures: edge grips, screen-edge slivers, header tabs that never push the close button out ── */
 @media(min-width:851px){.panel{position:relative}}
-.drawer-grip{position:absolute;top:56px;bottom:0;width:10px;z-index:5;cursor:ew-resize;touch-action:none}
-.drawer-grip.edge-right{right:0}.drawer-grip.edge-left{left:0}
-.drawer-grip::after{content:"";position:absolute;top:50%;width:3px;height:36px;border-radius:2px;background:#d4d8cf;transform:translateY(-50%);opacity:.7;transition:opacity .15s,background .15s}
-.drawer-grip.edge-right::after{right:2px}.drawer-grip.edge-left::after{left:2px}
-.drawer-grip:hover::after,.drawer-live .drawer-grip::after{background:var(--accent);opacity:1}
-.drawer-live .left-panel,.drawer-live .right-panel{animation:none}
 .drawer-sliver{position:absolute;top:0;bottom:0;z-index:7;width:14px;display:grid;place-items:center;background:rgba(255,255,255,.82);color:#a9b0a6;cursor:ew-resize;touch-action:none}
 .drawer-sliver::before{content:"";position:absolute;top:50%;width:3px;height:44px;margin-top:-22px;border-radius:2px;background:#d4d8cf}
 .drawer-sliver.left{left:0;border-right:1px solid #e1e3db}.drawer-sliver.left::before{left:2px}
@@ -986,3 +980,19 @@ html,body{touch-action:manipulation}
 .tabs-heading .head-close{flex:none}
 @container (max-width:215px){.tabs-heading .head-tab .count-pill{display:none}.tabs-heading .head-tab{padding:0 6px;gap:4px}}
 .panel-heading.clickable{touch-action:pan-y}
+
+/* New project dialog */
+.new-dialog{width:min(560px,100%)}
+.size-summary{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:9px;background:#f4f6f1;border:1px solid var(--line);margin-bottom:12px}
+.size-summary strong{font:700 14px Manrope,sans-serif;color:#46564c}
+.size-summary small{font-size:11px;color:#78847a}
+.size-summary.custom strong{color:#b86e46}
+.new-size{margin-bottom:6px}
+.swap-size{display:inline-flex;align-items:center;gap:6px;margin-bottom:4px}
+.new-group{margin:16px 0 8px;font-size:10px;letter-spacing:.8px;color:#9aa198;font-weight:700;display:flex;justify-content:space-between}
+.paper-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
+.paper-chip{position:relative;display:flex;flex-direction:column;gap:1px;align-items:flex-start;padding:8px 10px;border:1px solid #e3e5de;border-radius:9px;background:#fff;text-align:left;color:#59685e}
+.paper-chip strong{font-size:12px}.paper-chip small{font-size:10px;color:#9aa198}
+.paper-chip svg{position:absolute;top:8px;right:8px;color:#b86e46}
+.paper-chip.selected{background:#fffaf6;border-color:#e9b894}
+.stock-list{display:flex;flex-direction:column;margin-top:8px;max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:9px}
