@@ -42,6 +42,8 @@ export type DesignItem = {
   /** Outline around the letters, in points, drawn outside the fill so text stays readable on busy backgrounds. */
   textStroke?: { color: string; width: number };
   imageFit?: "cover" | "contain";
+  /** Colour treatment for a picture: hue, saturation, brightness, black and white, a tint or recolour, and a cutout. */
+  imageFx?: ImageFx;
   /** A picture from the image library. */
   assetId?: string;
   /** Makes the picture data-driven: each record resolves its own image. */
@@ -126,6 +128,15 @@ export type Project = {
   overrides?: Record<string, InstanceOverride>;
 };
 
+/** Picture colour effects. Saturation, brightness and contrast are percentages where 100 leaves the picture unchanged; hue is in degrees. */
+export type ImageFx = {
+  hue?: number; saturation?: number; brightness?: number; contrast?: number;
+  grayscale?: boolean;
+  /** multiply: tint like a coloured filter; film: a see-through layer of colour over it; solid: every pixel becomes this colour, keeping the picture's shape. */
+  overlay?: { mode: "multiply" | "film" | "solid"; color: string; amount: number };
+  /** Make black or white (and what is close to it) transparent. `amount` is how much of the dark or light range goes. */
+  cutout?: { remove: "black" | "white"; amount: number };
+};
 export type ImageSource = { mode: "column"; column: string } | { mode: "pattern"; pattern: string };
 /** Offsets and blur in points. A glow is a shadow with no offset. */
 export type Shadow = { x: number; y: number; blur: number; color: string; opacity: number };

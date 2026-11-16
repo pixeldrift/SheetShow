@@ -12,7 +12,7 @@ import { averyPresets, fieldDisplayName, prettyField } from "../lib/data";
 import type { FontLibrary } from "../hooks/useFontLibrary";
 import { NumberField, Pair, Section } from "./Fields";
 import { FontPicker } from "./FontPicker";
-import { EffectsSection, PictureSection, ShapeStyleSection, type ImageTools } from "./ItemStyleSections";
+import { EffectsSection, ImageColorSection, PictureSection, ShapeStyleSection, type ImageTools } from "./ItemStyleSections";
 import { VariantsSection } from "./VariantSections";
 import { ConditionsSection } from "./ConditionsSection";
 import { PrinterCalibrationSection } from "./PrinterCalibrationSection";
@@ -266,6 +266,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
       )}
 
       {item.type === "image" && <PictureSection item={item} patch={patch} tools={imageTools} />}
+      {item.type === "image" && <ImageColorSection item={item} patch={patch} />}
       <ShapeStyleSection item={item} patch={patch} />
       <EffectsSection item={item} patch={patch} />
       {!instanceMode && <ConditionsSection item={item} patch={patch} fields={imageTools.columns} records={imageTools.records} record={imageTools.record} />}

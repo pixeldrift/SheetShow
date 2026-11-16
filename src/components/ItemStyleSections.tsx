@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronRight, Circle, X } from "lucide-react";
-import type { DesignItem, RecordRow, Shadow } from "../types";
+import type { DesignItem, ImageFx, RecordRow, Shadow } from "../types";
+import { hasImageFx } from "./ImageFxFilter";
 import type { ImageLibrary } from "../hooks/useImageLibrary";
 import { TRANSFORM_NAMES, defaultImageSource, needsReview, patternFields } from "../lib/images";
 import { prettyField } from "../lib/data";
@@ -274,6 +275,68 @@ export function EffectsSection({ item, patch }: { item: DesignItem; patch: Patch
         <div className="switch-row" title="A guide for you while designing (a scan, a mock-up). It is never printed and can be semi-transparent."><span>Reference only (won’t print)</span>
           <Switch label="Reference only" on={!!item.reference} onChange={(on) => patch(on ? { reference: true, opacity: (item.opacity ?? 1) === 1 ? 0.5 : item.opacity } : { reference: undefined, opacity: item.opacity === 0.5 ? undefined : item.opacity })} /></div>
       </div>
+    </Section>
+  );
+}
+
+/** Colour effects for a picture: tint it, make it black and white, recolour an icon, or cut black or white out. */
+export function ImageColorSection({ item, patch }: { item: DesignItem; patch: Patch }) {
+  const fx: ImageFx = item.imageFx ?? {};
+  // Defaults are not stored: an effect that does nothing is simply absent, so a picture with no effects is untouched.
+  const set = (change: Partial<ImageFx>) => {
+    const next: ImageFx = { ...fx, ...change };
+    if (!next.hue) delete next.hue;
+    if (next.saturation === 100 || next.saturation === undefined) delete next.saturation;
+    if (next.brightness === 100 || next.brightness === undefined) delete next.brightness;
+    if (next.contrast === 100 || next.contrast === undefined) delete next.contrast;
+    if (!next.grayscale) delete next.grayscale;
+    if (!next.overlay) delete next.overlay;
+    if (!next.cutout) delete next.cutout;
+    patch({ imageFx: Object.keys(next).length ? next : undefined });
+  };
+  const changed = hasImageFx(item.imageFx);
+  const overlay = fx.overlay;
+  return (
+    <Section title="COLOR">
+      <div className="switch-row first"><span>Black and white</span><Switch label="Black and white" on={!!fx.grayscale} onChange={(on) => set({ grayscale: on })} /></div>
+      <div className="two-col spaced">
+        <Pair label="Hue"><NumberField value={fx.hue ?? 0} min={-180} max={180} step={1} places={0} unit="°" onChange={(n) => set({ hue: n })} /></Pair>
+        <Pair label="Saturation"><NumberField value={fx.saturation ?? 100} min={0} max={300} step={1} places={0} unit="%" onChange={(n) => set({ saturation: n })} /></Pair>
+        <Pair label="Brightness"><NumberField value={fx.brightness ?? 100} min={0} max={300} step={1} places={0} unit="%" onChange={(n) => set({ brightness: n })} /></Pair>
+        <Pair label="Contrast"><NumberField value={fx.contrast ?? 100} min={0} max={300} step={1} places={0} unit="%" onChange={(n) => set({ contrast: n })} /></Pair>
+      </div>
+
+      <div className="effect-block">
+        <Pair label="Colour overlay">
+          <select className="select" value={overlay?.mode ?? "none"} aria-label="Colour overlay"
+            onChange={(e) => (e.target.value === "none" ? set({ overlay: undefined }) : set({ overlay: { mode: e.target.value as "multiply" | "film" | "solid", color: overlay?.color ?? "#d17c4b", amount: overlay?.amount ?? (e.target.value === "solid" ? 100 : 60) } }))}>
+            <option value="none">None</option>
+            <option value="multiply">Tint (like a coloured filter)</option>
+            <option value="film">Film (a see-through layer of colour)</option>
+            <option value="solid">Recolour (keeps the shape, one colour)</option>
+          </select>
+        </Pair>
+        {overlay && (
+          <div className="two-col spaced">
+            <Pair label="Colour"><ColorChip value={overlay.color} fallback="#d17c4b" label="Overlay colour" onChange={(c) => set({ overlay: { ...overlay, color: c } })} /></Pair>
+            <Pair label="Amount"><NumberField value={overlay.amount} min={0} max={100} step={1} places={0} unit="%" onChange={(n) => set({ overlay: { ...overlay, amount: n } })} /></Pair>
+          </div>
+        )}
+        {overlay?.mode === "solid" && <p className="hint">Turns every visible pixel this colour. Good for changing an icon from black to any colour.</p>}
+      </div>
+
+      <div className="effect-block">
+        <Pair label="Make transparent">
+          <select className="select" value={fx.cutout?.remove ?? "none"} aria-label="Make transparent"
+            onChange={(e) => (e.target.value === "none" ? set({ cutout: undefined }) : set({ cutout: { remove: e.target.value as "black" | "white", amount: fx.cutout?.amount ?? 40 } }))}>
+            <option value="none">Nothing</option>
+            <option value="white">White (and near white)</option>
+            <option value="black">Black (and near black)</option>
+          </select>
+        </Pair>
+        {fx.cutout && <div className="two-col spaced"><Pair label="Strength"><NumberField value={fx.cutout.amount} min={0} max={100} step={1} places={0} unit="%" onChange={(n) => set({ cutout: { ...fx.cutout!, amount: n } })} /></Pair></div>}
+      </div>
+      {changed && <button className="link-button reset-fx" onClick={() => patch({ imageFx: undefined })}>Reset colour effects</button>}
     </Section>
   );
 }

@@ -1009,3 +1009,4 @@ html,body{touch-action:manipulation}
 
 /* The paste box always draws its text in solid ink on white, whatever the device's own form styling or dark mode does to text fields */
 .paste-box{color:#2f3d34!important;-webkit-text-fill-color:#2f3d34!important;background:#fff!important;opacity:1!important;caret-color:#d17c4b;-webkit-appearance:none;appearance:none;text-shadow:none;font-size:13px;color-scheme:light;-webkit-user-select:text;user-select:text}
+.reset-fx{margin-top:12px;display:block}
