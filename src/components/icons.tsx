@@ -1,4 +1,4 @@
-import type { SVGProps } from "react";
+import { useId, type SVGProps } from "react";
 
 /** Outline glue bottle — used for "Paste". */
 export function GlueBottle({ size = 16, ...props }: { size?: number } & SVGProps<SVGSVGElement>) {
@@ -15,23 +15,40 @@ export function GlueBottle({ size = 16, ...props }: { size?: number } & SVGProps
 type IconProps = { size?: number } & SVGProps<SVGSVGElement>;
 const base = (size: number): SVGProps<SVGSVGElement> => ({ viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinejoin: "round", strokeLinecap: "round", "aria-hidden": true });
 
-/** A square and a circle side by side: the shape tools (today a rectangle, with room for more). */
+/** A square, a triangle and a circle overlapping, with a gap where one passes over another: the shape tools. */
 export function ShapesIcon({ size = 16, ...props }: IconProps) {
+  const id = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const circle = { cx: 8.6, cy: 15.2, r: 5.3 };
+  const tri = "M16.6 7.6 22 18.6H11.6Z";
   return (
-    <svg {...base(size)} strokeWidth={1.8} {...props}>
-      <rect x="1.8" y="6.5" width="9.6" height="10" rx="1.7" />
-      <circle cx="17.9" cy="11.5" r="5.1" />
+    <svg {...base(size)} strokeWidth={1.7} {...props}>
+      <defs>
+        {/* each shape is cut away where a shape in front of it crosses it */}
+        <mask id={`${id}a`} maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+          <rect width="24" height="24" fill="white" />
+          <circle {...circle} r={circle.r} fill="black" stroke="black" strokeWidth="3.4" />
+          <path d={tri} fill="black" stroke="black" strokeWidth="3.4" />
+        </mask>
+        <mask id={`${id}b`} maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+          <rect width="24" height="24" fill="white" />
+          <circle {...circle} fill="black" stroke="black" strokeWidth="3.4" />
+        </mask>
+      </defs>
+      <rect x="2.8" y="2.6" width="10" height="10" rx="1.6" mask={`url(#${id}a)`} />
+      <path d={tri} mask={`url(#${id}b)`} />
+      <circle {...circle} />
     </svg>
   );
 }
 
-/** The picture icon with its artwork drawn as dots: a picture that is only a guide and never prints. */
+/** Two stacked sheets: the front one is the picture, the one behind it is dotted and carries a registration mark. Reference images sit under the design and never print. */
 export function ReferenceImageIcon({ size = 16, ...props }: IconProps) {
   return (
-    <svg {...base(size)} {...props}>
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <circle cx="9" cy="9" r="2" strokeDasharray="0.1 2.5" />
-      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" strokeDasharray="0.1 2.6" />
+    <svg {...base(size)} strokeWidth={1.7} {...props}>
+      <path d="M12 2.8 21 7.4 12 12 3 7.4Z" />
+      <path d="M3 11.6 12 16.2 21 11.6" strokeDasharray="0.1 2.5" />
+      <circle cx="12" cy="20.1" r="1.5" />
+      <path d="M12 17.6v1M12 21.6v1M9.7 20.1h1M13.3 20.1h1" strokeWidth="1.3" />
     </svg>
   );
 }
