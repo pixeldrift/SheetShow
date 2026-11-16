@@ -627,8 +627,11 @@ function App() {
     };
     function move(e: PointerEvent) {
       if (e.pointerId !== pointerId) return;
-      if (!active && Math.hypot(e.clientX - startX, e.clientY - startY) > (touch ? 8 : 5)) {
-        if (touch) { cleanup(); return; } // finger moved first: the user is scrolling the list
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      if (!active && Math.hypot(dx, dy) > (touch ? 8 : 5)) {
+        // On a touch screen a mostly sideways swipe picks the chip up straight away (the list only scrolls up and down, so the browser
+        // leaves a sideways gesture alone); moving up or down first means the person is scrolling the list.
+        if (touch && !(Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5)) { cleanup(); return; }
         begin();
       }
       if (active) {
@@ -928,14 +931,14 @@ function App() {
         />
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}${drawers.live ? " drawer-live" : ""}`} style={drawers.vars}>
-          {dataOpen && (
+          <div className={`drawer-slot left${dataOpen ? " open" : ""}`} {...({ inert: dataOpen ? undefined : "" } as Record<string, unknown>)}>
             <DataPanel chrome={{ header: (e) => drawers.start("left", e, "swipe", 10), consumeSwipe: drawers.consumeSwipe }} onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
               layerCount={(inLayoutEdit ? instItems : items).length}
               layers={<LayersPanel items={inLayoutEdit ? instItems : items} selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems} flat={!!instanceBanner}
                 onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
                 onUpdate={inLayoutEdit && instRecord ? (id, patch) => setInstanceItem(instRecord[ID], id, toItemPatch(patch)) : updateItem}
                 onUpdateMany={updateMany} onReorder={reorderLayer} multi={multiMode} />} />
-          )}
+          </div>
 
           <div className="editor-content">
             <div className="canvas-frame">
@@ -1008,8 +1011,6 @@ function App() {
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
-              <div className="drawer-sliver left" onPointerDown={(e) => drawers.start("left", e, dataOpen ? "resize" : "open")} title={dataOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Fields and Layers drawer"} aria-hidden />
-              <div className="drawer-sliver right" onPointerDown={(e) => drawers.start("right", e, inspectorOpen ? "resize" : "open")} title={inspectorOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Properties drawer"} aria-hidden />
               {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields and Layers drawer" : "Show the Fields and Layers drawer (your data columns, and every object in the design)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onPointerDown={(e) => drawers.start("left", e, "open")} onClick={(e) => { if (e.detail === 0) setDataOpen(true); }}>
                 <Braces size={15} /><span>Fields</span><ChevronRight size={13} className="toggle-arrow" />
               </button>}
@@ -1038,7 +1039,7 @@ function App() {
             />
           </div>
 
-          {inspectorOpen && (
+          <div className={`drawer-slot right${inspectorOpen ? " open" : ""}`} {...({ inert: inspectorOpen ? undefined : "" } as Record<string, unknown>)}>
             <Inspector
               chrome={{ header: (e) => drawers.start("right", e, "swipe", 10), consumeSwipe: drawers.consumeSwipe }}
               workspace={workspace}
@@ -1064,7 +1065,9 @@ function App() {
               }}
               onClose={() => setInspectorOpen(false)}
             />
-          )}
+          </div>
+          <div className="drawer-sliver left" onPointerDown={(e) => drawers.start("left", e, dataOpen ? "resize" : "open")} title={dataOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Fields and Layers drawer"} aria-hidden />
+          <div className="drawer-sliver right" onPointerDown={(e) => drawers.start("right", e, inspectorOpen ? "resize" : "open")} title={inspectorOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Properties drawer"} aria-hidden />
         </div>
       </main>
 
