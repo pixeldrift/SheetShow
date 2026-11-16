@@ -1,11 +1,11 @@
-import { renameTokens } from "./merge";
+import { renameTokens, tokenFields } from "./merge";
 import type { DesignItem } from "../types";
 import { fieldDisplayName } from "./data";
 import { ruleFields } from "./conditions";
 
 /** Distinct data fields the template is linked to (automatic `__` fields excluded), in first-use order. */
 export const boundFields = (items: DesignItem[]): string[] =>
-  [...new Set(items.flatMap((item) => [...(item.field ? [item.field] : []), ...ruleFields(item)].filter((f) => !f.startsWith("__"))))];
+  [...new Set(items.flatMap((item) => [...(item.field ? [item.field] : tokenFields(item.text ?? "")), ...ruleFields(item)].filter((f) => !f.startsWith("__"))))];
 
 /** "Hatched" → "hatch", "Bands" → "band": enough stemming to line up ordinary header variations. */
 const stem = (word: string) => word.replace(/(ing|ed|es|s)$/, (m, _s, offset) => (offset >= 3 ? "" : m));

@@ -4,9 +4,9 @@ import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { DesignItem, Guide, InstanceOverride, ItemPatch, LabelPreset, Project, RecordRow, Sheet, Variant, VariantRule, View, Workspace } from "./types";
-import { upgradeProject } from "./lib/merge";
+import { tokenFields, upgradeProject } from "./lib/merge";
 import { DEFAULT_SNAP_OPTIONS, type SnapOptions } from "./lib/smartSnap";
-import { PX_PER_IN, clamp, fieldDisplayName, specialFields, starterItems, starterRecords, uid, valueFor } from "./lib/data";
+import { PX_PER_IN, clamp, fieldDisplayName, isPlaceholderData, isPlaceholderDesign, specialFields, starterItems, starterRecords, uid, valueFor } from "./lib/data";
 import { applyOverride, hasEdits, pickVariant, toItemPatch } from "./lib/instances";
 import { applyConditions } from "./lib/conditions";
 import { cloneItems, expandToGroups, groupItems, moveLayerTo, reorderSelection, type ArrangeMode, nextGroupName, renameGroup as renameGroupIn, ungroupItems, unitsOf } from "./lib/groups";
@@ -20,7 +20,7 @@ import { HelpDialog } from "./components/HelpDialog";
 import { useHistory } from "./hooks/useHistory";
 import { useFontLibrary } from "./hooks/useFontLibrary";
 import { aabb, alignItems, boundsOf, centerOf, distributeItems, rotateAbout, type AlignMode, type Transform } from "./lib/align";
-import { applyMapping, boundFields } from "./lib/mapping";
+import { applyMapping, boundFields, suggestMapping } from "./lib/mapping";
 import { MappingDialog } from "./components/MappingDialog";
 import { ImportDialog } from "./components/ImportDialog";
 import { bundleProject, downloadBlob, loadProject, projectFileName, readProjectAny, saveProject } from "./lib/storage";
@@ -60,7 +60,7 @@ GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 const WIDE_QUERY = "(min-width: 851px)";
 const freshView = (): View => ({ zoom: 1, pan: { x: 0, y: 0 }, fitted: false });
 const defaultSheet: Sheet = { pageWidth: 8.5, pageHeight: 11, columns: 2, rows: 4, gapX: 0.18, gapY: 0.18, marginX: 0.25, marginY: 0.25, repeatMode: "next", cropMarks: false };
-const DEFAULT_NAME = "Untitled bird card";
+const DEFAULT_NAME = "Untitled project";
 
 /** Everything the undo history covers. */
 type Doc = {
@@ -81,7 +81,7 @@ function App() {
     return {
       items: Object.fromEntries(vs.map((v) => [v.id, v.items])), variants: vs.map(({ id, name }) => ({ id, name })), rules: initial?.rules ?? [],
       template: initial?.template ?? { width: 3.5, height: 2 }, sheet: initial?.sheet ?? defaultSheet,
-      records: withIds(initial?.records ?? starterRecords), fileName: initial?.fileName ?? "bird-records.csv", overrides: initial?.overrides ?? {},
+      records: withIds(initial?.records ?? starterRecords), fileName: initial?.fileName ?? "people.csv", overrides: initial?.overrides ?? {},
     };
   });
   const doc = useHistory<Doc>(startDoc);
@@ -483,12 +483,33 @@ function App() {
     setPendingImport(null);
   };
 
-  /** The person chose "Replace": use the new file, matching the template's links first if it needs columns the file lacks. */
-  const replaceWithImport = () => {
-    if (!pendingImport) return;
-    const columns = new Set(Object.keys(pendingImport.records[0] ?? {}));
-    if (boundFields(items).some((field) => !columns.has(field))) setPendingImport({ ...pendingImport, stage: "map" });
-    else adoptData(pendingImport.records, pendingImport.fileName);
+  /** Use the new records in place of the current ones, matching the template's links first if it needs columns they lack. */
+  const replaceWith = (incoming: { records: RecordRow[]; fileName: string }) => {
+    const norm = (k: string) => k.toLowerCase().replace(/[\s_]+/g, "_");
+    const columns = new Set(Object.keys(incoming.records[0] ?? {}).map(norm));
+    if (boundFields(items).some((field) => !columns.has(norm(field)))) setPendingImport({ ...incoming, stage: "map" });
+    else adoptData(incoming.records, incoming.fileName);
+  };
+  const replaceWithImport = () => { if (pendingImport) replaceWith(pendingImport); };
+  /**
+   * New records are coming in. If the current ones are only the built-in sample (or nothing has been typed), there is nothing to
+   * replace or merge with, so they simply arrive; the untouched sample card adapts to the new columns, or gives way to a blank design.
+   */
+  const beginImport = (incoming: RecordRow[], name: string) => {
+    if (!isPlaceholderData(records)) { setPendingImport({ records: incoming, fileName: name, stage: "choose" }); return; }
+    if (!isPlaceholderDesign(items)) { replaceWith({ records: incoming, fileName: name }); return; }
+    const bound = boundFields(items);
+    const suggestions = suggestMapping(bound, Object.keys(incoming[0] ?? {}));
+    const mapping: Record<string, string | null> = Object.fromEntries(bound.map((f) => [f, suggestions[f].column]));
+    const unmatched = new Set(bound.filter((f) => !mapping[f]));
+    const adapt = bound.length - unmatched.size >= 2;
+    doc.set((d) => ({
+      ...d, records: withIds(incoming), fileName: name,
+      items: adapt
+        ? Object.fromEntries(Object.entries(mapAllTemplates(d.items, mapping)).map(([id, list]) => [id, list.filter((i) => !(i.field && unmatched.has(i.field)) && !(!i.field && tokenFields(i.text ?? "").some((f) => unmatched.has(f))))]))
+        : Object.fromEntries(Object.keys(d.items).map((id) => [id, [] as DesignItem[]])),
+    }));
+    setRecordIndex(0);
   };
   /** "Add" or "Merge": the finished list, as one undo step. */
   const combineImport = (rows: RecordRow[]) => { recordHistory.set(() => rows); setPendingImport(null); };
@@ -496,7 +517,7 @@ function App() {
   const importRecords = (records: RecordRow[], name: string) => {
     setPasteOpen(false); setSheetsOpen(false);
     if (!records.length) { window.alert("No records were found."); return; }
-    setPendingImport({ records, fileName: name, stage: "choose" });
+    beginImport(records, name);
   };
   const importData = (file: File) => {
     Papa.parse<RecordRow>(file, {
@@ -504,7 +525,7 @@ function App() {
       complete: (result) => {
         const cleaned = result.data.filter((row) => Object.values(row).some((v) => String(v ?? "").trim()));
         if (!cleaned.length) { window.alert("No records were found in that file."); return; }
-        setPendingImport({ records: cleaned, fileName: file.name, stage: "choose" }); // ask: replace, add, or merge
+        beginImport(cleaned, file.name); // ask replace, add or merge, unless there is only sample data to replace
       },
       error: () => window.alert("That file could not be read."),
     });
