@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
-import { BoxSelect, ChevronDown, FileSearch, FileText, LayoutGrid, Rows3, Grid2X2, ImagePlus, Magnet, PencilLine, Plus, Ruler, ScanLine, Square, Type } from "lucide-react";
+import { SquareDashedMousePointer, ChevronDown, FileSearch, FileText, LayoutGrid, Rows3, Grid2X2, Image as ImageIcon, Magnet, PencilLine, Plus, Ruler, Type } from "lucide-react";
 import { MAX_ZOOM, MIN_ZOOM } from "./Viewport";
 import { ZoomField } from "./ZoomField";
+import { ReferenceImageIcon, ShapesIcon } from "./icons";
 import type { SnapOptions } from "../lib/smartSnap";
 
 type Props = {
@@ -40,9 +41,9 @@ export function Toolbar(p: Props) {
         <>
           <div className="tool-group add-inline">
             <button className="tool-button" title="Add text" aria-label="Add text" onClick={p.onAddText}><Type size={16} /></button>
-            <button className="tool-button" title="Add rectangle: then turn it into a text box or photo placeholder in Properties" aria-label="Add rectangle" onClick={p.onAddShape}><Square size={16} /></button>
-            <button className="tool-button" title="Add image or PDF" aria-label="Add image or PDF" onClick={p.onAddImage}><ImagePlus size={16} /></button>
-            <button className="tool-button" title="Add a reference image: a faded, locked guide at the bottom that never prints" aria-label="Add reference image" onClick={p.onAddReference}><ScanLine size={16} /></button>
+            <button className="tool-button" title="Add a shape (a rectangle for now). Convert it to a text box or photo box in Properties" aria-label="Add rectangle" onClick={p.onAddShape}><ShapesIcon size={19} /></button>
+            <button className="tool-button" title="Add image or PDF" aria-label="Add image or PDF" onClick={p.onAddImage}><ImageIcon size={16} /></button>
+            <button className="tool-button" title="Add a reference image: a faded, locked guide at the bottom that never prints" aria-label="Add reference image" onClick={p.onAddReference}><ReferenceImageIcon size={16} /></button>
           </div>
           <div className="tool-group add-collapsed">
             <button ref={shapesRef} className="tool-button with-caret" title="Add something to the template" aria-label="Add" aria-haspopup="menu" aria-expanded={!!shapesAt} onClick={() => (shapesAt ? setShapesAt(null) : openShapes())}>
@@ -61,7 +62,7 @@ export function Toolbar(p: Props) {
         </>
       )}
       <div className="tool-group">
-        {p.workspace === "template" && toggle(p.multi, "Multi-select (tap items to add, drag to box-select)", p.onMulti, <BoxSelect size={15} />)}
+        {p.workspace === "template" && toggle(p.multi, "Select several: tap objects to add or remove them, or drag on empty canvas to draw a selection box", p.onMulti, <SquareDashedMousePointer size={16} />)}
         {toggle(p.showGrid, "Show grid", p.onGrid, <Grid2X2 size={15} />)}
         {toggle(p.showRulers, "Show rulers", p.onRulers, <Ruler size={15} />)}
         <span className="split-tool">
@@ -108,9 +109,9 @@ export function Toolbar(p: Props) {
           <div className="menu-scrim" onClick={() => setShapesAt(null)} />
           <div className="menu shapes-menu" role="menu" style={{ position: "fixed", left: Math.min(shapesAt.x, window.innerWidth - 220), top: shapesAt.y }}>
             <button role="menuitem" onClick={choose(p.onAddText)}><Type size={15} /> <span>Text<small>Typed or linked to a field</small></span></button>
-            <button role="menuitem" onClick={choose(p.onAddShape)}><Square size={15} /> <span>Rectangle<small>Turn it into a text box or photo placeholder in Properties</small></span></button>
-            <button role="menuitem" onClick={choose(p.onAddImage)}><ImagePlus size={15} /> <span>Image or PDF<small>From your library or a file</small></span></button>
-            <button role="menuitem" onClick={choose(p.onAddReference)}><ScanLine size={15} /> <span>Reference image<small>A faded, locked guide that never prints</small></span></button>
+            <button role="menuitem" onClick={choose(p.onAddShape)}><ShapesIcon size={15} /> <span>Shape<small>Turn it into a text box or photo placeholder in Properties</small></span></button>
+            <button role="menuitem" onClick={choose(p.onAddImage)}><ImageIcon size={15} /> <span>Image or PDF<small>From your library or a file</small></span></button>
+            <button role="menuitem" onClick={choose(p.onAddReference)}><ReferenceImageIcon size={15} /> <span>Reference image<small>A faded, locked guide that never prints</small></span></button>
           </div>
         </>
       )}

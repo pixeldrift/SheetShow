@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { ClipboardPaste, Sheet, Upload, BadgeCheck, Braces, ChevronDown, ChevronLeft, Database, FileText, Hash, GripVertical, Layers, MousePointer2, Search, Type } from "lucide-react";
 import { specialFields, prettyField } from "../lib/data";
+import type { DrawerChrome } from "./DrawerChrome";
 
 type Props = {
   fileName: string;
@@ -16,12 +17,14 @@ type Props = {
   onClose: () => void;
   onPasteData: () => void;
   onGoogleSheet: () => void;
+  /** Gestures: drag the edge or the header to resize, flick toward the screen edge to close. */
+  chrome: DrawerChrome;
   /** The layer list, shown on its own tab beside the fields. */
   layers: React.ReactNode;
   layerCount: number;
 };
 
-export function DataPanel({ fileName, fields, recordCount, totalRecords, hasTextSelected, onImport, onField, onFieldPointerDown, dragging, onClose, layers, layerCount, onPasteData, onGoogleSheet }: Props) {
+export function DataPanel({ fileName, fields, recordCount, totalRecords, hasTextSelected, onImport, onField, onFieldPointerDown, dragging, onClose, layers, layerCount, onPasteData, onGoogleSheet, chrome }: Props) {
   const [sourceMenu, setSourceMenu] = useState<{ x: number; y: number } | null>(null);
   const sourceRef = useRef<HTMLButtonElement>(null);
   const [tab, setTab] = useState<"fields" | "layers">("fields");
@@ -42,7 +45,8 @@ export function DataPanel({ fileName, fields, recordCount, totalRecords, hasText
 
   return (
     <aside className={dragging ? "panel left-panel dragging" : "panel left-panel"} aria-label="Data fields">
-      <div className="panel-heading tabs-heading" role="tablist">
+      <div className="drawer-grip edge-right" onPointerDown={chrome.grip} title="Drag to resize · flick toward the edge to close" aria-hidden />
+      <div className="panel-heading tabs-heading" role="tablist" onPointerDown={chrome.header} onClickCapture={(e) => { if (chrome.consumeSwipe()) { e.stopPropagation(); e.preventDefault(); } }}>
         <button role="tab" aria-selected={tab === "fields"} className={tab === "fields" ? "head-tab active" : "head-tab"} onClick={() => setTab("fields")} title="Your data columns: drag one onto the design"><Braces size={14} /> Fields</button>
         <button role="tab" aria-selected={tab === "layers"} className={tab === "layers" ? "head-tab active" : "head-tab"} onClick={() => setTab("layers")} title="Every object in the design, front to back"><Layers size={14} /> Layers <span className="count-pill">{layerCount}</span></button>
         <button type="button" className="icon-button head-close" title="Close this drawer" aria-label="Close drawer" onClick={onClose}><ChevronLeft size={17} /></button>

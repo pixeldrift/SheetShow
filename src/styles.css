@@ -245,10 +245,6 @@ h2,h3,p{margin:0}
   .edit-bar{bottom:10px;padding:3px 4px}.edit-bar .tool-button{width:31px}
   .canvas-caption{top:14px;font-size:8px;gap:6px}
 }
-/* iOS zooms the page when focusing inputs below 16px */
-@media(hover:none) and (pointer:coarse){
-  .property-input,.select,.number-input input,.field-search input{font-size:16px}
-}
 
 /* ── Print: only the sheets ─────────────────────────────────────────────── */
 .print-root{display:none}
@@ -818,11 +814,6 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .left-panel>*{min-width:var(--left-w)}.right-panel>*{min-width:var(--right-w)}
 @media(prefers-reduced-motion:reduce){.left-panel,.right-panel{animation:none}}
 
-/* iOS Safari zooms the whole page when a focused field's text is under 16px: on touch screens every field is at least that. */
-@media(pointer:coarse){
-  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea:not(.inline-editor),[contenteditable="true"]:not(.inline-editor){font-size:max(16px,1em)!important}
-}
-
 .convert-row .with-chevron{display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
 .convert-row .with-chevron .caret{margin-left:auto}
 .convert-row{display:block}
@@ -872,7 +863,6 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 
 /* On-canvas text editing */
 .inline-editor{z-index:40;box-sizing:border-box;resize:none;overflow:hidden;border:0;outline:2px solid var(--accent);outline-offset:0;border-radius:2px;background:rgba(255,255,255,.92);box-shadow:0 4px 18px #27372d33;margin:0;-webkit-user-select:text;user-select:text;font-size:inherit}
-@media(pointer:coarse){.inline-editor{font-size:revert-layer}}
 .drawer-table tr.on-page td{background:#faf5ef}
 .drawer-table tr.current td{background:var(--accent-soft)}
 .sheet-no{display:block;font-size:8px;font-weight:700;color:#b9916f;letter-spacing:.3px}
@@ -966,3 +956,28 @@ th.drop-before::before{left:-1px}th.drop-after::after{right:-1px}
 .sheets-dialog{width:min(560px,100%)}
 .warn-banner{margin-top:12px}
 .paste-name{margin-top:12px}
+
+/* A chip dragged out of the Fields drawer: the same chip, lifted a little, held where you grabbed it */
+.drag-ghost.chip{transform:none;padding:0 6px 0 7px;width:auto;display:flex;align-items:center;gap:7px;height:36px;border:1px solid #e3b898;border-radius:10px;background:#fff;color:#657169;font-weight:400;text-transform:none;box-shadow:0 10px 26px #25352b45,0 2px 6px #25352b30;scale:1.04;transform-origin:var(--ox,30%) 50%;cursor:grabbing}
+.drag-ghost.chip.special{background:#fffaf5}
+
+/* The page itself never zooms (the viewport is fixed in index.html); this also stops a double-tap from zooming. The canvas has its own pinch and zoom controls. */
+html,body{touch-action:manipulation}
+
+/* ── Drawer gestures: edge grips, screen-edge slivers, header tabs that never push the close button out ── */
+@media(min-width:851px){.panel{position:relative}}
+.drawer-grip{position:absolute;top:56px;bottom:0;width:10px;z-index:5;cursor:ew-resize;touch-action:none}
+.drawer-grip.edge-right{right:0}.drawer-grip.edge-left{left:0}
+.drawer-grip::after{content:"";position:absolute;top:50%;width:3px;height:36px;border-radius:2px;background:#d4d8cf;transform:translateY(-50%);opacity:.7;transition:opacity .15s,background .15s}
+.drawer-grip.edge-right::after{right:2px}.drawer-grip.edge-left::after{left:2px}
+.drawer-grip:hover::after,.drawer-live .drawer-grip::after{background:var(--accent);opacity:1}
+.drawer-live .left-panel,.drawer-live .right-panel{animation:none}
+.drawer-sliver{position:absolute;top:50%;z-index:7;width:15px;height:76px;margin-top:-38px;display:grid;place-items:center;background:#fff;color:#a9b0a6;border:1px solid #e1e3db;box-shadow:0 2px 10px #27372d1a;cursor:ew-resize;touch-action:none}
+.drawer-sliver.left{left:0;border-left:0;border-radius:0 10px 10px 0}
+.drawer-sliver.right{right:0;border-right:0;border-radius:10px 0 0 10px}
+@media(hover:hover){.drawer-sliver:hover{color:var(--accent);background:#fffaf6}}
+.tabs-heading{touch-action:pan-y;container-type:inline-size;min-width:0}
+.tabs-heading .head-tab{min-width:0;flex:0 1 auto;padding:0 8px;overflow:hidden;white-space:nowrap}
+.tabs-heading .head-close{flex:none}
+@container (max-width:215px){.tabs-heading .head-tab .count-pill{display:none}.tabs-heading .head-tab{padding:0 6px;gap:4px}}
+.panel-heading.clickable{touch-action:pan-y}

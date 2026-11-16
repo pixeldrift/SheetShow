@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { kindIcon } from "./LayersPanel";
+import type { DrawerChrome } from "./DrawerChrome";
 import {
   ChevronDown, FileText, LayoutTemplate, Shapes, Group, Ungroup,
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
@@ -65,6 +66,7 @@ type Props = {
   pageCount: number;
   overflow: boolean;
   onClose: () => void;
+  chrome: DrawerChrome;
 };
 
 export function Inspector(props: Props) {
@@ -81,7 +83,8 @@ export function Inspector(props: Props) {
 
   return (
     <aside className="panel right-panel" aria-label="Properties">
-      <button type="button" className="panel-heading clickable two-line" title="Close this drawer" aria-label={`Close ${head.title} properties`} onClick={onClose}>
+      <div className="drawer-grip edge-left" onPointerDown={props.chrome.grip} title="Drag to resize · flick toward the edge to close" aria-hidden />
+      <button type="button" className="panel-heading clickable two-line" title="Close this drawer (or flick it toward the edge)" aria-label={`Close ${head.title} properties`} onPointerDown={props.chrome.header} onClick={(e) => { if (props.chrome.consumeSwipe()) { e.preventDefault(); return; } onClose(); }}>
         <span className="head-icon">{head.icon}</span>
         <span className="head-text"><strong>{head.title}</strong><small>{head.sub}</small></span>
         <ChevronRight size={17} className="heading-chevron" />
@@ -147,7 +150,7 @@ function MultiProperties({ count, onRotateBy, onDuplicate, onDelete, group, grou
         </div>
         <p className="hint">Drag the round handle above the selection to turn it freely (Shift for 15° steps). Items turn together around the group’s centre.</p>
       </Section>
-      <p className="hint">Shift-click items or layers to adjust the selection. Alignment is on the bar at the bottom of the canvas.</p>
+      <p className="hint">Shift-click items or layers to adjust the selection, or turn on multi-select in the toolbar and just tap. Alignment is on the bar at the bottom of the canvas.</p>
       <div className="property-actions"><button onClick={onDuplicate}><Copy size={14} /> Duplicate</button><button className="danger" onClick={onDelete}><Trash2 size={14} /> Delete</button></div>
     </>
   );

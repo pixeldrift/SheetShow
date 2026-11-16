@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Braces, ChevronLeft, ChevronRight, Redo2, SlidersHorizontal, Undo2 } from "lucide-react";
+import { Braces, ChevronLeft, ChevronRight, GripVertical, Hash, Redo2, SlidersHorizontal, Type, Undo2 } from "lucide-react";
 import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -38,6 +38,7 @@ import { ArrangeBar } from "./components/ArrangeBar";
 import { InlineTextEditor } from "./components/InlineTextEditor";
 import { LayersPanel } from "./components/LayersPanel";
 import { PasteDialog } from "./components/PasteDialog";
+import { useDrawerGestures } from "./hooks/useDrawerGestures";
 import { SheetsDialog } from "./components/SheetsDialog";
 import type { SortState } from "./components/columnDrag";
 import type { PaletteState } from "./components/Palette";
@@ -120,11 +121,13 @@ function App() {
   const [multiMode, setMultiMode] = useState(false);
   const [clipboard, setClipboard] = useState<DesignItem[]>([]);
   const [saveState, setSaveState] = useState<"saved" | "error">("saved");
-  const [fieldDrag, setFieldDrag] = useState<{ field: string; x: number; y: number } | null>(null);
+  /** `grab` is where on the chip it was picked up, so it keeps that exact place under the finger as it travels (null for a table cell, which is shown as a small chip at the pointer). */
+  const [fieldDrag, setFieldDrag] = useState<{ field: string; x: number; y: number; grab: { dx: number; dy: number; w: number } | null } | null>(null);
   /** The existing text object a dragged field would link to if dropped now. */
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const justDragged = useRef(false);
   // A freshly imported file waiting for the person to confirm how its columns map onto the template.
+  const drawers = useDrawerGestures((side, open) => (side === "left" ? setDataOpen(open) : setInspectorOpen(open)));
   const [pasteOpen, setPasteOpen] = useState(false);
   const [sheetsOpen, setSheetsOpen] = useState(false);
   const [pendingImport, setPendingImport] = useState<{ records: RecordRow[]; fileName: string; stage: "choose" | "map" } | null>(null);
@@ -603,8 +606,12 @@ function App() {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const { pointerId, clientX: startX, clientY: startY } = event;
     const touch = event.pointerType !== "mouse";
+    // A chip from the Fields drawer travels as itself, held at the same spot you grabbed it.
+    const source = event.currentTarget as HTMLElement;
+    const chip = source.classList.contains("field-row") ? source.getBoundingClientRect() : null;
+    const grab = chip ? { dx: startX - chip.left, dy: startY - chip.top, w: chip.width } : null;
     let active = false;
-    const begin = () => { active = true; setFieldDrag({ field, x: startX, y: startY }); navigator.vibrate?.(8); };
+    const begin = () => { active = true; setFieldDrag({ field, x: startX, y: startY, grab }); navigator.vibrate?.(8); };
     const timer = touch ? window.setTimeout(begin, 260) : undefined;
     const blockScroll = (e: TouchEvent) => { if (active) e.preventDefault(); };
     const cleanup = () => {
@@ -623,7 +630,7 @@ function App() {
         begin();
       }
       if (active) {
-        setFieldDrag({ field, x: e.clientX, y: e.clientY });
+        setFieldDrag({ field, x: e.clientX, y: e.clientY, grab });
         const over = document.elementFromPoint(e.clientX, e.clientY);
         const id = over?.closest(".viewport") ? over.closest("[data-item-id]")?.getAttribute("data-item-id") : null;
         setDropTargetId(id && itemsRef.current.find((i) => i.id === id)?.type === "text" ? id : null);
@@ -915,14 +922,14 @@ function App() {
           onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })} onAddReference={() => setLibraryDialog({ kind: "insert", reference: true })} docked={templateTools.docked} pageView={pageView} onPageView={setPageView} pageCount={pageCount}
         />
 
-        <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
+        <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}${drawers.live ? " drawer-live" : ""}`} style={drawers.vars}>
           {dataOpen && (
-            <DataPanel onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
+            <DataPanel chrome={{ grip: (e) => drawers.start("left", e, "resize"), header: (e) => drawers.start("left", e, "resize", 10), consumeSwipe: drawers.consumeSwipe }} onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
               layerCount={(inLayoutEdit ? instItems : items).length}
               layers={<LayersPanel items={inLayoutEdit ? instItems : items} selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems} flat={!!instanceBanner}
                 onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
                 onUpdate={inLayoutEdit && instRecord ? (id, patch) => setInstanceItem(instRecord[ID], id, toItemPatch(patch)) : updateItem}
-                onUpdateMany={updateMany} onReorder={reorderLayer} />} />
+                onUpdateMany={updateMany} onReorder={reorderLayer} multi={multiMode} />} />
           )}
 
           <div className="editor-content">
@@ -996,6 +1003,8 @@ function App() {
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
+              {!dataOpen && <div className="drawer-sliver left" onPointerDown={(e) => drawers.start("left", e, "open")} title="Drag to open the Fields and Layers drawer" aria-hidden><ChevronRight size={12} /></div>}
+              {!inspectorOpen && <div className="drawer-sliver right" onPointerDown={(e) => drawers.start("right", e, "open")} title="Drag to open the Properties drawer" aria-hidden><ChevronLeft size={12} /></div>}
               {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields and Layers drawer" : "Show the Fields and Layers drawer (your data columns, and every object in the design)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
                 <Braces size={15} /><span>Fields</span><ChevronRight size={13} className="toggle-arrow" />
               </button>}
@@ -1026,6 +1035,7 @@ function App() {
 
           {inspectorOpen && (
             <Inspector
+              chrome={{ grip: (e) => drawers.start("right", e, "resize"), header: (e) => drawers.start("right", e, "resize", 10), consumeSwipe: drawers.consumeSwipe }}
               workspace={workspace}
               items={inLayoutEdit ? instItems : items}
               selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems}
@@ -1093,7 +1103,15 @@ function App() {
         />
       )}
 
-      {fieldDrag && <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>}
+      {fieldDrag && (fieldDrag.grab
+        ? (
+          <div className={`field-row drag-ghost chip${fieldDrag.field.startsWith("__") ? " special" : ""}`} style={{ left: fieldDrag.x - fieldDrag.grab.dx, top: fieldDrag.y - fieldDrag.grab.dy, width: fieldDrag.grab.w }}>
+            <span className="field-type">{fieldDrag.field.startsWith("__") ? <Hash size={12} /> : <Type size={12} />}</span>
+            <span className="field-name">{fieldDisplayName(fieldDrag.field)}</span>
+            <span className="field-grip" aria-hidden><GripVertical size={14} /></span>
+          </div>
+        )
+        : <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>)}
 
       {printing && (
         <PrintSheets kind={printing} offset={printer} sheet={sheet} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} instanceFor={instanceFor} />
