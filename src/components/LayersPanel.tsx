@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronDown, ChevronsUpDown, Database, Eye, EyeOff, FileImage, Filter, Group, Hash, Lock, Square, Type, Unlock } from "lucide-react";
 import type { DesignItem } from "../types";
 import { fieldDisplayName } from "../lib/data";
@@ -6,7 +6,7 @@ import { isLinked } from "./ItemShape";
 
 export const kindIcon = (item: DesignItem, size = 14) =>
   item.type === "text" ? (item.field?.startsWith("__") ? <Hash size={size} /> : <Type size={size} />) : item.type === "image" ? <FileImage size={size} /> : <Square size={size} />;
-export const layerLabel = (item: DesignItem) => (item.field ? fieldDisplayName(item.field) : item.text || item.assetName || (item.type === "rect" ? "Shape" : "Item"));
+export const layerLabel = (item: DesignItem) => (item.name?.trim() ? item.name.trim() : item.field ? fieldDisplayName(item.field) : item.text || item.assetName || (item.type === "rect" ? "Shape" : "Item"));
 
 type Props = {
   items: DesignItem[];
@@ -16,6 +16,7 @@ type Props = {
   onUpdateMany: (ids: string[], patch: Partial<DesignItem>) => void;
   /** Drag-and-drop: put `id` above/below `targetId`. */
   onReorder: (id: string, targetId: string, above: boolean, asGroup: boolean) => void;
+  onRenameGroup: (groupId: string, name: string) => void;
   /** Hand-editing one record's copy: groups aren't offered. */
   flat: boolean;
   /** Multi-select mode (the toolbar toggle): tapping a layer adds it to, or takes it out of, the selection. */
@@ -23,7 +24,22 @@ type Props = {
 };
 
 /** Every object in the design, front to back: select, show/hide, lock, and drag to restack. A global view, not a property of one object. */
-export function LayersPanel({ items, selectedItems, onSelect, onUpdate, onUpdateMany, onReorder, flat: flatLayers, multi }: Props) {
+export function LayersPanel({ items, selectedItems, onSelect, onUpdate, onUpdateMany, onReorder, onRenameGroup, flat: flatLayers, multi }: Props) {
+  // Double-click or double-tap a name to rename it. An empty name goes back to the automatic one.
+  const [renaming, setRenaming] = useState<{ key: string; value: string } | null>(null);
+  const lastTap = useRef<{ key: string; at: number } | null>(null);
+  const tapName = (key: string, begin: string) => (e: React.MouseEvent) => {
+    const now = Date.now();
+    if (lastTap.current?.key === key && now - lastTap.current.at < 400) { e.stopPropagation(); lastTap.current = null; setRenaming({ key, value: begin }); }
+    else lastTap.current = { key, at: now };
+  };
+  const nameEditor = (key: string, commit: (name: string) => void) => (
+    <input className="layer-rename" autoFocus value={renaming?.value ?? ""} aria-label="Layer name" spellCheck={false}
+      onChange={(e) => setRenaming({ key, value: e.target.value })} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}
+      onFocus={(e) => e.currentTarget.select()}
+      onBlur={() => { if (renaming?.key === key) commit(renaming.value.trim()); setRenaming(null); }}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget as HTMLInputElement).blur(); } else if (e.key === "Escape") { e.preventDefault(); setRenaming(null); } }} />
+  );
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // Drag a layer by its grip: the row under the pointer shows a line where it will land.
   const [drag, setDrag] = useState<{ id: string; over: string; above: boolean } | null>(null);
@@ -56,7 +72,7 @@ export function LayersPanel({ items, selectedItems, onSelect, onUpdate, onUpdate
         const itemRow = (item: DesignItem, indented: boolean) => (
           <div key={item.id} data-layer-id={item.id} className={`${selectedItems.some((x) => x.id === item.id) ? "layer-row selected" : "layer-row"}${indented ? " nested" : ""}${dropClass(item.id)}`} onClick={(e) => pick([item.id], e)}>
             <span className="layer-kind">{kindIcon(item, 13)}</span>
-            <span className="layer-label">{layerLabel(item)}{isLinked(item) ? <Database size={11} className="layer-linked" aria-label="Linked to your data" /> : null}{item.reference ? <em className="ref-tag">reference</em> : null}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
+            <span className="layer-label" onClick={tapName(item.id, layerLabel(item))} title="Double-tap to rename">{renaming?.key === item.id ? nameEditor(item.id, (name) => onUpdate(item.id, { name: name || undefined })) : layerLabel(item)}{isLinked(item) ? <Database size={11} className="layer-linked" aria-label="Linked to your data" /> : null}{item.reference ? <em className="ref-tag">reference</em> : null}{item.rules?.length ? <Filter size={11} className="layer-rules" aria-label="Has conditional rules" /> : null}</span>
             <button className="mini-button" title={item.visible === false ? "Show" : "Hide"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { visible: item.visible === false }); }}>{item.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}</button>
             <button className="mini-button" title={item.locked ? "Unlock" : "Lock"} onClick={(e) => { e.stopPropagation(); onUpdate(item.id, { locked: !item.locked }); }}>{item.locked ? <Lock size={13} /> : <Unlock size={13} />}</button>
             <span className="layer-grip" title="Drag to change the stacking order" aria-label="Drag to reorder" role="button" onClick={(e) => e.stopPropagation()} onPointerDown={startDrag(item.id, false)}><ChevronsUpDown size={14} /></span>
@@ -76,7 +92,7 @@ export function LayersPanel({ items, selectedItems, onSelect, onUpdate, onUpdate
             <div key={`g-${item.groupId}`} data-layer-id={ids[0]} className={`${ids.every((id) => selectedItems.some((x) => x.id === id)) ? "layer-row group selected" : "layer-row group"}${dropClass(ids[0])}`} onClick={(e) => pick(ids, e)}>
               <button className="mini-button chev" aria-label={open ? "Collapse group" : "Expand group"} onClick={(e) => { e.stopPropagation(); setCollapsed((c) => { const n = new Set(c); if (n.has(item.groupId!)) n.delete(item.groupId!); else n.add(item.groupId!); return n; }); }}><ChevronDown size={13} style={{ transform: open ? undefined : "rotate(-90deg)" }} /></button>
               <span className="layer-kind"><Group size={13} /></span>
-              <span className="layer-label">{item.groupName ?? "Group"} <em>{members.length}</em></span>
+              <span className="layer-label" onClick={tapName(`g-${item.groupId}`, item.groupName ?? "Group")} title="Double-tap to rename">{renaming?.key === `g-${item.groupId}` ? nameEditor(`g-${item.groupId}`, (name) => onRenameGroup(item.groupId!, name || "Group")) : <>{item.groupName ?? "Group"} <em>{members.length}</em></>}</span>
               <button className="mini-button" title={allHidden ? "Show group" : "Hide group"} onClick={(e) => { e.stopPropagation(); onUpdateMany(ids, { visible: allHidden }); }}>{allHidden ? <EyeOff size={13} /> : <Eye size={13} />}</button>
               <button className="mini-button" title={allLocked ? "Unlock group" : "Lock group"} onClick={(e) => { e.stopPropagation(); onUpdateMany(ids, { locked: !allLocked }); }}>{allLocked ? <Lock size={13} /> : <Unlock size={13} />}</button>
               <span className="layer-grip" title="Drag to change the stacking order" aria-label="Drag group to reorder" role="button" onClick={(e) => e.stopPropagation()} onPointerDown={startDrag(ids[0], true)}><ChevronsUpDown size={14} /></span>

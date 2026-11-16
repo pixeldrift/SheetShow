@@ -28,7 +28,7 @@ The **Project menu** (a pill with an arrow, left of the tabs) is different: it i
 
 Use the upload button in the Data tab (or **Change** in the Fields drawer). You can also **paste cells** copied from Google Sheets, Excel or Numbers into the Paste data box (the clipboard button), or import a **Google Sheet** by its address (the sheet button). A sheet shared with “anyone with the link” comes straight in; for a private one, copy its cells in Google Sheets and paste them. A plain list with no headings comes in as a single column that you name.
 
-You can also paste straight into the table: click a cell and paste. A whole **column** (lines) pastes downward and a whole **row** (tabs) pastes across, adding records or columns as needed. SheetShow asks what to do with the new records:
+You can also paste straight into the table: click a cell and paste. A whole **column** (lines) pastes downward and a whole **row** (tabs) pastes across, adding records or columns as needed. While the data is still only the built-in sample (or nothing has been typed), the first import simply arrives. After that, SheetShow asks what to do with the new records:
 
 - **Replace** uses only the new file.
 - **Add** puts the new records after your current ones.
@@ -62,6 +62,7 @@ The **field names** button at the right of the bar swaps every linked text for i
 - **Move the tool bars**: the edit, align and arrange tools float on the canvas. Drag one by its handle to put it anywhere, or drop it on the toolbar at the top (or press its pin) to dock it; drag the divider before a docked group down to float it again.
 - **Align** with the bar at the bottom of the canvas. One object aligns to the template; several align to each other.
 - **Group** objects with Ctrl/⌘+G so they move, turn and resize together. Alt-click or double-click picks a single member.
+- **Rename** a layer by double-tapping its name. **All caps** (the Aa button beside bold-italic-underline) shows text in capitals without changing what you typed.
 - **Layers** (the second tab in the left drawer, beside Fields) lists every object in stacking order, with show, hide, lock, and a handle to drag it up or down. It is the way to select something you have made fully transparent.
 - **Undo and redo** cover everything: edits, new templates, page setup and data changes.
 
@@ -80,6 +81,8 @@ Background, border and border size sit on one line. **Padding** and **Rounding**
 ## Pictures
 
 Open **Add image** to drop in pictures, a folder or a .zip. They are kept in this browser's image library, and **Download all as ZIP** saves them.
+
+**Colour effects** (Properties → Color) work on any picture: hue, saturation, brightness and contrast, black and white, and a colour overlay. The colour overlay can **tint** the picture (like a coloured filter) or **fill** it, so every visible pixel becomes one colour and the shape is kept, which turns a black icon into any colour you like. **Make transparent** cuts black or white (and tones close to it) out of a picture, so a logo on a white background can sit on a coloured card.
 
 A **data-driven picture** shows a different image for each record. Point it at a column that holds a filename, or build a pattern such as `{{band}}.jpg`. SheetShow finds the closest matching file, flags anything uncertain for you to review, and prints a warning before printing if any picture is missing. Web addresses work too.
 

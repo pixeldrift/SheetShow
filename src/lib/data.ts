@@ -7,37 +7,50 @@ export const clamp = (n: number, min: number, max: number) => Math.max(min, Math
 export const round = (n: number, places = 3) => Number(n.toFixed(places));
 
 export const starterRecords: RecordRow[] = [
-  { name: "Pip", species: "Green-cheeked conure", band: "GC-1048", location: "Garden Room · Cage 03", diet: "Pellets, greens, fruit", hatch_date: "2022-04-18" },
-  { name: "Juniper", species: "Blue-and-gold macaw", band: "BG-0217", location: "Aviary · Flight 01", diet: "Pellets, nuts, vegetables", hatch_date: "2018-09-02" },
-  { name: "Mochi", species: "Cockatiel", band: "CK-3309", location: "Garden Room · Cage 08", diet: "Pellets, seed, greens", hatch_date: "2021-11-26" },
-  { name: "Fig", species: "African grey", band: "AG-0084", location: "Sunroom · Perch 02", diet: "Pellets, vegetables", hatch_date: "2016-02-11" },
-  { name: "Basil", species: "Indian ringneck", band: "IR-1742", location: "Garden Room · Cage 05", diet: "Pellets, fruit, greens", hatch_date: "2020-07-07" },
-  { name: "Clover", species: "Lovebird", band: "LB-4421", location: "Nursery · Cage 02", diet: "Small pellets, seed, greens", hatch_date: "2023-03-14" },
-  { name: "Sage", species: "Quaker parrot", band: "QP-2210", location: "Nursery · Cage 04", diet: "Pellets, vegetables, seed", hatch_date: "2022-08-30" },
-  { name: "Rio", species: "Scarlet macaw", band: "SM-0562", location: "Aviary · Flight 02", diet: "Pellets, nuts, fruit", hatch_date: "2015-05-21" },
-  { name: "Pepper", species: "Senegal parrot", band: "SP-1133", location: "Sunroom · Perch 04", diet: "Pellets, greens, sweet potato", hatch_date: "2019-12-09" },
-  { name: "Tango", species: "Sun conure", band: "SC-3076", location: "Garden Room · Cage 01", diet: "Pellets, fruit, seed", hatch_date: "2021-06-03" },
-  { name: "Willow", species: "Eclectus", band: "EC-0791", location: "Aviary · Flight 03", diet: "Pellets, vegetables, fruit", hatch_date: "2017-10-15" },
-  { name: "Biscuit", species: "Budgerigar", band: "BU-5588", location: "Nursery · Cage 06", diet: "Seed, millet, greens", hatch_date: "2023-09-12" },
-  { name: "Olive", species: "Pionus", band: "PI-2204", location: "Garden Room · Cage 07", diet: "Pellets, greens, fruit", hatch_date: "2020-01-28" },
-  { name: "Mango", species: "Caique", band: "CQ-0415", location: "Sunroom · Perch 01", diet: "Pellets, fruit, vegetables", hatch_date: "2019-04-04" },
-  { name: "Ziggy", species: "Rose-breasted cockatoo", band: "RC-0938", location: "Aviary · Flight 04", diet: "Pellets, nuts, vegetables", hatch_date: "2014-03-17" },
-  { name: "Dot", species: "Parrotlet", band: "PL-4067", location: "Nursery · Cage 01", diet: "Small pellets, seed, greens", hatch_date: "2022-12-01" },
-  { name: "Maple", species: "Hahn's macaw", band: "HM-0629", location: "Sunroom · Perch 03", diet: "Pellets, vegetables, nuts", hatch_date: "2018-02-23" },
-  { name: "Kiwi", species: "Green-cheeked conure", band: "GC-1102", location: "Garden Room · Cage 02", diet: "Pellets, greens, fruit", hatch_date: "2021-02-19" },
-  { name: "Echo", species: "Cockatiel", band: "CK-3351", location: "Garden Room · Cage 09", diet: "Pellets, seed, greens", hatch_date: "2022-05-06" },
-  { name: "Luna", species: "Indian ringneck", band: "IR-1788", location: "Garden Room · Cage 06", diet: "Pellets, fruit, greens", hatch_date: "2020-11-30" },
+  { first: "Maya", last: "Chen", title: "Operations Lead", company: "Harbor Coffee Co.", email: "maya.chen@harborcoffee.example" },
+  { first: "Daniel", last: "Okafor", title: "Head Roaster", company: "Harbor Coffee Co.", email: "daniel.okafor@harborcoffee.example" },
+  { first: "Priya", last: "Raman", title: "", company: "Northwind Studio", email: "priya.raman@northwind.example" },
+  { first: "Tomás", last: "Herrera", title: "Creative Director", company: "Northwind Studio", email: "tomas.herrera@northwind.example" },
+  { first: "Hannah", last: "Lindqvist", title: "Volunteer Coordinator", company: "Riverbend Library", email: "hannah.lindqvist@riverbend.example" },
+  { first: "Samuel", last: "Adeyemi", title: "Branch Manager", company: "Riverbend Library", email: "samuel.adeyemi@riverbend.example" },
+  { first: "Grace", last: "Whitfield", title: "", company: "Riverbend Library", email: "grace.whitfield@riverbend.example" },
+  { first: "Kenji", last: "Watanabe", title: "Event Planner", company: "Cedar & Pine Events", email: "kenji.watanabe@cedarpine.example" },
+  { first: "Amara", last: "Nwosu", title: "Owner", company: "Cedar & Pine Events", email: "amara.nwosu@cedarpine.example" },
+  { first: "Lucas", last: "Moreau", title: "Sound Engineer", company: "Cedar & Pine Events", email: "lucas.moreau@cedarpine.example" },
+  { first: "Fatima", last: "Al-Sayed", title: "Program Director", company: "Bright Futures Club", email: "fatima.alsayed@brightfutures.example" },
+  { first: "Owen", last: "Fitzgerald", title: "Treasurer", company: "Bright Futures Club", email: "owen.fitzgerald@brightfutures.example" },
+  { first: "Sofia", last: "Marchetti", title: "", company: "Bright Futures Club", email: "sofia.marchetti@brightfutures.example" },
+  { first: "Noah", last: "Kowalski", title: "Lead Carpenter", company: "Kowalski & Daughters", email: "noah.kowalski@kowalski.example" },
+  { first: "Elena", last: "Petrova", title: "Office Manager", company: "Kowalski & Daughters", email: "elena.petrova@kowalski.example" },
+  { first: "James", last: "Oyelaran", title: "Photographer", company: "Studio Oyelaran", email: "james.oyelaran@oyelaran.example" },
+  { first: "Mei", last: "Tanaka", title: "Designer", company: "Studio Oyelaran", email: "mei.tanaka@oyelaran.example" },
+  { first: "Ravi", last: "Subramanian", title: "Chief Baker", company: "Golden Crumb Bakery", email: "ravi.subramanian@goldencrumb.example" },
+  { first: "Chloe", last: "Bennett", title: "", company: "Golden Crumb Bakery", email: "chloe.bennett@goldencrumb.example" },
+  { first: "Isaac", last: "Mendoza", title: "Delivery Driver", company: "Golden Crumb Bakery", email: "isaac.mendoza@goldencrumb.example" },
 ];
 
+/** The sample design: a business card for each person, with a name made of two fields. */
 export const starterItems: DesignItem[] = [
   { id: "shape-1", type: "rect", x: 0.18, y: 0.18, w: 3.14, h: 1.64, fill: "#fbfaf7", stroke: "#e7e2d8", visible: true },
   { id: "shape-2", type: "rect", x: 0.18, y: 0.18, w: 0.09, h: 1.64, fill: "#e28b55", stroke: "none", visible: true },
-  { id: "text-1", type: "text", x: 0.42, y: 0.55, w: 2.75, h: 0.28, text: "BIRD PROFILE", fontSize: 8, color: "#b16b3f", weight: 700, visible: true },
-  { id: "text-2", type: "text", x: 0.42, y: 0.91, w: 2.75, h: 0.38, text: "Bird name", field: "name", fontSize: 22, color: "#26352f", weight: 700, visible: true },
-  { id: "text-3", type: "text", x: 0.42, y: 1.23, w: 2.75, h: 0.22, text: "Species", field: "species", fontSize: 10, color: "#66736d", visible: true },
-  { id: "text-4", type: "text", x: 0.42, y: 1.55, w: 1.3, h: 0.18, text: "BAND · ", fontSize: 7, color: "#9a9d91", weight: 700, visible: true },
-  { id: "text-5", type: "text", x: 1.0, y: 1.55, w: 2.0, h: 0.18, text: "Band number", field: "band", fontSize: 8, color: "#47564f", visible: true },
+  { id: "text-1", type: "text", x: 0.42, y: 0.5, w: 2.75, h: 0.28, text: "Company", field: "company", fontSize: 8, color: "#b16b3f", weight: 700, caps: true, letterSpacing: 60, visible: true },
+  { id: "text-2", type: "text", x: 0.42, y: 0.86, w: 2.75, h: 0.4, text: "{{first}} {{last}}", fontSize: 22, color: "#26352f", weight: 700, visible: true },
+  { id: "text-3", type: "text", x: 0.42, y: 1.23, w: 2.75, h: 0.22, text: "Title", field: "title", fontSize: 10, color: "#66736d", visible: true },
+  { id: "text-4", type: "text", x: 0.42, y: 1.55, w: 0.6, h: 0.18, text: "EMAIL ", fontSize: 7, color: "#9a9d91", weight: 700, visible: true },
+  { id: "text-5", type: "text", x: 0.9, y: 1.55, w: 2.3, h: 0.18, text: "Email", field: "email", fontSize: 8, color: "#47564f", visible: true },
 ];
+
+/** True when the records are only the built-in sample (or the older bird sample), or nothing has been typed yet: there is nothing of the person's own to protect. */
+export function isPlaceholderData(rows: RecordRow[]): boolean {
+  if (!rows.length) return true;
+  const cells = (r: RecordRow) => Object.entries(r).filter(([k]) => !k.startsWith("__")).map(([, v]) => String(v ?? ""));
+  if (rows.every((r) => cells(r).every((v) => !v.trim()))) return true;
+  const key = (list: RecordRow[]) => list.map((r) => cells(r).join("|")).join("\n");
+  if (key(rows) === key(starterRecords)) return true;
+  return rows[0]?.name === "Pip" && rows[0]?.band === "GC-1048"; // the old bird sample
+}
+/** True while the design is still the built-in sample card. */
+export const isPlaceholderDesign = (items: DesignItem[]) => items.length === 0 || JSON.stringify(items) === JSON.stringify(starterItems);
 
 const preset = (code: string, name: string, width: number, height: number, columns: number, rows: number, gapX: number, gapY: number, marginX: number, marginY: number): LabelPreset =>
   ({ code, name, width, height, columns, rows, gapX, gapY, marginX, marginY });
@@ -75,7 +88,7 @@ export const prettyField = (field: string) => field.replaceAll("_", " ");
 export const fieldDisplayName = (field: string) =>
   specialFields.find((entry) => entry.key === field)?.label ?? prettyField(field);
 
-export function valueFor(item: DesignItem, record: RecordRow, meta: RecordMeta): string {
+function rawValueFor(item: DesignItem, record: RecordRow, meta: RecordMeta): string {
   if (!item.field) return mergeText(item.text ?? "", record, specialValues(meta));
   switch (item.field) {
     case "__record_number": return String(meta.recordNumber);
@@ -84,4 +97,10 @@ export function valueFor(item: DesignItem, record: RecordRow, meta: RecordMeta):
     case "__page_count": return String(meta.pageCount);
     default: return record[item.field] ?? "—";
   }
+}
+
+/** What a text object shows for a record: its field or merge text, in capitals when All caps is on. */
+export function valueFor(item: DesignItem, record: RecordRow, meta: RecordMeta): string {
+  const value = rawValueFor(item, record, meta);
+  return item.caps ? value.toUpperCase() : value;
 }

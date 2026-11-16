@@ -4,7 +4,7 @@ import type { DrawerChrome } from "./DrawerChrome";
 import {
   ChevronDown, FileText, LayoutTemplate, Shapes, Group, Ungroup,
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
-  Hash, Image as ImageIcon, Italic, Underline, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
+  CaseUpper, Hash, Image as ImageIcon, Italic, Underline, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   X, Filter,
 } from "lucide-react";
 import type { DesignItem, LabelPreset, Sheet } from "../types";
@@ -12,7 +12,7 @@ import { averyPresets, fieldDisplayName, prettyField } from "../lib/data";
 import type { FontLibrary } from "../hooks/useFontLibrary";
 import { NumberField, Pair, Section } from "./Fields";
 import { FontPicker } from "./FontPicker";
-import { EffectsSection, PictureSection, ShapeStyleSection, type ImageTools } from "./ItemStyleSections";
+import { EffectsSection, ImageColorSection, PictureSection, ShapeStyleSection, type ImageTools } from "./ItemStyleSections";
 import { VariantsSection } from "./VariantSections";
 import { ConditionsSection } from "./ConditionsSection";
 import { PrinterCalibrationSection } from "./PrinterCalibrationSection";
@@ -76,7 +76,7 @@ export function Inspector(props: Props) {
   const head = selectedItems.length > 1
     ? { icon: props.groups.wholeGroup ? <Group size={16} /> : <Layers size={16} />, title: props.groups.wholeGroup ? `Group · ${selectedItems[0].groupName ?? ""}` : `${selectedItems.length} objects`, sub: props.groups.wholeGroup ? "Moves and resizes as one" : "Selected together" }
     : selected
-      ? { icon: kindIcon(selected, 16), title: selected.type === "text" ? "Text" : selected.type === "image" ? "Picture" : "Shape", sub: selected.field ? `Linked to ${fieldDisplayName(selected.field)}` : selected.type === "image" ? (selected.imageSource ? "Different for each record" : "One picture") : selected.type === "text" ? "Typed text" : "Fill, border and corners" }
+      ? { icon: kindIcon(selected, 16), title: selected.name?.trim() || (selected.type === "text" ? "Text" : selected.type === "image" ? "Picture" : "Shape"), sub: selected.field ? `Linked to ${fieldDisplayName(selected.field)}` : selected.type === "image" ? (selected.imageSource ? "Different for each record" : "One picture") : selected.type === "text" ? "Typed text" : "Fill, border and corners" }
       : workspace === "template"
         ? { icon: <LayoutTemplate size={16} />, title: "Template", sub: "Size and label stock" }
         : { icon: <FileText size={16} />, title: "Page", sub: "Sheet, margins and printing" };
@@ -217,6 +217,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
               <div className="style-buttons" role="group" aria-label="Text style">
                 <button aria-label="Italic" title="Italic" aria-pressed={!!item.italic} onClick={() => patch({ italic: !item.italic })}><Italic size={15} /></button>
                 <button aria-label="Underline" title="Underline" aria-pressed={!!item.underline} onClick={() => patch({ underline: !item.underline })}><Underline size={15} /></button>
+                <button aria-label="All caps" title="All caps" aria-pressed={!!item.caps} onClick={() => patch({ caps: !item.caps })}><CaseUpper size={15} /></button>
               </div>
             </div>
             <div className="format-row">
@@ -265,6 +266,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
       )}
 
       {item.type === "image" && <PictureSection item={item} patch={patch} tools={imageTools} />}
+      {item.type === "image" && <ImageColorSection item={item} patch={patch} />}
       <ShapeStyleSection item={item} patch={patch} />
       <EffectsSection item={item} patch={patch} />
       {!instanceMode && <ConditionsSection item={item} patch={patch} fields={imageTools.columns} records={imageTools.records} record={imageTools.record} />}

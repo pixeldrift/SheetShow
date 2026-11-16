@@ -27,6 +27,7 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Groups: select several objects and group them (Ctrl/⌘+G). A group moves, turns, resizes (text included), aligns and copies as one; Alt-click or double-click picks a single member; collapsible rows in Layers
 - Conditional objects: show, hide or restyle any object by rule (e.g. a ribbon only for VIPs, a symbol by meal choice), with AND / OR / NOT conditions
 - Merge fields inside text in double braces, e.g. `{{city}}, {{state}} {{zip}}` or `${{price}}`, with conditions (`{{?title}}, {{title}}{{/}}`, `=`, `!=`, `contains`, `starts`, `ends`, `and`/`or`, `{{else}}`) and automatic space tidying
+- Picture colour effects (hue, saturation, brightness, black and white, tint, fill, and cutting black or white out), All caps text, and renamable layers
 - Sortable, movable data columns (click a heading to sort, click again to reverse, drag to reorder); tracking and pair-kerning controls for text
 - A token-aware text editor: `{{tokens}}` show as chips (the one under the caret turns into editable text) or as colour-coded plain text, switchable from a corner icon
 - Double-tap a text object to edit it right on the canvas (linked text switches to its `{{field}}` tokens while you edit)
@@ -84,7 +85,7 @@ The initial CSV/TSV adapter is intentionally replaceable. Future data adapters c
 - **Paste:** copy cells in Google Sheets, Excel or Numbers and paste them into the Paste data box. Tabs, commas, semicolons and bars are detected. A plain list with no headings comes in as one column, which you name. A block can also be pasted straight into the data table, starting at any cell.
 - **Google Sheets by address:** a sheet shared as “anyone with the link can view” is read directly. A private sheet is brought in by copying its cells and pasting them; there is no sign-in.
 
-All of these finish with the same choice: replace your records, add to them, or merge without duplicates.
+All of these finish with the same choice: replace your records, add to them, or merge without duplicates. While the data is still only the built-in sample (or nothing has been typed), that question is skipped and the new data simply arrives; the untouched sample card adapts to the new columns, or is cleared if it cannot.
 
 ## Roadmap
 

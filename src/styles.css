@@ -125,8 +125,8 @@ h2,h3,p{margin:0}
 
 /* ── Drawers ────────────────────────────────────────────────────────────── */
 .panel{flex:none;display:flex;flex-direction:column;min-height:0;background:#fff}
-.left-panel{width:var(--left-w);border-right:1px solid var(--line)}
-.right-panel{width:var(--right-w);border-left:1px solid var(--line)}
+.left-panel{width:var(--left-w)}
+.right-panel{width:var(--right-w)}
 .panel-heading{height:48px;flex:none;padding:0 8px 0 16px;display:flex;align-items:center;justify-content:space-between}
 .panel-heading h2{font:700 14px Manrope,sans-serif;color:#526157}
 /* The scrolling region of every drawer */
@@ -223,10 +223,10 @@ h2,h3,p{margin:0}
 
 /* ── Narrow screens: drawers float over the canvas ──────────────────────── */
 @media(max-width:850px){
-  .panel{position:absolute;top:0;bottom:0;z-index:50;box-shadow:0 4px 24px #1c2b2030}
+  .drawer-slot{position:absolute;top:0;bottom:0;z-index:52}
+  .drawer-slot.left{left:0}.drawer-slot.right{right:0}
+  .drawer-slot.open{box-shadow:0 4px 24px #1c2b2030}
   :root{--left-w:clamp(168px,50vw,188px);--right-w:clamp(184px,50vw,252px)}
-  .left-panel{left:0;width:var(--left-w)}
-  .right-panel{right:0;width:var(--right-w)}
   .title-input,.save-dot{display:none}
   .topbar{gap:12px;padding:0 12px}
   .topbar-center{gap:8px}
@@ -698,7 +698,7 @@ kbd,.help-body kbd{font:600 11px ui-monospace,Menlo,monospace;background:#f3f1ec
 .peek-chevron{color:#9aa198;flex:none;transition:transform .2s}.peek-chevron.open{transform:rotate(180deg)}
 .record-peek[aria-expanded="true"]{background:#f8f3ed}
 .names-toggle{width:32px;height:32px;border:1px solid #e5e8e1;flex:none}
-.records-drawer{position:absolute;z-index:12;left:0;right:0;bottom:56px;height:min(48%,360px);display:flex;flex-direction:column;background:#fff;border-top:1px solid #e0e1d9;box-shadow:0 -10px 30px #26372d22;transform:translateY(calc(100% + 56px));transition:transform .22s ease,opacity .12s;visibility:hidden}
+.records-drawer{position:absolute;z-index:12;left:0;right:0;bottom:0;height:min(48%,360px);display:flex;flex-direction:column;background:#fff;border-top:1px solid #e0e1d9;box-shadow:0 -10px 30px #26372d22;transform:translateY(100%);transition:transform .22s ease,opacity .12s;visibility:hidden}
 .records-drawer.open{transform:none;visibility:visible}
 .records-drawer.dragging{opacity:0;pointer-events:none}
 .drawer-head{display:flex;align-items:center;gap:12px;padding:8px 10px 8px 16px;border-bottom:1px solid var(--line);font-size:11px;color:#8f968d;flex:none}
@@ -715,7 +715,7 @@ kbd,.help-body kbd{font:600 11px ui-monospace,Menlo,monospace;background:#f3f1ec
 .cell-drag{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab;position:relative}
 .cell-drag .grip{margin-left:6px;opacity:.5;vertical-align:-1px}
 @media(hover:hover) and (pointer:fine){.drawer-table tbody tr:hover td{background:#f8f5ef}.drawer-table tbody tr.current:hover td{background:#fbeadb}.record-peek:hover{background:#f8f3ed}}
-@media(max-width:620px){.records-drawer{bottom:50px;height:52%}.drawer-head span{display:none}.peek-values{font-size:12px}}
+@media(max-width:620px){.records-drawer{height:52%}.drawer-head span{display:none}.peek-values{font-size:12px}}
 
 /* ── Import dialog ─────────────────────────────────────────────────────── */
 .import-dialog{width:min(640px,100%)}
@@ -809,10 +809,18 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .layer-row.drop-below{box-shadow:0 2px 0 0 var(--accent)}
 
 /* Drawers: slide open, and the button that opened one steps aside */
-@keyframes panel-in{from{width:0}}
-.left-panel,.right-panel{overflow:hidden;animation:panel-in .22s cubic-bezier(.2,.8,.3,1)}
-.left-panel>*{min-width:var(--left-w)}.right-panel>*{min-width:var(--right-w)}
-@media(prefers-reduced-motion:reduce){.left-panel,.right-panel{animation:none}}
+/* A drawer is a slot whose width opens and closes while the drawer inside keeps its own width, so the whole drawer slides in and out rather than squeezing. */
+.content-frame{--left-vis:0px;--right-vis:0px}
+.content-frame.data-open{--left-vis:var(--left-w)}
+.content-frame.inspector-open{--right-vis:var(--right-w)}
+.drawer-slot{position:relative;z-index:52;flex:none;display:flex;overflow:hidden;visibility:hidden;transition:width .26s cubic-bezier(.2,.8,.3,1),visibility 0s .26s}
+.drawer-slot.left{width:var(--left-vis);justify-content:flex-end}
+.drawer-slot.right{width:var(--right-vis);justify-content:flex-start}
+.drawer-slot.open{visibility:visible;transition:width .26s cubic-bezier(.2,.8,.3,1),visibility 0s}
+.drawer-live .drawer-slot{visibility:visible;transition:none}
+.drawer-live .drawer-sliver{transition:none}
+.left-panel,.right-panel{flex:none}
+@media(prefers-reduced-motion:reduce){.drawer-slot,.drawer-sliver{transition:none!important}}
 
 .convert-row .with-chevron{display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
 .convert-row .with-chevron .caret{margin-left:auto}
@@ -965,16 +973,14 @@ th.drop-before::before{left:-1px}th.drop-after::after{right:-1px}
 html,body{touch-action:manipulation}
 
 /* ── Drawer gestures: edge grips, screen-edge slivers, header tabs that never push the close button out ── */
-@media(min-width:851px){.panel{position:relative}}
-.drawer-sliver{position:absolute;top:0;bottom:0;z-index:7;width:14px;display:grid;place-items:center;background:rgba(255,255,255,.82);color:#a9b0a6;cursor:ew-resize;touch-action:none}
-.drawer-sliver::before{content:"";position:absolute;top:50%;width:3px;height:44px;margin-top:-22px;border-radius:2px;background:#d4d8cf}
-.drawer-sliver.left{left:0;border-right:1px solid #e1e3db}.drawer-sliver.left::before{left:2px}
-.drawer-sliver.right{right:0;border-left:1px solid #e1e3db}.drawer-sliver.right::before{right:2px}
-.drawer-sliver svg{display:none}
-/* the labelled button is the sliver's tab: it hangs off the strip at the top and opens the same drawer */
-.drawer-toggle.left{left:14px;border-left:0;border-radius:0 8px 8px 0}
-.drawer-toggle.right{right:14px;border-right:0;border-radius:8px 0 0 8px}
-@media(hover:hover){.drawer-sliver:hover{background:#fffaf6}.drawer-sliver:hover::before{background:var(--accent)}}
+.drawer-sliver{position:absolute;top:0;bottom:0;z-index:53;width:16px;display:grid;place-items:center;background:rgba(255,255,255,.82);cursor:ew-resize;touch-action:none;transition:left .26s cubic-bezier(.2,.8,.3,1),right .26s cubic-bezier(.2,.8,.3,1)}
+.sliver-pill{position:absolute;top:50%;width:14px;height:60px;margin-top:-30px;border-radius:7px;background:#d4d8cf;color:#fff;display:grid;place-items:center;transition:background .15s}
+.drawer-sliver.left{left:var(--left-vis)}.drawer-sliver.left .sliver-pill{left:1px}
+.drawer-sliver.right{right:var(--right-vis)}.drawer-sliver.right .sliver-pill{right:1px}
+/* with a drawer open, the handle on its edge is the green one that resizes it */
+.data-open .drawer-sliver.left .sliver-pill,.inspector-open .drawer-sliver.right .sliver-pill{background:#8fb39e}
+.drawer-live .drawer-sliver .sliver-pill{background:var(--accent)!important}
+@media(hover:hover){.drawer-sliver:hover{background:#fffaf6}.drawer-sliver:hover .sliver-pill{background:var(--accent)!important}}
 .tabs-heading{touch-action:pan-y;container-type:inline-size;min-width:0}
 .tabs-heading .head-tab{min-width:0;flex:0 1 auto;padding:0 8px;overflow:hidden;white-space:nowrap}
 .tabs-heading .head-close{flex:none}
@@ -996,3 +1002,19 @@ html,body{touch-action:manipulation}
 .paper-chip svg{position:absolute;top:8px;right:8px;color:#b86e46}
 .paper-chip.selected{background:#fffaf6;border-color:#e9b894}
 .stock-list{display:flex;flex-direction:column;margin-top:8px;max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:9px}
+.drawer-toggle.left{left:16px;border-left:0;border-radius:0 8px 8px 0}
+.drawer-toggle.right{right:16px;border-right:0;border-radius:8px 0 0 8px}
+.layer-rename{width:100%;min-width:0;height:24px;border:1px solid #d69a77;border-radius:5px;padding:0 6px;font:inherit;font-size:12px;color:#4c5a51;background:#fff;outline:none}
+
+/* The paste box always draws its text in solid ink on white, whatever the device's own form styling or dark mode does to text fields */
+.paste-box{color:#2f3d34!important;-webkit-text-fill-color:#2f3d34!important;background:#fff!important;opacity:1!important;caret-color:#d17c4b;-webkit-appearance:none;appearance:none;text-shadow:none;font-size:13px;color-scheme:light;-webkit-user-select:text;user-select:text}
+.reset-fx{margin-top:12px;display:block}
+
+/* With a drawer open its handle strip is part of it: the same white, with no line between them */
+.data-open .drawer-sliver.left,.inspector-open .drawer-sliver.right{background:#fff}
+/* The paste box scrolls inside a fixed frame: what is pasted never stretches the dialog */
+.paste-dialog{overflow:hidden}
+.paste-dialog .dialog-body{min-width:0;overflow-x:hidden}
+.paste-box{display:block;box-sizing:border-box;width:100%;max-width:100%;height:170px;min-height:0;max-height:170px;resize:none;overflow:auto;field-sizing:fixed}
+.paste-dialog .dialog-foot{flex:none}
+.paste-preview{max-width:100%}

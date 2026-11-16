@@ -6,6 +6,7 @@ import { fieldDisplayName } from "../lib/data";
 import { PX_PER_IN, valueFor } from "../lib/data";
 import { fontStack } from "../lib/fonts";
 import { layoutText, spacingPx, type TextLayout } from "../lib/text";
+import { ImageFxFilter, hasImageFx } from "./ImageFxFilter";
 
 type Props = {
   item: DesignItem;
@@ -131,6 +132,7 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
         <defs>
           {shadow && <filter id={`${uid}s`} x="-60%" y="-60%" width="220%" height="220%" colorInterpolationFilters="sRGB"><feDropShadow dx={shadow.x * PT} dy={shadow.y * PT} stdDeviation={Math.max(0, shadow.blur * PT) / 2} floodColor={shadow.color} floodOpacity={shadow.opacity} /></filter>}
           {item.type === "image" && <clipPath id={`${uid}c`}>{outlineShape(0, {})}</clipPath>}
+          {item.type === "image" && hasImageFx(item.imageFx) && <ImageFxFilter id={`${uid}fx`} fx={item.imageFx!} />}
           {item.type === "text" && item.overflow === "clip" && <clipPath id={`${uid}t`}><rect width={w} height={boxH} /></clipPath>}
         </defs>
       )}
@@ -138,7 +140,7 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
         {item.type === "rect" && outlineShape(strokePx / 2, { fill: item.fill ?? "#e9eee9", stroke: hasStroke ? item.stroke : "none", strokeWidth: strokePx })}
         {item.type === "image" && (
           <>
-            <g clipPath={`url(#${uid}c)`}><ImageLayer urls={urls} w={w} h={boxH} fit={item.imageFit ?? "cover"} editor={editor} label={missingLabel} /></g>
+            <g clipPath={`url(#${uid}c)`}><g filter={hasImageFx(item.imageFx) ? `url(#${uid}fx)` : undefined}><ImageLayer urls={urls} w={w} h={boxH} fit={item.imageFit ?? "cover"} editor={editor} label={missingLabel} /></g></g>
             {strokePx > 0 && outlineShape(strokePx / 2, { fill: "none", stroke: item.stroke, strokeWidth: strokePx, pointerEvents: "none" })}
           </>
         )}

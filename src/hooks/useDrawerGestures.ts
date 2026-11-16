@@ -16,7 +16,7 @@ const maxWidth = () => Math.min(window.innerWidth * 0.85, 480);
  */
 export function useDrawerGestures(setOpen: (side: Side, open: boolean) => void) {
   const [saved, setSaved] = useState(load);
-  const [live, setLive] = useState<{ side: Side; width: number } | null>(null);
+  const [live, setLive] = useState<{ side: Side; width: number; mode: "open" | "resize" } | null>(null);
   const swiped = useRef(false);
 
   const save = (side: Side, width: number) => {
@@ -29,12 +29,13 @@ export function useDrawerGestures(setOpen: (side: Side, open: boolean) => void) 
   const start = useCallback((side: Side, event: React.PointerEvent, mode: "open" | "resize" | "swipe", threshold = 4) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const panel = document.querySelector<HTMLElement>(side === "left" ? ".left-panel" : ".right-panel");
-    const startW = mode === "open" ? 0 : panel?.getBoundingClientRect().width ?? MIN;
+    const panelW = panel?.getBoundingClientRect().width ?? MIN; // the panel keeps its own width even while it is slid out of sight
+    const startW = mode === "open" ? 0 : panelW;
     const startX = event.clientX;
     const dir = side === "left" ? 1 : -1; // moving this way makes the drawer wider
     const samples: { t: number; x: number }[] = [{ t: performance.now(), x: startX }];
     let moved = false;
-    const widthAt = (x: number) => Math.max(0, Math.min(maxWidth(), startW + (x - startX) * dir));
+    const widthAt = (x: number) => Math.max(0, Math.min(mode === "open" ? panelW : maxWidth(), startW + (x - startX) * dir));
     const move = (e: PointerEvent) => {
       if (!moved) {
         if (Math.abs(e.clientX - startX) < threshold) return;
@@ -44,7 +45,7 @@ export function useDrawerGestures(setOpen: (side: Side, open: boolean) => void) 
       }
       samples.push({ t: performance.now(), x: e.clientX });
       if (samples.length > 8) samples.shift();
-      if (mode !== "swipe") setLive({ side, width: widthAt(e.clientX) });
+      if (mode !== "swipe") setLive({ side, width: widthAt(e.clientX), mode });
     };
     const up = (e: PointerEvent) => {
       window.removeEventListener("pointermove", move);
@@ -52,14 +53,14 @@ export function useDrawerGestures(setOpen: (side: Side, open: boolean) => void) 
       window.removeEventListener("pointercancel", up);
       document.body.classList.remove("scrubbing");
       setLive(null);
-      if (!moved) { if (mode === "open") setOpen(side, true); return; } // a tap on the sliver opens it
+      if (!moved) { if (mode === "open") setOpen(side, true); else if (mode === "resize") setOpen(side, false); return; } // a tap on the sliver opens or closes the drawer
       swiped.current = true; // the click that follows a drag must not also press a button under the pointer
       window.setTimeout(() => { swiped.current = false; }, 150);
       const width = widthAt(e.clientX);
       const now = performance.now();
       const from = samples.find((s) => now - s.t < 140) ?? samples[0];
       const velocity = ((e.clientX - from.x) * dir) / Math.max(1, now - from.t); // negative: heading for the edge
-      if (mode === "open") { if (width >= OPEN_ABOVE) save(side, width); else setOpen(side, false); return; }
+      if (mode === "open") { setOpen(side, width >= OPEN_ABOVE); return; } // pulling a drawer open slides it; it never changes its width
       if (width < CLOSE_BELOW || (velocity < -FLICK && startW - width > 24)) setOpen(side, false);
       else if (mode === "resize") save(side, width);
     };
@@ -68,10 +69,13 @@ export function useDrawerGestures(setOpen: (side: Side, open: boolean) => void) 
     window.addEventListener("pointercancel", up);
   }, [setOpen, saved]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // --x-w is the drawer's own width; --x-vis is how much of it is showing (the whole drawer is slid in or out, never squeezed).
   const vars: Record<string, string> = {};
-  const widthFor = (side: Side) => (live?.side === side ? live.width : saved[side]);
-  if (widthFor("left")) vars["--left-w"] = `${widthFor("left")}px`;
-  if (widthFor("right")) vars["--right-w"] = `${widthFor("right")}px`;
+  for (const side of ["left", "right"] as const) {
+    const own = live?.side === side && live.mode === "resize" ? live.width : saved[side];
+    if (own) vars[`--${side}-w`] = `${own}px`;
+    if (live?.side === side) vars[`--${side}-vis`] = `${live.width}px`;
+  }
 
   return { start, vars: vars as React.CSSProperties, live: !!live, consumeSwipe: () => { const was = swiped.current; swiped.current = false; return was; } };
 }

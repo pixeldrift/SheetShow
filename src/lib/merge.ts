@@ -315,3 +315,16 @@ export function renameTokens(text: string, mapping: Record<string, string | null
     return m && to && to !== m[1].trim() ? `{{${to}${m[2]}}}` : whole;
   });
 }
+
+/** The data fields a text's {{tokens}} and conditions refer to (the automatic page and record numbers are left out). */
+export function tokenFields(text: string): string[] {
+  if (!text.includes("{{")) return [];
+  const out: string[] = [];
+  for (const m of text.matchAll(/\{\{([^{}]*)\}\}/g)) {
+    const t = m[1].trim();
+    if (!t || t.startsWith("/") || t.toLowerCase() === "else") continue;
+    if (t.startsWith("?")) for (const f of t.matchAll(/\?([^\s"“”,=!<>?]+(?:\s+(?!(?:and|or)\b|!?(?:contains|starts|ends)\b)[^\s"“”,=!<>?]+)*)/g)) out.push(f[1]);
+    else out.push(t.split("|")[0].trim());
+  }
+  return [...new Set(out.filter((f) => f && !SPECIAL_NAMES.includes(f.toLowerCase())))];
+}
