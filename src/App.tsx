@@ -38,6 +38,7 @@ import { ArrangeBar } from "./components/ArrangeBar";
 import { InlineTextEditor } from "./components/InlineTextEditor";
 import { LayersPanel } from "./components/LayersPanel";
 import { PasteDialog } from "./components/PasteDialog";
+import { useDrawerGestures } from "./hooks/useDrawerGestures";
 import { SheetsDialog } from "./components/SheetsDialog";
 import type { SortState } from "./components/columnDrag";
 import type { PaletteState } from "./components/Palette";
@@ -126,6 +127,7 @@ function App() {
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const justDragged = useRef(false);
   // A freshly imported file waiting for the person to confirm how its columns map onto the template.
+  const drawers = useDrawerGestures((side, open) => (side === "left" ? setDataOpen(open) : setInspectorOpen(open)));
   const [pasteOpen, setPasteOpen] = useState(false);
   const [sheetsOpen, setSheetsOpen] = useState(false);
   const [pendingImport, setPendingImport] = useState<{ records: RecordRow[]; fileName: string; stage: "choose" | "map" } | null>(null);
@@ -920,9 +922,9 @@ function App() {
           onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })} onAddReference={() => setLibraryDialog({ kind: "insert", reference: true })} docked={templateTools.docked} pageView={pageView} onPageView={setPageView} pageCount={pageCount}
         />
 
-        <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}`}>
+        <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}${drawers.live ? " drawer-live" : ""}`} style={drawers.vars}>
           {dataOpen && (
-            <DataPanel onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
+            <DataPanel chrome={{ grip: (e) => drawers.start("left", e, "resize"), header: (e) => drawers.start("left", e, "resize", 10), consumeSwipe: drawers.consumeSwipe }} onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
               layerCount={(inLayoutEdit ? instItems : items).length}
               layers={<LayersPanel items={inLayoutEdit ? instItems : items} selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems} flat={!!instanceBanner}
                 onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
@@ -1001,6 +1003,8 @@ function App() {
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
+              {!dataOpen && <div className="drawer-sliver left" onPointerDown={(e) => drawers.start("left", e, "open")} title="Drag to open the Fields and Layers drawer" aria-hidden><ChevronRight size={12} /></div>}
+              {!inspectorOpen && <div className="drawer-sliver right" onPointerDown={(e) => drawers.start("right", e, "open")} title="Drag to open the Properties drawer" aria-hidden><ChevronLeft size={12} /></div>}
               {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields and Layers drawer" : "Show the Fields and Layers drawer (your data columns, and every object in the design)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
                 <Braces size={15} /><span>Fields</span><ChevronRight size={13} className="toggle-arrow" />
               </button>}
@@ -1031,6 +1035,7 @@ function App() {
 
           {inspectorOpen && (
             <Inspector
+              chrome={{ grip: (e) => drawers.start("right", e, "resize"), header: (e) => drawers.start("right", e, "resize", 10), consumeSwipe: drawers.consumeSwipe }}
               workspace={workspace}
               items={inLayoutEdit ? instItems : items}
               selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems}
