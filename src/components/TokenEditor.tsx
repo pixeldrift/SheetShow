@@ -65,7 +65,7 @@ function locate(root: HTMLElement, offset: number): { node: Node; offset: number
 
 /**
  * A text editor that understands {{tokens}}. In chips mode every token is a chip except the one the caret is in, which turns
- * into plain text so it can be edited; in text mode all tokens stay text, colour-coded. Either way the value is plain text.
+ * into plain text so it can be edited; in text mode all tokens stay text, color-coded. Either way the value is plain text.
  */
 export const TokenEditor = forwardRef<TokenEditorHandle, Props>(function TokenEditor({ value, onChange, mode, fields, className, style, ariaLabel, placeholder, onBlur, onKeyDown, onPointerDown }, handle) {
   const root = useRef<HTMLDivElement>(null);

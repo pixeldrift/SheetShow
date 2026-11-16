@@ -27,7 +27,7 @@ export type DesignItem = {
   lineHeight?: number;
   /** Wrap text to the box width (default true). */
   wrap?: boolean;
-  /** Degrees clockwise, about the item's centre. */
+  /** Degrees clockwise, about the item's center. */
   rotation?: number;
   /** Text scaling: shrink to fit the box, shrink to fit one line's width, or fit exactly (grow or shrink). */
   autoFit?: "off" | "shrink" | "width" | "fit";
@@ -42,7 +42,7 @@ export type DesignItem = {
   /** Outline around the letters, in points, drawn outside the fill so text stays readable on busy backgrounds. */
   textStroke?: { color: string; width: number };
   imageFit?: "cover" | "contain";
-  /** Colour treatment for a picture: hue, saturation, brightness, black and white, a tint or recolour, and a cutout. */
+  /** Color treatment for a picture: hue, saturation, brightness, black and white, a tint or recolor, and a cutout. */
   imageFx?: ImageFx;
   /** A picture from the image library. */
   assetId?: string;
@@ -83,7 +83,7 @@ export type DesignItem = {
 
 export type Guide = { id: string; axis: "x" | "y"; position: number };
 
-/** Pan is the offset (px) of the page centre from the viewport centre. */
+/** Pan is the offset (px) of the page center from the viewport center. */
 export type View = { zoom: number; pan: { x: number; y: number }; fitted: boolean };
 
 export type Sheet = {
@@ -128,11 +128,11 @@ export type Project = {
   overrides?: Record<string, InstanceOverride>;
 };
 
-/** Picture colour effects. Saturation, brightness and contrast are percentages where 100 leaves the picture unchanged; hue is in degrees. */
+/** Picture color effects. Saturation, brightness and contrast are percentages where 100 leaves the picture unchanged; hue is in degrees. */
 export type ImageFx = {
   hue?: number; saturation?: number; brightness?: number; contrast?: number;
   grayscale?: boolean;
-  /** multiply: tint, like a coloured filter; solid: fill, every visible pixel becomes this colour (keeping the picture's shape), by `amount`. */
+  /** multiply: tint, like a colored filter; solid: fill, every visible pixel becomes this color (keeping the picture's shape), by `amount`. */
   overlay?: { mode: "multiply" | "solid"; color: string; amount: number };
   /** Make black or white (and what is close to it) transparent. `amount` is how much of the dark or light range goes. */
   cutout?: { remove: "black" | "white"; amount: number };
@@ -144,7 +144,7 @@ export type Shadow = { x: number; y: number; blur: number; color: string; opacit
 /** Image library entry. The pixels live in IndexedDB. */
 export type Asset = { id: string; name: string; path: string; width: number; height: number; bytes: number; /** Where a downloaded web picture came from. */ sourceUrl?: string };
 
-/** One of several templates that can be combined into a single output (e.g. alternating colours). */
+/** One of several templates that can be combined into a single output (e.g. alternating colors). */
 export type Variant = { id: string; name: string };
 /** Which template a record uses: every n-th record starting at `start` (CSS-style 2n+1), or when a field equals a value. First match wins. */
 export type VariantRule = { id: string; variantId: string } & (

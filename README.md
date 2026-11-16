@@ -27,9 +27,9 @@ SheetShow is a browser-based variable-data design and print tool. Create an indi
 - Groups: select several objects and group them (Ctrl/⌘+G). A group moves, turns, resizes (text included), aligns and copies as one; Alt-click or double-click picks a single member; collapsible rows in Layers
 - Conditional objects: show, hide or restyle any object by rule (e.g. a ribbon only for VIPs, a symbol by meal choice), with AND / OR / NOT conditions
 - Merge fields inside text in double braces, e.g. `{{city}}, {{state}} {{zip}}` or `${{price}}`, with conditions (`{{?title}}, {{title}}{{/}}`, `=`, `!=`, `contains`, `starts`, `ends`, `and`/`or`, `{{else}}`) and automatic space tidying
-- Picture colour effects (hue, saturation, brightness, black and white, tint, fill, and cutting black or white out), All caps text, and renamable layers
+- Picture color effects (hue, saturation, brightness, black and white, tint, fill, and cutting black or white out), All caps text, and renamable layers
 - Sortable, movable data columns (click a heading to sort, click again to reverse, drag to reorder); tracking and pair-kerning controls for text
-- A token-aware text editor: `{{tokens}}` show as chips (the one under the caret turns into editable text) or as colour-coded plain text, switchable from a corner icon
+- A token-aware text editor: `{{tokens}}` show as chips (the one under the caret turns into editable text) or as color-coded plain text, switchable from a corner icon
 - Double-tap a text object to edit it right on the canvas (linked text switches to its `{{field}}` tokens while you edit)
 - Movable, dockable tool palettes (edit, align, arrange) and stacking-order shortcuts (Ctrl/⌘+[ and ])
 - One full sheet per record ("return address page for everyone in the class")
@@ -61,7 +61,7 @@ npm run build
 
 ```
 src/App.tsx              state + wiring (document, per-workspace view state, shortcuts, print)
-src/components/Viewport  pan / pinch / wheel zoom, rulers, guides (page is centred; pan 0,0 = centred)
+src/components/Viewport  pan / pinch / wheel zoom, rulers, guides (page is centered; pan 0,0 = centered)
 src/components/*Stage    template editor (SVG) and page layout (true physical slot positions)
 src/components/Inspector properties, layers, template + page setup
 src/lib, src/hooks       presets and data helpers, undo/redo history
@@ -98,7 +98,7 @@ All of these finish with the same choice: replace your records, add to them, or 
 - [x] **Variable images**
   - [x] Image library: drop / browse / folder / zip / multi-select (stored in the browser), download all as a ZIP
   - [x] Picture objects bound to a column or a filename/URL pattern, with `{{field|transform}}` variables and `||` fallbacks
-  - [x] Exact → normalised → fuzzy matching, a match-review screen with manual overrides, placeholder picture
+  - [x] Exact → normalized → fuzzy matching, a match-review screen with manual overrides, placeholder picture
   - [x] Web sources via URL patterns (hotlinked, falling back to library pictures if a download fails)
   - [x] Project bundle (.zip) that carries the pictures; pre-print warning for pictures with no match
   - [x] Download web pictures into the library (when the site allows it) and a print-time check that every web picture loads
@@ -112,7 +112,7 @@ All of these finish with the same choice: replace your records, add to them, or 
 - [x] Template gallery with built-in examples
 - [x] **Conditional objects and formatting** — rules on individual objects, in the spirit of conditional formatting in a spreadsheet
   - [x] Show or hide any object based on a field; “Show only when…”, “Hide when…” and “Change its look when…” quick starts
-  - [x] Change colour, fill, frame, opacity, bold/italic, font size, corner radius or replace the text based on a field
+  - [x] Change color, fill, frame, opacity, bold/italic, font size, corner radius or replace the text based on a field
   - [x] Conditions: is / is not / contains / doesn't contain / starts with / ends with / is one of / is empty / is not empty / greater, less (numbers, dates), combined with all (AND), any (OR) or none (NOT)
   - [x] Several rules per object, “first match wins” or “all matches apply”, and “Otherwise”; live “applies to N of M records” counts
   - [x] An override on one record beats a rule; renaming or re-mapping a column keeps rules connected
@@ -121,8 +121,8 @@ All of these finish with the same choice: replace your records, add to them, or 
 - [x] Group and ungroup objects (single-level groups; resize scales text proportionally)
   - [ ] Nested groups, and conditional rules that apply to a whole group
 - [ ] **Responsive layout with pinning** — objects that react to each other
-  - Pin an object to another (or to the template edge) with a gap, so when text grows or wraps the object below it moves down with it, and a short name pulls its neighbours in
-  - Stretch, hug-contents and fill behaviours for boxes, similar to auto-layout / constraints in design tools
+  - Pin an object to another (or to the template edge) with a gap, so when text grows or wraps the object below it moves down with it, and a short name pulls its neighbors in
+  - Stretch, hug-contents and fill behaviors for boxes, similar to auto-layout / constraints in design tools
   - Pins respect groups and work together with text auto-fit and conditions
 - [ ] **More shapes**: lines, polygons, ellipses and arrows, with stroke styles (dashed, dotted) and fills
 - [ ] **Icon library**: pick from a library of icons and set their color; icons can be driven by data like any other object

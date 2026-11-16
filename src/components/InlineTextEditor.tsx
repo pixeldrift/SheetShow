@@ -51,7 +51,7 @@ export function InlineTextEditor({ item, svgRef, zoom, draft, onChange, onCommit
         ariaLabel="Edit text"
         value={draft}
         onChange={onChange}
-        mode="text" /* on the canvas tokens stay plain, colour-coded text; chips are left for the Properties box */
+        mode="text" /* on the canvas tokens stay plain, color-coded text; chips are left for the Properties box */
         fields={fields}
         onBlur={() => {
           if (cancelled.current) return;

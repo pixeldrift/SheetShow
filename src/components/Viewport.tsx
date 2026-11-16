@@ -32,8 +32,8 @@ type Gesture =
 
 
 /**
- * Pan / zoom surface. The page is centred in the viewport and offset by `view.pan`,
- * so a pan of (0, 0) is always "centred" regardless of drawer state or zoom.
+ * Pan / zoom surface. The page is centered in the viewport and offset by `view.pan`,
+ * so a pan of (0, 0) is always "centered" regardless of drawer state or zoom.
  */
 export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRulers, guides, onGuides, onRulerDoubleClick, onBackgroundClick, marqueeMode, onMarquee, children, paperClassName }: Props) {
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);

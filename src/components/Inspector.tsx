@@ -147,7 +147,7 @@ function MultiProperties({ count, onRotateBy, onDuplicate, onDelete, group, grou
           <button title="Rotate group 90° counter-clockwise" aria-label="Rotate group 90° counter-clockwise" onClick={() => onRotateBy(-90)}><RotateCcw size={16} /></button>
           <button title="Rotate group 90° clockwise" aria-label="Rotate group 90° clockwise" onClick={() => onRotateBy(90)}><RotateCw size={16} /></button>
         </div>
-        <p className="hint">Drag the round handle above the selection to turn it freely (Shift for 15° steps). Items turn together around the group’s centre.</p>
+        <p className="hint">Drag the round handle above the selection to turn it freely (Shift for 15° steps). Items turn together around the group’s center.</p>
       </Section>
       <p className="hint">Shift-click items or layers to adjust the selection, or turn on multi-select in the toolbar and just tap. Alignment is on the bar at the bottom of the canvas.</p>
       <div className="property-actions"><button onClick={onDuplicate}><Copy size={14} /> Duplicate</button><button className="danger" onClick={onDelete}><Trash2 size={14} /> Delete</button></div>
@@ -369,7 +369,7 @@ function PageSetup({ templateWidth, templateHeight, onPreset, sheet, onSheet, pa
         <p className="hint">{auditCount ? `${auditCount} text${auditCount === 1 ? "" : "s"} on this sheet ${auditCount === 1 ? "doesn’t" : "don’t"} fit — look for the orange badges.` : "Nothing on this sheet is too long for its box."}</p>
       </Section>
       <Section title="OVERRIDDEN RECORDS" unit={editedList.length ? String(editedList.length) : undefined}>
-        {editedList.length === 0 ? <p className="hint first">Turn on <strong>Override</strong> in the toolbar, then click or double-click anything on a sheet to change just that record — a name, a photo, a colour.</p> : (
+        {editedList.length === 0 ? <p className="hint first">Turn on <strong>Override</strong> in the toolbar, then click or double-click anything on a sheet to change just that record — a name, a photo, a color.</p> : (
           <div className="edited-list">
             {editedList.slice(0, 40).map((e) => (
               <div key={e.recordId} className="edited-row">

@@ -6,7 +6,7 @@ const EVENT = "sheetshow:tokenMode";
 
 const read = (): TokenMode => { try { return localStorage.getItem(KEY) === "chips" ? "chips" : "text"; } catch { return "text"; } };
 
-/** How {{tokens}} look in the Properties text box: colour-coded plain text (the default), or chips (the token under the caret turns into text). The on-canvas editor always uses plain text. */
+/** How {{tokens}} look in the Properties text box: color-coded plain text (the default), or chips (the token under the caret turns into text). The on-canvas editor always uses plain text. */
 export function useTokenMode(): [TokenMode, () => void] {
   const [mode, setMode] = useState<TokenMode>(read);
   useEffect(() => {

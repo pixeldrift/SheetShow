@@ -19,7 +19,7 @@ export const isKnownField = (name: string, fields: string[]) => fields.some((f) 
 
 const COND = /([“”"][^“”"]*[“”"])|(~)|\?([^\s"“”,=!<>?]+(?:\s+(?!(?:and|or)\b|!?(?:contains|starts|ends)\b)[^\s"“”,=!<>?]+)*)|(!=|>=|<=|[=<>]|!?\b(?:contains|starts|ends)\b)|(\band\b|\bor\b)|([\s\S])/g;
 
-/** Colour-coded HTML for the inside of a tag (the part between the braces). `raw` keeps surrounding spaces so offsets stay true. */
+/** Color-coded HTML for the inside of a tag (the part between the braces). `raw` keeps surrounding spaces so offsets stay true. */
 export function highlightInner(rawInner: string): string {
   const t = rawInner;
   const lead = t.match(/^\s*/)![0];
@@ -49,7 +49,7 @@ export const tagField = (tag: Tag) => tag.inner.replace(/^\?/, "").split("|")[0]
 
 /**
  * The editor's HTML for a text. `caret` is the collapsed caret position (or null when not focused): the tag it sits inside is
- * shown as raw text; every other tag is a chip (in chips mode) or colour-coded raw text (in text mode).
+ * shown as raw text; every other tag is a chip (in chips mode) or color-coded raw text (in text mode).
  */
 export function buildEditorHtml(text: string, mode: "chips" | "text", caret: number | null, fields: string[]): { html: string; activeStart: number } {
   const tags = findTags(text);
