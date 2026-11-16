@@ -8,7 +8,7 @@ import {
   X, Filter,
 } from "lucide-react";
 import type { DesignItem, LabelPreset, Sheet } from "../types";
-import { averyPresets, fieldDisplayName, prettyField } from "../lib/data";
+import { averyPresets, fieldDisplayName, prettyField, specialFields } from "../lib/data";
 import type { FontLibrary } from "../hooks/useFontLibrary";
 import { NumberField, Pair, Section } from "./Fields";
 import { FontPicker } from "./FontPicker";
@@ -182,16 +182,21 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
       {item.type === "text" && (
         <>
           <Section title="CONTENT">
-            {item.field ? (
-              <div className="binding-chip">
-                {item.field.startsWith("__") ? <Hash size={13} /> : <Type size={13} />}<span>{fieldDisplayName(item.field)}</span>
-                <button onClick={() => patch({ field: undefined, text: fieldDisplayName(item.field!) })} title="Unlink and keep as static text"><Link2Off size={13} /> Unlink</button>
-              </div>
-            ) : (
-              <div className="token-box">
-                <TokenEditor className="property-input textarea" value={item.text ?? ""} onChange={(text) => patch({ text })} mode={tokenMode} fields={imageTools.columns} ariaLabel="Text" placeholder="Enter text…" />
-                <TokenModeToggle mode={tokenMode} onToggle={toggleTokenMode} />
-              </div>
+            {/* The contents box is always here. Text linked to a field shows that field as a chip, and typing over it turns the link into ordinary text. */}
+            <div className="token-box">
+              <TokenEditor className="property-input textarea" value={item.field ? `{{${item.field.startsWith("__") ? fieldDisplayName(item.field) : item.field}}}` : item.text ?? ""}
+                onChange={(text) => {
+                  if (!item.field) { patch({ text }); return; }
+                  const whole = text.trim().match(/^\{\{\s*([^{}|#^/?]+?)\s*\}\}$/);
+                  const named = whole && [...imageTools.columns, ...specialFields.map((f) => f.key)].find((f) => f === whole[1] || fieldDisplayName(f).toLowerCase() === whole[1].toLowerCase());
+                  if (named) { if (named !== item.field) patch({ field: named, text: fieldDisplayName(named) }); } else patch({ field: undefined, text });
+                }}
+                mode={item.field ? "chips" : tokenMode} fields={imageTools.columns} ariaLabel="Text" placeholder="Enter text…" />
+              <TokenModeToggle mode={tokenMode} onToggle={toggleTokenMode} />
+            </div>
+            {item.field && (
+              <div className="binding-note"><span>Linked to <strong>{fieldDisplayName(item.field)}</strong>. Type to add your own wording around it.</span>
+                <button className="link-button" onClick={() => patch({ field: undefined, text: fieldDisplayName(item.field!) })} title="Unlink and keep as static text"><Link2Off size={12} /> Unlink</button></div>
             )}
             {!item.field && (
               <>

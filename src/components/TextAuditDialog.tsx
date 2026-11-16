@@ -10,7 +10,7 @@ type Props = {
   onClose: () => void;
 };
 
-const LABEL = { spill: "Runs past its box", truncated: "Cut off with “…”" } as const;
+const LABEL = { spill: "Runs out of its box", truncated: "Cut off", outside: "Runs off the card" } as const;
 
 /** Every text that doesn't fit, across all the records that will print. */
 export function TextAuditDialog({ issues, itemId, onFix, onClose }: Props) {
@@ -29,7 +29,7 @@ export function TextAuditDialog({ issues, itemId, onFix, onClose }: Props) {
       <div className="dialog review-dialog" role="dialog" aria-modal="true" aria-labelledby="audit-title">
         <div className="dialog-head">
           <div><h2 id="audit-title">Text that doesn’t fit</h2>
-            <p>{issues.length ? `${issues.length} place${issues.length === 1 ? "" : "s"} where text is too long for its box. Fix one by editing just that record on the page, or change the text’s fit settings to handle them all.` : "Everything fits."}</p></div>
+            <p>{issues.length ? `${issues.length} place${issues.length === 1 ? "" : "s"} where text gets cut off or runs off the card. Fix one by editing just that record on the page, or change the text’s fit settings to handle them all.` : "Everything fits."}</p></div>
           <button className="icon-button" aria-label="Close" onClick={onClose}><X size={17} /></button>
         </div>
         {issues.length > 0 && (
@@ -44,7 +44,7 @@ export function TextAuditDialog({ issues, itemId, onFix, onClose }: Props) {
           {shown.slice(0, 400).map((issue) => (
             <div className="review-row audit-row" key={issue.recordId + issue.itemId}>
               <AlertTriangle size={16} className={issue.kind === "truncated" ? "audit-icon cut" : "audit-icon"} />
-              <div className="review-text"><strong>{issue.recordLabel}</strong><small>{issue.itemLabel} · {LABEL[issue.kind]}{issue.atMin ? " even at the smallest allowed size" : ""} · record {issue.recordIndex + 1}</small></div>
+              <div className="review-text"><strong>Record {issue.recordIndex + 1}</strong><small>{issue.itemLabel} · {LABEL[issue.kind]}{issue.atMin ? " even at the smallest allowed size" : ""} · {issue.recordLabel}</small></div>
               <button className="button" onClick={() => onFix(issue)}>Fix on page…</button>
             </div>
           ))}

@@ -65,7 +65,7 @@ export function LayoutStage(p: Props) {
         const id = record?.[ID] as string | undefined;
         const edited = !preview && hasEdits(info?.override);
         const reverted = edited && !!info?.override?.off;
-        const issues = !preview && info && record && meta ? instanceIssues(info.items, record, meta) : [];
+        const issues = !preview && info && record && meta ? instanceIssues(info.items, record, meta, { w: templateWidth, h: templateHeight }) : [];
         const overriddenIds = edited && !reverted ? new Set(Object.keys(info!.override!.items)) : undefined;
         const sel = p.selected && p.selected.recordId === id ? p.selected.itemId : null;
         const editingHere = p.editing && p.editing.recordId === id ? info?.items.find((i) => i.id === p.editing!.itemId) : undefined;

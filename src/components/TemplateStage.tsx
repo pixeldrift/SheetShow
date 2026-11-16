@@ -1,4 +1,4 @@
-import { PointerEvent, RefObject, useRef, useState } from "react";
+import { PointerEvent, RefObject, useEffect, useRef, useState } from "react";
 import type { DesignItem, Guide, RecordMeta, RecordRow } from "../types";
 import { PX_PER_IN, round } from "../lib/data";
 import { aabb, boundsOf, centerOf, rotateAbout, type Box, type Transform } from "../lib/align";
@@ -26,6 +26,9 @@ type Props = {
   snapOptions: SnapOptions;
   /** A text object a dragged field would link to if dropped now: drawn with a highlighted border and a link badge. */
   dropTargetId?: string | null;
+  /** Texts that will cause trouble for some records (cut off, off the card, out of a visible box): each gets a warning icon you can tap. */
+  warnings?: Map<string, { index: number; kind: string }[]>;
+  onWarning?: (itemId: string, clientX: number, clientY: number) => void;
   guides: Guide[];
   /** Tapping toggles selection (multi-select mode) instead of replacing it. */
   multi: boolean;
@@ -47,7 +50,7 @@ type Props = {
 };
 
 type Drag =
-  | { kind: "move"; primary: string; startX: number; startY: number; origins: Map<string, { x: number; y: number }>; w: number; h: number; box: Box; targets: Box[]; spacing?: Box[] }
+  | { kind: "move"; primary: string; startX: number; startY: number; origins: Map<string, { x: number; y: number }>; w: number; h: number; box: Box; targets: Box[]; spacing?: Box[]; began?: boolean }
   | { kind: "resize"; id: string; handle: Handle; startX: number; startY: number; box: Box; rotation: number; keepAspect: boolean; targets: Box[] }
   | { kind: "rotate"; id: string }
   | { kind: "scale-group"; handle: Handle; startX: number; startY: number; box: Box; origins: DesignItem[]; keepAspect: boolean }
@@ -65,12 +68,24 @@ const GUIDE_REACH = 0.08;
 const MIN_SIZE = 0.05;
 
 /** Editable template canvas. Items may be dragged anywhere, including past the template edge and over the rulers. */
-export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, snapOptions, dropTargetId, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd, onEditText }: Props) {
+export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, snapOptions, dropTargetId, warnings, onWarning, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd, onEditText }: Props) {
   const drag = useRef<Drag | null>(null);
   const lastTap = useRef<{ id: string; at: number } | null>(null);
   /** A double-click on a grouped object picks just that object, but only once the pointer is released without having moved (otherwise it was a quick click-and-drag of the group). */
   const pendingSingle = useRef<string | null>(null);
   const scale = PX_PER_IN * zoom;
+  const wantKeyboard = useRef(false);
+  const summonKeyboard = () => {
+    if (!wantKeyboard.current) return;
+    const editor = document.querySelector<HTMLElement>(".inline-editor");
+    if (editor) { editor.focus({ preventScroll: true }); wantKeyboard.current = false; }
+  };
+  // A second finger on the canvas means pan and zoom: drop any drag the first finger had started.
+  useEffect(() => {
+    const cancel = () => { drag.current = null; pendingSingle.current = null; setSnapLines([]); };
+    window.addEventListener("canvas-multitouch", cancel);
+    return () => window.removeEventListener("canvas-multitouch", cancel);
+  }, []);
   /** Smart-snap guide lines shown while dragging. */
   const [snapLines, setSnapLines] = useState<SnapLine[]>([]);
   /** An item's box as drawn (text can be taller than its box), including rotation. */
@@ -106,6 +121,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     if (doubleTap && item.type === "text" && !item.locked && !(multi || event.shiftKey || event.metaKey || event.ctrlKey) && selectedIds.length === 1 && selectedIds[0] === item.id && onEditText) {
       event.preventDefault();
       lastTap.current = null;
+      wantKeyboard.current = true; // the phone's keyboard only opens from a touch event, so the editor is focused again when this tap lifts
       onEditText(item.id);
       return;
     }
@@ -190,6 +206,9 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
     const dx = (event.clientX - d.startX) / scale;
     const dy = (event.clientY - d.startY) / scale;
     if (d.kind === "move") {
+      // On a touch screen an object only starts to move after the finger has travelled a few pixels, so a second finger landing for a
+      // two-finger pan or zoom doesn't nudge it first.
+      if (!d.began) { if (event.pointerType === "touch" && Math.hypot(event.clientX - d.startX, event.clientY - d.startY) < 7) return; d.began = true; }
       if (pendingSingle.current && Math.hypot(event.clientX - d.startX, event.clientY - d.startY) > 4) pendingSingle.current = null;
       const origin = d.origins.get(d.primary) ?? [...d.origins.values()][0];
       let x = origin.x + dx, y = origin.y + dy;
@@ -274,7 +293,8 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       height={height * PX_PER_IN}
       viewBox={`0 0 ${width * PX_PER_IN} ${height * PX_PER_IN}`}
       onPointerMove={onPointerMove}
-      onPointerUp={endDrag}
+      onPointerUp={() => { endDrag(); summonKeyboard(); }}
+      onClick={summonKeyboard}
       onPointerCancel={endDrag}
     >
       {showGrid && (
@@ -356,6 +376,21 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
           </g>
         );
       })()}
+      {!preview && warnings && onWarning && items.filter((i) => warnings.has(i.id) && i.visible !== false).map((item) => {
+        const { w, h } = itemFrame(item, record, meta, rawFields);
+        const s = 20 / zoom; // a constant on-screen size, at the top-right corner of the box
+        return (
+          <g key={`warn-${item.id}`} transform={`translate(${item.x * PX_PER_IN} ${item.y * PX_PER_IN})${item.rotation ? ` rotate(${item.rotation} ${w / 2} ${h / 2})` : ""}`}>
+            <g transform={`translate(${w - s * 0.2} ${-s * 0.8}) scale(${s / 24})`} style={{ cursor: "pointer", touchAction: "none" }}
+              onPointerDown={(e) => { e.stopPropagation(); }} onClick={(e) => { e.stopPropagation(); onWarning(item.id, e.clientX, e.clientY); }}>
+              <title>Some records don’t fit this text. Tap to see which.</title>
+              <circle cx="12" cy="12" r="15" fill="transparent" />
+              <path d="M12 2.6 22.4 20.6H1.6Z" fill="#f2a43a" stroke="#fff" strokeWidth="2" strokeLinejoin="round" />
+              <path d="M12 9.2v5.2" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" /><circle cx="12" cy="17.4" r="1.4" fill="#fff" />
+            </g>
+          </g>
+        );
+      })}
     </svg>
   );
 }

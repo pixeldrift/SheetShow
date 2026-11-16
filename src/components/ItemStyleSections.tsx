@@ -298,7 +298,24 @@ export function ImageColorSection({ item, patch }: { item: DesignItem; patch: Pa
   const overlay = fx.overlay;
   return (
     <Section title="COLOR">
-      <div className="switch-row first"><span>Black and white</span><Switch label="Black and white" on={!!fx.grayscale} onChange={(on) => set({ grayscale: on })} /></div>
+      {/* Cut-out comes first: it works from the picture's own tones, and the colour effects below then apply to what is left. */}
+      <div className="cutout-block">
+        <Pair label="Make transparent">
+          <select className="select" value={fx.cutout?.remove ?? "none"} aria-label="Make transparent"
+            onChange={(e) => (e.target.value === "none" ? set({ cutout: undefined }) : set({ cutout: { remove: e.target.value as "black" | "white", amount: fx.cutout?.amount ?? 40 } }))}>
+            <option value="none">Nothing</option>
+            <option value="white">White (and near white)</option>
+            <option value="black">Black (and near black)</option>
+          </select>
+        </Pair>
+        {fx.cutout && (
+          <div className="opacity-block spaced-block">
+            <Pair label="Threshold: how much is cut out"><NumberField value={fx.cutout.amount} min={0} max={100} step={1} places={0} unit="%" onChange={(n) => set({ cutout: { ...fx.cutout!, amount: n } })} /></Pair>
+            <input type="range" min="0" max="100" step="1" value={fx.cutout.amount} aria-label="Cut-out threshold" onChange={(ev) => set({ cutout: { ...fx.cutout!, amount: Number(ev.target.value) } })} />
+          </div>
+        )}
+      </div>
+      <div className="switch-row" style={{ marginTop: 14 }}><span>Black and white</span><Switch label="Black and white" on={!!fx.grayscale} onChange={(on) => set({ grayscale: on })} /></div>
       <div className="two-col spaced">
         <Pair label="Hue"><NumberField value={fx.hue ?? 0} min={-180} max={180} step={1} places={0} unit="°" onChange={(n) => set({ hue: n })} /></Pair>
         <Pair label="Saturation"><NumberField value={fx.saturation ?? 100} min={0} max={300} step={1} places={0} unit="%" onChange={(n) => set({ saturation: n })} /></Pair>
@@ -324,17 +341,6 @@ export function ImageColorSection({ item, patch }: { item: DesignItem; patch: Pa
         {overlay?.mode === "solid" && <p className="hint">Turns every visible pixel this colour. Good for changing an icon from black to any colour.</p>}
       </div>
 
-      <div className="effect-block">
-        <Pair label="Make transparent">
-          <select className="select" value={fx.cutout?.remove ?? "none"} aria-label="Make transparent"
-            onChange={(e) => (e.target.value === "none" ? set({ cutout: undefined }) : set({ cutout: { remove: e.target.value as "black" | "white", amount: fx.cutout?.amount ?? 40 } }))}>
-            <option value="none">Nothing</option>
-            <option value="white">White (and near white)</option>
-            <option value="black">Black (and near black)</option>
-          </select>
-        </Pair>
-        {fx.cutout && <div className="two-col spaced"><Pair label="Strength"><NumberField value={fx.cutout.amount} min={0} max={100} step={1} places={0} unit="%" onChange={(n) => set({ cutout: { ...fx.cutout!, amount: n } })} /></Pair></div>}
-      </div>
       {changed && <button className="link-button reset-fx" onClick={() => patch({ imageFx: undefined })}>Reset colour effects</button>}
     </Section>
   );
