@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { BoxSelect, ChevronDown, FileSearch, FileText, LayoutGrid, Rows3, Grid2X2, ImagePlus, Magnet, PencilLine, Plus, Ruler, ScanLine, Square, Type } from "lucide-react";
+import { SquareDashedMousePointer, ChevronDown, FileSearch, FileText, LayoutGrid, Rows3, Grid2X2, ImagePlus, Magnet, PencilLine, Plus, Ruler, ScanLine, Square, Type } from "lucide-react";
 import { MAX_ZOOM, MIN_ZOOM } from "./Viewport";
 import { ZoomField } from "./ZoomField";
 import type { SnapOptions } from "../lib/smartSnap";
@@ -61,7 +61,7 @@ export function Toolbar(p: Props) {
         </>
       )}
       <div className="tool-group">
-        {p.workspace === "template" && toggle(p.multi, "Multi-select (tap items to add, drag to box-select)", p.onMulti, <BoxSelect size={15} />)}
+        {p.workspace === "template" && toggle(p.multi, "Select several: tap objects to add or remove them, or drag on empty canvas to draw a selection box", p.onMulti, <SquareDashedMousePointer size={16} />)}
         {toggle(p.showGrid, "Show grid", p.onGrid, <Grid2X2 size={15} />)}
         {toggle(p.showRulers, "Show rulers", p.onRulers, <Ruler size={15} />)}
         <span className="split-tool">
