@@ -82,7 +82,9 @@ Background, border and border size sit on one line. **Padding** and **Rounding**
 
 Open **Add image** to drop in pictures, a folder or a .zip. They are kept in this browser's image library, and **Download all as ZIP** saves them.
 
-**Color effects** (Properties → Color) work on any picture: hue, saturation, brightness and contrast, black and white, and a color overlay. The color overlay can **tint** the picture (like a colored filter) or **fill** it, so every visible pixel becomes one color and the shape is kept, which turns a black icon into any color you like. **Make transparent** comes first: it cuts black or white (and tones close to it) out of a picture, with a threshold slider for how much is cut, and the tint or fill is applied afterwards.
+**Color effects** (Properties → Color) work on any picture: hue, saturation, brightness and contrast, black and white, and a color overlay. The color overlay can **tint** the picture (like a colored filter) or **fill** it, so every visible pixel becomes one color and the shape is kept, which turns a black icon into any color you like. **Make transparent** comes first: it cuts black or white (and tones close to it) out of a picture, with a threshold slider, and the tint or fill is applied afterwards.
+
+**Properties sections** (Color, Effects and so on) fold away when you tap their headings, so you can hide the options you are not using.
 
 **Moving around:** drag two fingers anywhere on the canvas, even over an object, to pan, and pinch to zoom, without moving anything. **Overflow warnings:** on the template page a small warning icon appears on a text box whose text will run off the card or out of a visible box for some records; tap it to see which records.
 
