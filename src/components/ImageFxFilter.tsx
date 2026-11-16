@@ -5,8 +5,8 @@ export const hasImageFx = (fx?: ImageFx) =>
   !!fx && (!!fx.hue || (fx.saturation !== undefined && fx.saturation !== 100) || (fx.brightness !== undefined && fx.brightness !== 100) || (fx.contrast !== undefined && fx.contrast !== 100) || !!fx.grayscale || !!fx.overlay || !!fx.cutout);
 
 /**
- * The SVG filter for a picture's colour effects. It runs in order: cutout, black and white, saturation, hue, brightness and contrast,
- * then the colour overlay, so a cutout is made from the picture's own tones before they are recoloured.
+ * The SVG filter for a picture's color effects. It runs in order: cutout, black and white, saturation, hue, brightness and contrast,
+ * then the color overlay, so a cutout is made from the picture's own tones before they are recolored.
  */
 export function ImageFxFilter({ id, fx }: { id: string; fx: ImageFx }) {
   const steps: React.ReactNode[] = [];
@@ -39,7 +39,7 @@ export function ImageFxFilter({ id, fx }: { id: string; fx: ImageFx }) {
     const { mode, color } = fx.overlay, amount = Math.max(0, Math.min(100, fx.overlay.amount)) / 100;
     const base = last, flood = next(), shaped = next();
     steps.push(<feFlood key={flood} floodColor={color} floodOpacity={1} result={flood} />);
-    steps.push(<feComposite key={shaped} in={flood} in2={base} operator="in" result={shaped} />); // colour only where the picture is
+    steps.push(<feComposite key={shaped} in={flood} in2={base} operator="in" result={shaped} />); // color only where the picture is
     let strong = shaped;
     if (mode === "multiply") { strong = next(); steps.push(<feBlend key={strong} in={shaped} in2={base} mode="multiply" result={strong} />); }
     // the effect at full strength, mixed back with the untouched picture by the amount

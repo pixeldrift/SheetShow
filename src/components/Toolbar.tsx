@@ -55,7 +55,7 @@ export function Toolbar(p: Props) {
       )}
       {p.workspace === "layout" && (
         <>
-          <button className="button mode-button toggle" aria-pressed={p.instanceMode} onClick={p.onInstanceMode} title="Override mode: click or double-click anything on a sheet to change just that record — edit a name, drop in a different photo, tweak a colour">
+          <button className="button mode-button toggle" aria-pressed={p.instanceMode} onClick={p.onInstanceMode} title="Override mode: click or double-click anything on a sheet to change just that record — edit a name, drop in a different photo, tweak a color">
             <PencilLine size={15} /> Override
           </button>
           <div className="toolbar-divider" />
@@ -91,9 +91,9 @@ export function Toolbar(p: Props) {
           <div className="menu snap-menu" role="menu" style={{ position: "fixed", left: Math.min(snapAt.x, window.innerWidth - 250), top: snapAt.y }}>
             <label className="snap-master"><input type="checkbox" checked={p.snap} onChange={p.onSnap} /> <span>Snapping<small>Master switch (the magnet)</small></span></label>
             {([
-              ["objects", "Other objects", "Edges and centres line up"],
+              ["objects", "Other objects", "Edges and centers line up"],
               ["spacing", "Equal spacing", "Matching gaps between objects"],
-              ["page", "Page", "Edges and centre of the template"],
+              ["page", "Page", "Edges and center of the template"],
               ["guides", "Guides", "Lines dragged from the rulers"],
               ["grid", "Grid", "Only while the grid is showing"],
             ] as const).map(([key, label, hint]) => (

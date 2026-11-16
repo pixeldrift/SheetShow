@@ -113,7 +113,7 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (on: bo
   return <button type="button" role="switch" aria-checked={on} aria-label={label} className="switch" onClick={() => onChange(!on)}><span /></button>;
 }
 
-/** A colour swatch that can optionally be cleared (shown as a slashed swatch when empty). */
+/** A color swatch that can optionally be cleared (shown as a slashed swatch when empty). */
 function ColorChip({ value, fallback, label, onChange, onClear }: { value?: string; fallback: string; label: string; onChange: (c: string) => void; onClear?: () => void }) {
   return (
     <span className={`color-chip${value ? "" : " empty"}`}>
@@ -157,7 +157,7 @@ export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Pa
 
   return (
     <Section title={label}>
-      {/* Background, border colour and border size share one line. */}
+      {/* Background, border color and border size share one line. */}
       <div className={`style-row${hasBackground ? "" : " two"}`}>
         {hasBackground && (
           <Pair label="Background">
@@ -222,6 +222,17 @@ export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Pa
   );
 }
 
+/** A label, a slider and its percent, all on one row. */
+function SliderRow({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
+  return (
+    <div className="slider-row">
+      <span>{label}</span>
+      <input type="range" min="0" max="100" step="1" value={value} aria-label={label} onChange={(ev) => onChange(Number(ev.target.value))} />
+      <NumberField value={value} min={0} max={100} step={1} places={0} unit="%" onChange={onChange} />
+    </div>
+  );
+}
+
 const SHADOW: Shadow = { x: 0, y: 2, blur: 5, color: "#000000", opacity: 0.35 };
 
 /** One effect: a twirl-down with its details, and a switch to turn it on. */
@@ -248,12 +259,7 @@ export function EffectsSection({ item, patch }: { item: DesignItem; patch: Patch
   const setOutline = (change: Partial<{ color: string; width: number }>) => patch({ textStroke: { ...ol, ...change } });
   return (
     <Section title="EFFECTS">
-      <div className="opacity-block">
-        <Pair label="Opacity">
-          <NumberField value={Math.round((item.opacity ?? 1) * 100)} min={0} max={100} step={1} places={0} unit="%" onChange={(n) => patch({ opacity: n / 100 })} />
-        </Pair>
-        <input type="range" min="0" max="100" step="1" value={Math.round((item.opacity ?? 1) * 100)} aria-label="Opacity" onChange={(ev) => patch({ opacity: Number(ev.target.value) / 100 })} />
-      </div>
+      <SliderRow label="Opacity" value={Math.round((item.opacity ?? 1) * 100)} onChange={(n) => patch({ opacity: n / 100 })} />
       {item.type === "text" && (
         <Effect title="Outline" on={!!stroke} onToggle={(on) => patch({ textStroke: on ? ol : undefined })}>
           <div className="two-col spaced">
@@ -279,7 +285,7 @@ export function EffectsSection({ item, patch }: { item: DesignItem; patch: Patch
   );
 }
 
-/** Colour effects for a picture: tint it, make it black and white, recolour an icon, or cut black or white out. */
+/** Color effects for a picture: tint it, make it black and white, recolor an icon, or cut black or white out. */
 export function ImageColorSection({ item, patch }: { item: DesignItem; patch: Patch }) {
   const fx: ImageFx = item.imageFx ?? {};
   // Defaults are not stored: an effect that does nothing is simply absent, so a picture with no effects is untouched.
@@ -298,22 +304,17 @@ export function ImageColorSection({ item, patch }: { item: DesignItem; patch: Pa
   const overlay = fx.overlay;
   return (
     <Section title="COLOR">
-      {/* Cut-out comes first: it works from the picture's own tones, and the colour effects below then apply to what is left. */}
+      {/* Cut-out comes first: it works from the picture's own tones, and the color effects below then apply to what is left. */}
       <div className="cutout-block">
         <Pair label="Make transparent">
           <select className="select" value={fx.cutout?.remove ?? "none"} aria-label="Make transparent"
             onChange={(e) => (e.target.value === "none" ? set({ cutout: undefined }) : set({ cutout: { remove: e.target.value as "black" | "white", amount: fx.cutout?.amount ?? 40 } }))}>
             <option value="none">Nothing</option>
-            <option value="white">White (and near white)</option>
-            <option value="black">Black (and near black)</option>
+            <option value="white">White</option>
+            <option value="black">Black</option>
           </select>
         </Pair>
-        {fx.cutout && (
-          <div className="opacity-block spaced-block">
-            <Pair label="Threshold: how much is cut out"><NumberField value={fx.cutout.amount} min={0} max={100} step={1} places={0} unit="%" onChange={(n) => set({ cutout: { ...fx.cutout!, amount: n } })} /></Pair>
-            <input type="range" min="0" max="100" step="1" value={fx.cutout.amount} aria-label="Cut-out threshold" onChange={(ev) => set({ cutout: { ...fx.cutout!, amount: Number(ev.target.value) } })} />
-          </div>
-        )}
+        {fx.cutout && <SliderRow label="Threshold" value={fx.cutout.amount} onChange={(n) => set({ cutout: { ...fx.cutout!, amount: n } })} />}
       </div>
       <div className="switch-row" style={{ marginTop: 14 }}><span>Black and white</span><Switch label="Black and white" on={!!fx.grayscale} onChange={(on) => set({ grayscale: on })} /></div>
       <div className="two-col spaced">
@@ -324,24 +325,24 @@ export function ImageColorSection({ item, patch }: { item: DesignItem; patch: Pa
       </div>
 
       <div className="effect-block">
-        <Pair label="Colour overlay">
-          <select className="select" value={overlay?.mode ?? "none"} aria-label="Colour overlay"
+        <Pair label="Color overlay">
+          <select className="select" value={overlay?.mode ?? "none"} aria-label="Color overlay"
             onChange={(e) => (e.target.value === "none" ? set({ overlay: undefined }) : set({ overlay: { mode: e.target.value as "multiply" | "solid", color: overlay?.color ?? "#d17c4b", amount: overlay?.amount ?? (e.target.value === "solid" ? 100 : 60) } }))}>
             <option value="none">None</option>
-            <option value="multiply">Tint (like a coloured filter)</option>
-            <option value="solid">Fill (one colour, keeps the shape)</option>
+            <option value="multiply">Tint (like a colored filter)</option>
+            <option value="solid">Fill (one color, keeps the shape)</option>
           </select>
         </Pair>
         {overlay && (
           <div className="two-col spaced">
-            <Pair label="Colour"><ColorChip value={overlay.color} fallback="#d17c4b" label="Overlay colour" onChange={(c) => set({ overlay: { ...overlay, color: c } })} /></Pair>
+            <Pair label="Color"><ColorChip value={overlay.color} fallback="#d17c4b" label="Overlay color" onChange={(c) => set({ overlay: { ...overlay, color: c } })} /></Pair>
             <Pair label="Amount"><NumberField value={overlay.amount} min={0} max={100} step={1} places={0} unit="%" onChange={(n) => set({ overlay: { ...overlay, amount: n } })} /></Pair>
           </div>
         )}
-        {overlay?.mode === "solid" && <p className="hint">Turns every visible pixel this colour. Good for changing an icon from black to any colour.</p>}
+        {overlay?.mode === "solid" && <p className="hint">Turns every visible pixel this color. Good for changing an icon from black to any color.</p>}
       </div>
 
-      {changed && <button className="link-button reset-fx" onClick={() => patch({ imageFx: undefined })}>Reset colour effects</button>}
+      {changed && <button className="link-button reset-fx" onClick={() => patch({ imageFx: undefined })}>Reset color effects</button>}
     </Section>
   );
 }

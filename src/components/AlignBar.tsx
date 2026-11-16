@@ -23,11 +23,11 @@ export function AlignBar({ units, onAlign, onDistribute, palette, onPalette, can
     <Palette label="Alignment tools" className="align-bar" state={palette} onState={onPalette} canDock={canDock}>
       <span className="align-to" title={`Aligning to the ${to}`}>{units > 1 ? "Align" : "Align to page"}</span>
       {btn(`Align left (to the ${to})`, () => onAlign("left"), <AlignStartVertical size={16} />)}
-      {btn(`Align centre horizontally (to the ${to})`, () => onAlign("center"), <AlignCenterVertical size={16} />)}
+      {btn(`Align center horizontally (to the ${to})`, () => onAlign("center"), <AlignCenterVertical size={16} />)}
       {btn(`Align right (to the ${to})`, () => onAlign("right"), <AlignEndVertical size={16} />)}
       <span className="edit-divider" />
       {btn(`Align top (to the ${to})`, () => onAlign("top"), <AlignStartHorizontal size={16} />)}
-      {btn(`Align centre vertically (to the ${to})`, () => onAlign("middle"), <AlignCenterHorizontal size={16} />)}
+      {btn(`Align center vertically (to the ${to})`, () => onAlign("middle"), <AlignCenterHorizontal size={16} />)}
       {btn(`Align bottom (to the ${to})`, () => onAlign("bottom"), <AlignEndHorizontal size={16} />)}
       <span className="edit-divider" />
       {btn("Distribute horizontally (needs three or more)", () => onDistribute("x"), <AlignHorizontalDistributeCenter size={16} />, units < 3)}

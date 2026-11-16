@@ -214,7 +214,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       let x = origin.x + dx, y = origin.y + dy;
       const smart = snap && !event.ctrlKey && !event.metaKey; // hold Ctrl/⌘ to move freely
       if (smart) {
-        // Snap the whole selection's edges and centre to other objects, the page and guides; the grid only when it is showing.
+        // Snap the whole selection's edges and center to other objects, the page and guides; the grid only when it is showing.
         const r = smartSnap({ x: d.box.x + dx, y: d.box.y + dy, w: d.box.w, h: d.box.h }, d.targets, guideLines, reach, undefined, d.spacing);
         x += r.dx; y += r.dy;
         if (gridOn && r.dx === 0) x = gridSnap(x);
@@ -321,7 +321,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
           </g>
         );
       })()}
-      {/* Smart-snap guides while dragging: a thin line wherever an edge or centre lines up with something else. */}
+      {/* Smart-snap guides while dragging: a thin line wherever an edge or center lines up with something else. */}
       {snapLines.map((l, i) => l.gap ? (
         // An equal-spacing marker: the measured gap with a tick at each end.
         <path key={i} d={l.axis === "x"

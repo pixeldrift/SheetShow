@@ -13,16 +13,16 @@ export const DEFAULT_SNAP_OPTIONS: SnapOptions = { objects: true, spacing: true,
 
 export type SnapResult = { dx: number; dy: number; lines: SnapLine[] };
 
-/** Edges and centre of a box, along one axis: [start, middle, end]. */
+/** Edges and center of a box, along one axis: [start, middle, end]. */
 const anchors = (b: Box, axis: "x" | "y") => (axis === "x" ? [b.x, b.x + b.w / 2, b.x + b.w] : [b.y, b.y + b.h / 2, b.y + b.h]);
 
 const EPS = 0.002;
 
 /**
- * Smart snapping, in the manner of a vector editor: the moving box's edges and centre snap to the edges and centres of
+ * Smart snapping, in the manner of a vector editor: the moving box's edges and center snap to the edges and centers of
  * other objects, the page, and any ruler guides, whichever is closest within `reach` inches.
  *
- * `use` picks which of the moving box's anchors take part per axis (0 = start edge, 1 = centre, 2 = end edge): all three
+ * `use` picks which of the moving box's anchors take part per axis (0 = start edge, 1 = center, 2 = end edge): all three
  * when moving, only the dragged edge when resizing. Returns the shift to apply and the lines to draw.
  */
 export function smartSnap(
@@ -79,7 +79,7 @@ export function smartSnap(
 
 /**
  * Equal spacing along one axis, between objects that overlap the moving box on the other axis. Two cases, as in a vector editor:
- * the box sits exactly midway between its neighbours on either side, or it repeats the gap between two objects beside it.
+ * the box sits exactly midway between its neighbors on either side, or it repeats the gap between two objects beside it.
  */
 function equalSpacing(moving: Box, boxes: Box[], axis: "x" | "y", reach: number): { delta: number; gaps: SnapLine[] } | null {
   const along = (b: Box) => (axis === "x" ? [b.x, b.x + b.w] : [b.y, b.y + b.h]);
@@ -95,14 +95,14 @@ function equalSpacing(moving: Box, boxes: Box[], axis: "x" | "y", reach: number)
     const delta = start - m0;
     if (Math.abs(delta) <= reach && (!best || Math.abs(delta) < Math.abs(best.delta))) best = { delta, gaps };
   };
-  // Midway between the nearest neighbour on each side.
+  // Midway between the nearest neighbor on each side.
   const left = beside.filter((b) => along(b)[1] <= mc).sort((a, b) => along(b)[1] - along(a)[1])[0];
   const right = beside.filter((b) => along(b)[0] >= mc).sort((a, b) => along(a)[0] - along(b)[0])[0];
   if (left && right) {
     const room = along(right)[0] - along(left)[1] - size;
     if (room > EPS) { const start = along(left)[1] + room / 2; consider(start, [gapAt(along(left)[1], start), gapAt(start + size, along(right)[0])]); }
   }
-  // Repeat the gap between two neighbouring objects, on either side of them.
+  // Repeat the gap between two neighboring objects, on either side of them.
   for (let i = 0; i + 1 < beside.length; i++) {
     const [, aEnd] = along(beside[i]), [bStart, bEnd] = along(beside[i + 1]);
     const g = bStart - aEnd;

@@ -55,8 +55,8 @@ export type Transform = { id: string; x: number; y: number; rotation: number };
 export const normAngle = (deg: number) => { const r = (((deg + 180) % 360) + 360) % 360 - 180; return r === -180 ? 180 : r; };
 
 /**
- * Rotates items by `delta` degrees as a temporary group: each item turns about its own centre by the same angle
- * and its centre orbits `center`. Pass the items as they were when the gesture began so repeated calls don't accumulate error.
+ * Rotates items by `delta` degrees as a temporary group: each item turns about its own center by the same angle
+ * and its center orbits `center`. Pass the items as they were when the gesture began so repeated calls don't accumulate error.
  */
 export function rotateAbout(items: DesignItem[], delta: number, center: { x: number; y: number }): Transform[] {
   const r = (delta * Math.PI) / 180, cos = Math.cos(r), sin = Math.sin(r);

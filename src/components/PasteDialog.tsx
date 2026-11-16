@@ -43,7 +43,7 @@ export function PasteDialog({ onUse, onCancel }: Props) {
           <button className="icon-button" aria-label="Cancel" onClick={onCancel}><X size={17} /></button>
         </div>
         <div className="dialog-body" data-scroll>
-          <textarea ref={box} className="paste-box" value={text} onChange={(e) => setText(e.target.value)} onPaste={(e) => { // plain text only: no colours, fonts or dark-mode styling from the source come along
+          <textarea ref={box} className="paste-box" value={text} onChange={(e) => setText(e.target.value)} onPaste={(e) => { // plain text only: no colors, fonts or dark-mode styling from the source come along
             e.preventDefault();
             const el = e.currentTarget, plain = e.clipboardData.getData("text/plain").replace(/\r\n?/g, "\n");
             const from = el.selectionStart, to = el.selectionEnd;

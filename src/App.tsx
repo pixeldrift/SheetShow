@@ -316,7 +316,7 @@ function App() {
     return Number(clamp(Math.min(availW / (widthOf(w) * PX_PER_IN), fitH), MIN_ZOOM, MAX_ZOOM).toFixed(2));
   };
 
-  // First visit to a workspace (or after its size changed from a preset): fit and centre it.
+  // First visit to a workspace (or after its size changed from a preset): fit and center it.
   useLayoutEffect(() => {
     if (!view.fitted && viewportRef.current) { const zoom = fitZoom(workspace); patchView({ zoom, pan: pageView === "scroll" && stack ? panForPage(currentPage, zoom) : { x: 0, y: 0 }, fitted: true }); }
   }, [workspace, view.fitted]);
@@ -1044,7 +1044,7 @@ function App() {
               {workspace === "template" && !preview && (
                 <div className="variant-bar" data-no-pan role="tablist" aria-label="Templates">
                   {variants.map((v, i) => <button key={v.id} role="tab" aria-selected={v.id === variantId} className={v.id === variantId ? "variant-chip active" : "variant-chip"} onClick={() => { setActiveVariant(v.id); setSelectedIds([]); }} title={`Edit ${v.name}`}>{variants.length > 1 ? `${String.fromCharCode(65 + i)} · ${v.name}` : v.name}</button>)}
-                  <button className="variant-chip" onClick={addVariant} title="Add another template, e.g. to alternate colours between records" aria-label="Add a template">+</button>
+                  <button className="variant-chip" onClick={addVariant} title="Add another template, e.g. to alternate colors between records" aria-label="Add a template">+</button>
                 </div>
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>

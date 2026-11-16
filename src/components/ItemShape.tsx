@@ -29,7 +29,7 @@ type Props = {
 };
 
 /**
- * Lays an item out. `frame` is the box shown to the user (outline, handles, rotation centre): the item's own box,
+ * Lays an item out. `frame` is the box shown to the user (outline, handles, rotation center): the item's own box,
  * grown to cover wrapped text that runs past it, unless auto-fit is keeping the text inside.
  */
 /** What a linked text shows in "field names" view: {name}. Static text (including your own {merge} fields) stays as typed. */
@@ -166,7 +166,7 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
           </g>
         );
       })()}
-      {/* Outline sits exactly on the frame edge, so the resize handles (centred on the same edge) attach to it. */}
+      {/* Outline sits exactly on the frame edge, so the resize handles (centered on the same edge) attach to it. */}
       {editor && !outline && <rect className="hover-outline" width={w} height={h} fill="none" stroke={ACCENT} strokeWidth={1 / zoom} pointerEvents="none" />}
       {source._ruleHidden && editor && <rect width={w} height={h} fill="none" stroke="#8f968d" strokeWidth={1 / zoom} strokeDasharray={`${3 / zoom} ${3 / zoom}`} pointerEvents="none" />}
       {overridden && !outline && <rect width={w} height={h} fill="none" stroke={OVERRIDE} strokeWidth={1.5 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} pointerEvents="none" />}

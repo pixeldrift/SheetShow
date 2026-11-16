@@ -20,7 +20,7 @@ type Props = {
   onBasis: (basis: NonNullable<Sheet["variantBasis"]>) => void;
 };
 
-/** Several templates combined into one output, like alternating row colours in a table. */
+/** Several templates combined into one output, like alternating row colors in a table. */
 export function VariantsSection(p: Props) {
   const multiple = p.variants.length > 1;
   const preview = useMemo(() => p.records.slice(0, 12).map((record, i) => {
@@ -33,7 +33,7 @@ export function VariantsSection(p: Props) {
 
   return (
     <Section title="ALTERNATING TEMPLATES">
-      <p className="hint first">Make more than one template, then say which records use which — for example every other badge in a different colour.</p>
+      <p className="hint first">Make more than one template, then say which records use which — for example every other badge in a different color.</p>
       <div className="variant-list">
         {p.variants.map((v, i) => (
           <div key={v.id} className={v.id === p.activeId ? "variant-row active" : "variant-row"}>

@@ -49,7 +49,7 @@ export const FUZZY_MIN = 0.72;
 
 export type Resolver = ReturnType<typeof createResolver>;
 
-/** Indexes the library once; each lookup then tries exact → normalised → fuzzy, and results are cached per candidate. */
+/** Indexes the library once; each lookup then tries exact → normalized → fuzzy, and results are cached per candidate. */
 export function createResolver(assets: Asset[]) {
   const byName = new Map<string, Asset>();
   const byPath = new Map<string, Asset>();

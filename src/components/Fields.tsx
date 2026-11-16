@@ -103,8 +103,21 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
   );
 }
 
+/** Which sections the user has collapsed; remembered by title so they stay shut when the selection changes. */
+const collapsed = new Set<string>();
+
+/** A properties section. Open by default; tap the heading to fold it away. */
 export function Section({ title, unit, children }: { title: string; unit?: string; children: ReactNode }) {
-  return <section className="property-section"><h3>{title}{unit && <span className="unit-label">{unit}</span>}</h3>{children}</section>;
+  const [open, setOpen] = useState(!collapsed.has(title));
+  const toggle = () => { if (open) collapsed.add(title); else collapsed.delete(title); setOpen(!open); };
+  return (
+    <section className={"property-section" + (open ? "" : " folded")}>
+      <h3><button type="button" className="section-toggle" aria-expanded={open} onClick={toggle}>
+        <ChevronDown size={12} className="section-chevron" />{title}{unit && <span className="unit-label">{unit}</span>}
+      </button></h3>
+      {open && children}
+    </section>
+  );
 }
 
 /** A label above a field. If the field is a number, dragging the label scrubs its value. */
