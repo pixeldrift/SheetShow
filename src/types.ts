@@ -16,6 +16,10 @@ export type DesignItem = {
   weight?: number;
   italic?: boolean;
   underline?: boolean;
+  /** Shown in capital letters (the text itself is left as typed). */
+  caps?: boolean;
+  /** A name you gave this object in the Layers list. */
+  name?: string;
   /** Tracking: extra space between letters, in thousandths of an em (negative tightens). */
   letterSpacing?: number;
   /** Pair kerning (the font's built-in adjustments between certain letters). On unless set to false. */

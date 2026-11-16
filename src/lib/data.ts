@@ -75,7 +75,7 @@ export const prettyField = (field: string) => field.replaceAll("_", " ");
 export const fieldDisplayName = (field: string) =>
   specialFields.find((entry) => entry.key === field)?.label ?? prettyField(field);
 
-export function valueFor(item: DesignItem, record: RecordRow, meta: RecordMeta): string {
+function rawValueFor(item: DesignItem, record: RecordRow, meta: RecordMeta): string {
   if (!item.field) return mergeText(item.text ?? "", record, specialValues(meta));
   switch (item.field) {
     case "__record_number": return String(meta.recordNumber);
@@ -84,4 +84,10 @@ export function valueFor(item: DesignItem, record: RecordRow, meta: RecordMeta):
     case "__page_count": return String(meta.pageCount);
     default: return record[item.field] ?? "—";
   }
+}
+
+/** What a text object shows for a record: its field or merge text, in capitals when All caps is on. */
+export function valueFor(item: DesignItem, record: RecordRow, meta: RecordMeta): string {
+  const value = rawValueFor(item, record, meta);
+  return item.caps ? value.toUpperCase() : value;
 }
