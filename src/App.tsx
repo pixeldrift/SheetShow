@@ -1043,15 +1043,6 @@ function App() {
               pageOf={workspace === "layout" ? (index) => (sheet.repeatMode === "same" ? index : Math.floor(index / slots)) : undefined} currentPage={currentPage}
               sort={dataSort} onSort={dataActions.onSort} onReorderColumn={dataActions.onReorderColumn}
             />
-            <RecordBar
-              label={pagedNav ? "Sheet" : "Record"}
-              position={pagedNav ? (stack ? visiblePage : currentPage) + 1 : recordIndex + 1}
-              total={pagedNav ? pageCount : activeRecords.length}
-              preview={fields.map((f) => (currentRecord[f] ?? "").trim()).filter(Boolean).join(" · ")}
-              onStep={stepRecord}
-              drawerOpen={recordsOpen} onToggleDrawer={() => setRecordsOpen((o) => !o)}
-              showNames={showFieldNames} onToggleNames={workspace === "template" ? () => setShowFieldNames((v) => !v) : undefined}
-            />
           </div>
 
           <div className={`drawer-slot right${inspectorOpen ? " open" : ""}`} {...({ inert: inspectorOpen ? undefined : "" } as Record<string, unknown>)}>
@@ -1090,6 +1081,17 @@ function App() {
           <div className="drawer-sliver left" onPointerDown={(e) => drawers.start("left", e, dataOpen ? "resize" : "open")} title={dataOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Fields and Layers drawer"} aria-hidden><span className="sliver-pill">{dataOpen ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}</span></div>
           <div className="drawer-sliver right" onPointerDown={(e) => drawers.start("right", e, inspectorOpen ? "resize" : "open")} title={inspectorOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Properties drawer"} aria-hidden><span className="sliver-pill">{inspectorOpen ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}</span></div>
         </div>
+
+        {/* The data preview bar runs the full width of the window, under the drawers as well as the canvas. */}
+        <RecordBar
+          label={pagedNav ? "Sheet" : "Record"}
+          position={pagedNav ? (stack ? visiblePage : currentPage) + 1 : recordIndex + 1}
+          total={pagedNav ? pageCount : activeRecords.length}
+          preview={fields.map((f) => (currentRecord[f] ?? "").trim()).filter(Boolean).join(" · ")}
+          onStep={stepRecord}
+          drawerOpen={recordsOpen} onToggleDrawer={() => setRecordsOpen((o) => !o)}
+          showNames={showFieldNames} onToggleNames={workspace === "template" ? () => setShowFieldNames((v) => !v) : undefined}
+        />
       </main>
 
       {libraryDialog && (
