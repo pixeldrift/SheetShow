@@ -1005,10 +1005,10 @@ function App() {
 
               {!dataOpen && <div className="drawer-sliver left" onPointerDown={(e) => drawers.start("left", e, "open")} title="Drag to open the Fields and Layers drawer" aria-hidden><ChevronRight size={12} /></div>}
               {!inspectorOpen && <div className="drawer-sliver right" onPointerDown={(e) => drawers.start("right", e, "open")} title="Drag to open the Properties drawer" aria-hidden><ChevronLeft size={12} /></div>}
-              {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields and Layers drawer" : "Show the Fields and Layers drawer (your data columns, and every object in the design)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onClick={() => setDataOpen((open) => !open)}>
+              {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields and Layers drawer" : "Show the Fields and Layers drawer (your data columns, and every object in the design)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onPointerDown={(e) => drawers.start("left", e, "open")} onClick={(e) => { if (e.detail === 0) setDataOpen(true); }}>
                 <Braces size={15} /><span>Fields</span><ChevronRight size={13} className="toggle-arrow" />
               </button>}
-              {!inspectorOpen && <button className="drawer-toggle right" title={inspectorOpen ? "Hide the Properties drawer" : "Show the Properties drawer (settings, layers)"} aria-label={inspectorOpen ? "Hide properties" : "Show properties"} aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>
+              {!inspectorOpen && <button className="drawer-toggle right" title={inspectorOpen ? "Hide the Properties drawer" : "Show the Properties drawer (settings, layers)"} aria-label={inspectorOpen ? "Hide properties" : "Show properties"} aria-pressed={inspectorOpen} onPointerDown={(e) => drawers.start("right", e, "open")} onClick={(e) => { if (e.detail === 0) setInspectorOpen(true); }}>
                 <SlidersHorizontal size={15} /><span>Properties</span><ChevronLeft size={13} className="toggle-arrow" />
               </button>}
               {templateTools.floating}
