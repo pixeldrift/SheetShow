@@ -25,8 +25,8 @@ export function useDrawerGestures(setOpen: (side: Side, open: boolean) => void) 
     try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
   };
 
-  /** `open` starts from a closed drawer; `resize` grabs an open one (its edge or header). `threshold` is how far the pointer must travel before it counts as a drag rather than a tap. */
-  const start = useCallback((side: Side, event: React.PointerEvent, mode: "open" | "resize", threshold = 4) => {
+  /** `open` starts from a closed drawer; `resize` grabs the sliver of an open one (it changes the width); `swipe` (from the header) can only close the drawer, never change its width. `threshold` is how far the pointer must travel before it counts as a drag rather than a tap. */
+  const start = useCallback((side: Side, event: React.PointerEvent, mode: "open" | "resize" | "swipe", threshold = 4) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const panel = document.querySelector<HTMLElement>(side === "left" ? ".left-panel" : ".right-panel");
     const startW = mode === "open" ? 0 : panel?.getBoundingClientRect().width ?? MIN;
@@ -44,7 +44,7 @@ export function useDrawerGestures(setOpen: (side: Side, open: boolean) => void) 
       }
       samples.push({ t: performance.now(), x: e.clientX });
       if (samples.length > 8) samples.shift();
-      setLive({ side, width: widthAt(e.clientX) });
+      if (mode !== "swipe") setLive({ side, width: widthAt(e.clientX) });
     };
     const up = (e: PointerEvent) => {
       window.removeEventListener("pointermove", move);
@@ -61,7 +61,7 @@ export function useDrawerGestures(setOpen: (side: Side, open: boolean) => void) 
       const velocity = ((e.clientX - from.x) * dir) / Math.max(1, now - from.t); // negative: heading for the edge
       if (mode === "open") { if (width >= OPEN_ABOVE) save(side, width); else setOpen(side, false); return; }
       if (width < CLOSE_BELOW || (velocity < -FLICK && startW - width > 24)) setOpen(side, false);
-      else save(side, width);
+      else if (mode === "resize") save(side, width);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);

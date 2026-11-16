@@ -83,7 +83,6 @@ export function Inspector(props: Props) {
 
   return (
     <aside className="panel right-panel" aria-label="Properties">
-      <div className="drawer-grip edge-left" onPointerDown={props.chrome.grip} title="Drag to resize · flick toward the edge to close" aria-hidden />
       <button type="button" className="panel-heading clickable two-line" title="Close this drawer (or flick it toward the edge)" aria-label={`Close ${head.title} properties`} onPointerDown={props.chrome.header} onClick={(e) => { if (props.chrome.consumeSwipe()) { e.preventDefault(); return; } onClose(); }}>
         <span className="head-icon">{head.icon}</span>
         <span className="head-text"><strong>{head.title}</strong><small>{head.sub}</small></span>
@@ -299,8 +298,8 @@ function TemplateSetup({ templateWidth, templateHeight, onTemplateSize, onPreset
       <VariantsSection {...variants} />
       <Section title="TEMPLATE SIZE" unit="INCHES">
         <div className="two-col">
-          <Pair label="Width"><NumberField value={templateWidth} min={0.1} unit="in" onChange={(n) => onTemplateSize(n, templateHeight)} /></Pair>
-          <Pair label="Height"><NumberField value={templateHeight} min={0.1} unit="in" onChange={(n) => onTemplateSize(templateWidth, n)} /></Pair>
+          <Pair label="Width"><NumberField value={templateWidth} min={0.1} step={0.05} unit="in" onChange={(n) => onTemplateSize(n, templateHeight)} /></Pair>
+          <Pair label="Height"><NumberField value={templateHeight} min={0.1} step={0.05} unit="in" onChange={(n) => onTemplateSize(templateWidth, n)} /></Pair>
         </div>
       </Section>
       <StockPicker templateWidth={templateWidth} templateHeight={templateHeight} sheet={sheet} onPreset={onPreset} />
@@ -320,8 +319,8 @@ function PageSetup({ templateWidth, templateHeight, onPreset, sheet, onSheet, pa
           <option value="letter">US Letter · 8.5 × 11 in</option><option value="a4">A4 · 8.27 × 11.69 in</option><option value="custom">Custom</option>
         </select>
         <div className="two-col spaced">
-          <Pair label="Width"><NumberField value={sheet.pageWidth} min={1} unit="in" onChange={(n) => onSheet({ pageWidth: n })} /></Pair>
-          <Pair label="Height"><NumberField value={sheet.pageHeight} min={1} unit="in" onChange={(n) => onSheet({ pageHeight: n })} /></Pair>
+          <Pair label="Width"><NumberField value={sheet.pageWidth} min={1} step={0.05} unit="in" onChange={(n) => onSheet({ pageWidth: n })} /></Pair>
+          <Pair label="Height"><NumberField value={sheet.pageHeight} min={1} step={0.05} unit="in" onChange={(n) => onSheet({ pageHeight: n })} /></Pair>
         </div>
       </Section>
       <StockPicker templateWidth={templateWidth} templateHeight={templateHeight} sheet={sheet} onPreset={onPreset} />

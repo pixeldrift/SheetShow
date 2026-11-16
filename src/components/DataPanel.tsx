@@ -45,7 +45,6 @@ export function DataPanel({ fileName, fields, recordCount, totalRecords, hasText
 
   return (
     <aside className={dragging ? "panel left-panel dragging" : "panel left-panel"} aria-label="Data fields">
-      <div className="drawer-grip edge-right" onPointerDown={chrome.grip} title="Drag to resize · flick toward the edge to close" aria-hidden />
       <div className="panel-heading tabs-heading" role="tablist" onPointerDown={chrome.header} onClickCapture={(e) => { if (chrome.consumeSwipe()) { e.stopPropagation(); e.preventDefault(); } }}>
         <button role="tab" aria-selected={tab === "fields"} className={tab === "fields" ? "head-tab active" : "head-tab"} onClick={() => setTab("fields")} title="Your data columns: drag one onto the design"><Braces size={14} /> Fields</button>
         <button role="tab" aria-selected={tab === "layers"} className={tab === "layers" ? "head-tab active" : "head-tab"} onClick={() => setTab("layers")} title="Every object in the design, front to back"><Layers size={14} /> Layers <span className="count-pill">{layerCount}</span></button>

@@ -38,6 +38,7 @@ import { ArrangeBar } from "./components/ArrangeBar";
 import { InlineTextEditor } from "./components/InlineTextEditor";
 import { LayersPanel } from "./components/LayersPanel";
 import { PasteDialog } from "./components/PasteDialog";
+import { NewProjectDialog } from "./components/NewProjectDialog";
 import { useDrawerGestures } from "./hooks/useDrawerGestures";
 import { SheetsDialog } from "./components/SheetsDialog";
 import type { SortState } from "./components/columnDrag";
@@ -128,6 +129,7 @@ function App() {
   const justDragged = useRef(false);
   // A freshly imported file waiting for the person to confirm how its columns map onto the template.
   const drawers = useDrawerGestures((side, open) => (side === "left" ? setDataOpen(open) : setInspectorOpen(open)));
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [sheetsOpen, setSheetsOpen] = useState(false);
   const [pendingImport, setPendingImport] = useState<{ records: RecordRow[]; fileName: string; stage: "choose" | "map" } | null>(null);
@@ -678,9 +680,12 @@ function App() {
     setGuides({ template: [], layout: [] });
     setViews({ template: freshView(), layout: freshView() });
   };
-  const newProject = async () => {
+  /** A blank project: an empty design at the chosen size, and a data table with one empty column to start filling in. */
+  const createBlankProject = async (size: { width: number; height: number }, sheet: Sheet) => {
+    setNewProjectOpen(false);
     await library.clear();
-    await applyProject({ version: 1, name: DEFAULT_NAME, fileName: "bird-records.csv", records: starterRecords, items: starterItems, template: { width: 3.5, height: 2 }, sheet: defaultSheet, fonts: [] });
+    setShowData(false); setWorkspace("template"); setPreview(false);
+    await applyProject({ version: 1, name: "Untitled project", fileName: "data.csv", records: [{ Name: "" }], items: [], template: size, sheet, fonts: [] });
   };
   /** Starts a new project from a gallery template. The image library is kept. */
   const useTemplate = async (project: Project) => {
@@ -898,7 +903,7 @@ function App() {
   return (
     <ImageContext.Provider value={{ resolver: library.resolver, urlFor: library.urlFor }}>
     <div className="app-shell">
-      <Topbar workspace={showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(tab); } }} onPrint={printNow} onHelp={() => setHelpOpen(true)} name={docName} onName={setDocName} saveState={saveState} onNew={newProject} onGallery={() => setGalleryOpen(true)} onOpen={openProject} onSave={saveToFile} />
+      <Topbar workspace={showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(tab); } }} onPrint={printNow} onHelp={() => setHelpOpen(true)} name={docName} onName={setDocName} saveState={saveState} onNew={() => setNewProjectOpen(true)} onGallery={() => setGalleryOpen(true)} onOpen={openProject} onSave={saveToFile} />
 
       {showData && (
         <main className="workspace">
@@ -924,7 +929,7 @@ function App() {
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}${drawers.live ? " drawer-live" : ""}`} style={drawers.vars}>
           {dataOpen && (
-            <DataPanel chrome={{ grip: (e) => drawers.start("left", e, "resize"), header: (e) => drawers.start("left", e, "resize", 10), consumeSwipe: drawers.consumeSwipe }} onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
+            <DataPanel chrome={{ header: (e) => drawers.start("left", e, "swipe", 10), consumeSwipe: drawers.consumeSwipe }} onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
               layerCount={(inLayoutEdit ? instItems : items).length}
               layers={<LayersPanel items={inLayoutEdit ? instItems : items} selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems} flat={!!instanceBanner}
                 onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
@@ -1003,8 +1008,8 @@ function App() {
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
-              {!dataOpen && <div className="drawer-sliver left" onPointerDown={(e) => drawers.start("left", e, "open")} title="Drag to open the Fields and Layers drawer" aria-hidden><ChevronRight size={12} /></div>}
-              {!inspectorOpen && <div className="drawer-sliver right" onPointerDown={(e) => drawers.start("right", e, "open")} title="Drag to open the Properties drawer" aria-hidden><ChevronLeft size={12} /></div>}
+              <div className="drawer-sliver left" onPointerDown={(e) => drawers.start("left", e, dataOpen ? "resize" : "open")} title={dataOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Fields and Layers drawer"} aria-hidden />
+              <div className="drawer-sliver right" onPointerDown={(e) => drawers.start("right", e, inspectorOpen ? "resize" : "open")} title={inspectorOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Properties drawer"} aria-hidden />
               {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields and Layers drawer" : "Show the Fields and Layers drawer (your data columns, and every object in the design)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onPointerDown={(e) => drawers.start("left", e, "open")} onClick={(e) => { if (e.detail === 0) setDataOpen(true); }}>
                 <Braces size={15} /><span>Fields</span><ChevronRight size={13} className="toggle-arrow" />
               </button>}
@@ -1035,7 +1040,7 @@ function App() {
 
           {inspectorOpen && (
             <Inspector
-              chrome={{ grip: (e) => drawers.start("right", e, "resize"), header: (e) => drawers.start("right", e, "resize", 10), consumeSwipe: drawers.consumeSwipe }}
+              chrome={{ header: (e) => drawers.start("right", e, "swipe", 10), consumeSwipe: drawers.consumeSwipe }}
               workspace={workspace}
               items={inLayoutEdit ? instItems : items}
               selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems}
@@ -1087,6 +1092,7 @@ function App() {
         </div>
       )}
 
+      {newProjectOpen && <NewProjectDialog baseSheet={sheet} onCreate={createBlankProject} onCancel={() => setNewProjectOpen(false)} />}
       {pasteOpen && <PasteDialog onUse={importRecords} onCancel={() => setPasteOpen(false)} />}
       {sheetsOpen && <SheetsDialog onUse={importRecords} onPasteInstead={() => { setSheetsOpen(false); setPasteOpen(true); }} onCancel={() => setSheetsOpen(false)} />}
       {pendingImport?.stage === "choose" && (

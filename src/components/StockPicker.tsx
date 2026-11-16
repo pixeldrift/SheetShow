@@ -3,6 +3,7 @@ import { BadgeCheck, Link2, Search } from "lucide-react";
 import type { LabelPreset, Sheet } from "../types";
 import { averyPresets } from "../lib/data";
 import { Section } from "./Fields";
+import { describeSize } from "../lib/papers";
 
 type Props = {
   templateWidth: number;
@@ -30,6 +31,7 @@ export function StockPicker({ templateWidth, templateHeight, sheet, onPreset }: 
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const current = matchedStock(templateWidth, templateHeight, sheet);
+  const described = describeSize(templateWidth, templateHeight, sheet);
   const matches = averyPresets
     .map((preset) => ({ preset, error: Math.abs(preset.width - templateWidth) + Math.abs(preset.height - templateHeight) }))
     .filter(({ preset, error }) => (q ? `${preset.code} ${preset.name} ${preset.width}x${preset.height}`.toLowerCase().includes(q) : error <= 1.25))
@@ -38,11 +40,11 @@ export function StockPicker({ templateWidth, templateHeight, sheet, onPreset }: 
 
   return (
     <Section title="LABEL STOCK" unit={`${averyPresets.length} AVERY FORMATS`}>
-      <div className={current ? "stock-status matched" : "stock-status"}>
-        {current ? <BadgeCheck size={14} /> : <Link2 size={14} />}
+      <div className={described.kind !== "custom" ? "stock-status matched" : "stock-status"}>
+        {described.kind !== "custom" ? <BadgeCheck size={14} /> : <Link2 size={14} />}
         <div>
-          <strong>{current ? `Avery ${current.code}` : "Custom"}</strong>
-          <small>{current ? `${current.name}. Template and page layout match.` : `${templateWidth.toFixed(3)} × ${templateHeight.toFixed(3)} in · ${sheet.columns * sheet.rows} per sheet. Pick a sheet below to set both at once.`}</small>
+          <strong>{described.title}</strong>
+          <small>{described.kind === "stock" ? `${described.detail}. Template and page layout match.` : described.kind === "paper" ? described.detail : `${described.detail} Pick a sheet below to set both at once.`}</small>
         </div>
       </div>
       <div className="field-search"><Search size={14} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by number, name, or size" aria-label="Search label formats" /></div>

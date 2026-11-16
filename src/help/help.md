@@ -2,7 +2,7 @@
 
 SheetShow turns a spreadsheet into printed labels, cards, badges and tags. You design **one** item, connect parts of it to your data, and SheetShow fills in a copy for every record and lays the copies out on the sheet.
 
-> New here? Open the **Project menu** (the pill at the top left) and choose **New from template…** to start from a ready-made business card, address label, conference badge, cage card or price tag.
+> New here? Open the **Project menu** (the pill at the top left) and choose **New project** for a blank design (you pick a paper size, a label stock, or your own size) or **New from template…** to start from a ready-made business card, address label, conference badge, cage card or price tag.
 
 ## The three views
 
@@ -54,7 +54,7 @@ The **field names** button at the right of the bar swaps every linked text for i
 - **Editing tokens**: tokens show as colour-coded plain text, both in the Properties text box and when you double-tap text on the canvas. The small icon in the corner of the Properties text box switches that box to chips (a field gets a small database icon, a condition shows its `?` and an `end` chip); the token you are working in turns back into plain text so you can edit it.
 - **Properties**: the **Properties** drawer holds the settings for the selected object. Number fields have small arrows, and you can **drag a field's label** (or its unit) left and right to scrub the value. Hold Shift to go ten times faster, or Alt for fine steps.
 - **Reference objects**: switch on **Reference only** for any object (or add a **Reference image**) to use it as a guide: a scan to trace, a mock-up to match. Reference objects are faded to 50% (change it if you like), never print, and a reference image is added locked at the bottom.
-- **Drawers**: pull a closed drawer open from the small tab on the edge of the canvas, drag the edge of an open one to resize it (SheetShow remembers the width), and flick it toward the edge of the screen to close it. You can also use the arrow in its header.
+- **Drawers**: pull a closed drawer open from the strip on the edge of the canvas. The same strip stays beside an open drawer: drag it to resize the drawer (SheetShow remembers the width), or flick it toward the edge of the screen to close it. Swiping the drawer’s header toward the edge also closes it, and the arrow in the header does too. Nothing else changes a drawer’s width.
 - **Select several**: with a keyboard, Shift- or Ctrl/⌘-click objects (or layers). On a touch screen, turn on the multi-select button in the toolbar; then tapping objects or layers adds or removes them, and dragging on empty canvas draws a selection box.
 - **Move, resize and rotate**: drag an object, use its square handles, or the round handle above it to rotate.
 - **Smart snapping** is on by default (the magnet button). As you drag or resize, an object’s edges and centre snap to the edges and centres of other objects, the page and your guides, and a pink line shows what lines up. **Equal spacing** also snaps an object midway between two others, or repeats the gap between two objects beside it, with the gaps marked. Hold <kbd>Ctrl/⌘</kbd> to move freely. The magnet turns all snapping on or off; the small arrow beside it lets you pick what snaps: other objects, equal spacing, the page, guides, and the grid (while it is showing).
