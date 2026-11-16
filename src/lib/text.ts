@@ -56,6 +56,8 @@ export type TextLayout = {
   issue: TextIssue | null;
   /** A shrinking mode reached its minimum size and the text still doesn't fit. */
   atMin: boolean;
+  /** Width (px) of the longest line as drawn. */
+  textW: number;
 };
 
 const TOL = 0.5;
@@ -126,5 +128,5 @@ export function layoutText(source: DesignItem, text: string, outerW: number, out
     else if (source.overflow === "clip") issue = "truncated"; // drawn clipped at the box edge, so part of it is lost
     else issue = "spill";
   }
-  return { item, lines, fontPx, needH: needH + pt + pb, issue, atMin };
+  return { item, lines, fontPx, needH: needH + pt + pb, issue, atMin, textW: widest(lines, item) };
 }

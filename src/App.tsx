@@ -10,7 +10,7 @@ import { PX_PER_IN, clamp, fieldDisplayName, isPlaceholderData, isPlaceholderDes
 import { applyOverride, hasEdits, pickVariant, toItemPatch } from "./lib/instances";
 import { applyConditions } from "./lib/conditions";
 import { cloneItems, expandToGroups, groupItems, moveLayerTo, reorderSelection, type ArrangeMode, nextGroupName, renameGroup as renameGroupIn, ungroupItems, unitsOf } from "./lib/groups";
-import { instanceIssues, itemLabel, recordLabel, type Issue } from "./lib/audit";
+import { instanceIssues, itemLabel, recordLabel, textProblem, type Issue, type TextProblemKind } from "./lib/audit";
 import { checkImageUrls } from "./lib/webImages";
 import { layoutText } from "./lib/text";
 import { TextAuditDialog } from "./components/TextAuditDialog";
@@ -237,7 +237,7 @@ function App() {
     for (const index of indices) {
       const record = activeRecords[index];
       if (!record) continue;
-      for (const { item, kind, atMin } of instanceIssues(instanceFor(record, index, index % slots).items, record, metaFor(index)))
+      for (const { item, kind, atMin } of instanceIssues(instanceFor(record, index, index % slots).items, record, metaFor(index), { w: template.width, h: template.height }))
         out.push({ recordId: record[ID], recordIndex: index, recordLabel: recordLabel(record), itemId: item.id, itemLabel: itemLabel(item), kind, atMin });
     }
     return out;
@@ -246,17 +246,34 @@ function App() {
   const issues = useMemo(() => (auditDialog ? computeIssues(allIndices()) : []), [auditDialog, items, itemsDoc.value, instanceOverrides, activeRecords, rules, variants, sheet]); // eslint-disable-line react-hooks/exhaustive-deps
   const sheetIssueCount = workspace === "layout" && !preview
     ? computeIssues(sheet.repeatMode === "same" ? [recordIndex] : Array.from({ length: slots }, (_, k) => currentPage * slots + k)).length : 0;
-  /** For the selected text in the template: does it fit for the records that use this template? */
-  const fitNote = (() => {
-    if (!selected || selected.type !== "text" || workspace !== "template") return null;
-    let bad = 0, total = 0;
-    for (let i = 0; i < Math.min(activeRecords.length, 1500); i++) {
+  /**
+   * For every text in the template being edited: the records (of those that use this template) where it will cause trouble, meaning
+   * it is cut off, runs off the card, or spills out of a visible box. Drives the warning icons on the canvas and the note in Properties.
+   */
+  const cardSize = { w: template.width, h: template.height };
+  const textTrouble = useMemo(() => {
+    const byItem = new Map<string, { index: number; kind: TextProblemKind }[]>();
+    let total = 0;
+    if (workspace !== "template" || preview) return { byItem, total };
+    const texts = items.filter((i) => i.type === "text" && i.visible !== false && !i.reference);
+    for (let i = 0; i < Math.min(activeRecords.length, 600); i++) {
       if (pickVariant(rules, variants, activeRecords[i], i, i % slots, sheet.variantBasis ?? "record") !== variantId) continue;
       total++;
-      if (layoutText(selected, valueFor(selected, activeRecords[i], metaFor(i)), selected.w * PX_PER_IN, selected.h * PX_PER_IN).issue) bad++;
+      const meta = metaFor(i);
+      for (const item of texts) {
+        const problem = textProblem(item, activeRecords[i], meta, cardSize);
+        if (problem) { const list = byItem.get(item.id) ?? []; list.push({ index: i, kind: problem.kind }); byItem.set(item.id, list); }
+      }
     }
-    return total ? { bad: bad > 0, text: bad ? `${bad} of ${total} record${total === 1 ? "" : "s"} ${bad === 1 ? "doesn’t" : "don’t"} fit this box.` : `All ${total} record${total === 1 ? "" : "s"} fit.` } : null;
+    return { byItem, total };
+  }, [items, activeRecords, rules, variants, variantId, sheet, template, workspace, preview]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fitNote = (() => {
+    if (!selected || selected.type !== "text" || workspace !== "template" || !textTrouble.total) return null;
+    const bad = textTrouble.byItem.get(selected.id)?.length ?? 0;
+    return { bad: bad > 0, text: bad ? `${bad} of ${textTrouble.total} record${textTrouble.total === 1 ? "" : "s"} ${bad === 1 ? "has" : "have"} text that is cut off or runs off the card.` : `All ${textTrouble.total} record${textTrouble.total === 1 ? "" : "s"} fit.` };
   })();
+  /** The warning icon's popup: which records have trouble in this text. */
+  const [warnPopup, setWarnPopup] = useState<{ itemId: string; x: number; y: number } | null>(null);
 
   // ── View: per-workspace zoom / pan / fit ───────────────────────────────
   // ── Page view: one sheet, or every sheet in a scrolling column or a grid ──
@@ -835,7 +852,7 @@ function App() {
     for (const index of indices) {
       const record = activeRecords[index];
       const inst = instanceFor(record, index, index % slots);
-      textProblems += instanceIssues(inst.items, record, metaFor(index)).length;
+      textProblems += instanceIssues(inst.items, record, metaFor(index), { w: template.width, h: template.height }).length;
       for (const item of inst.items) {
         if (item.type !== "image" || item.visible === false || !item.imageSource) continue;
         const match = library.resolver.resolve(item, record);
@@ -981,7 +998,7 @@ function App() {
                 {workspace === "template" ? (
                   <TemplateStage
                     items={inlineEdit ? displayItems.map((i) => (i.id === inlineEdit.id ? { ...i, text: "", field: undefined } : i)) : displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
-                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} dropTargetId={dropTargetId} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
+                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} dropTargetId={dropTargetId} warnings={textTrouble.byItem} onWarning={(id, x, y) => setWarnPopup({ itemId: id, x, y })} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
                     onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup} onEditText={startInlineEdit}
                   />
                 ) : (
@@ -1054,7 +1071,7 @@ function App() {
               onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
               onUpdate={inLayoutEdit && instRecord ? (id, patch, coalesce) => setInstanceItem(instRecord[ID], id, toItemPatch(patch), coalesce) : updateItem}
               instance={instanceBanner}
-              fitNote={inLayoutEdit && instItem?.type === "text" && instRecord ? (() => { const l = layoutText(instItem, valueFor(instItem, instRecord, metaFor(instIndex)), instItem.w * PX_PER_IN, instItem.h * PX_PER_IN); return l.issue ? { bad: true, text: l.issue === "truncated" ? "This text is being cut off." : "This text runs past its box." } : { bad: false, text: "This text fits." }; })() : fitNote}
+              fitNote={inLayoutEdit && instItem?.type === "text" && instRecord ? (() => { const p = textProblem(instItem, instRecord, metaFor(instIndex), cardSize); return p ? { bad: true, text: p.kind === "truncated" ? "This text is being cut off." : p.kind === "outside" ? "This text runs off the card." : "This text spills out of its box." } : { bad: false, text: "This text fits." }; })() : fitNote}
               fontLibrary={fontLibrary} onRotateBy={rotateSelectionBy} imageTools={imageTools}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onReorder={reorderLayer}
               groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
@@ -1119,6 +1136,25 @@ function App() {
       )}
 
       {newProjectOpen && <NewProjectDialog baseSheet={sheet} onCreate={createBlankProject} onCancel={() => setNewProjectOpen(false)} />}
+      {warnPopup && (() => {
+        const list = textTrouble.byItem.get(warnPopup.itemId) ?? [];
+        const item = items.find((i) => i.id === warnPopup.itemId);
+        const WORDS = { truncated: "is cut off", outside: "runs off the card", spill: "spills out of its box" } as const;
+        return (
+          <>
+            <div className="menu-scrim" onClick={() => setWarnPopup(null)} />
+            <div className="warn-popup" role="dialog" aria-label="Records that don’t fit" style={{ left: Math.min(warnPopup.x, window.innerWidth - 290), top: Math.min(warnPopup.y + 8, window.innerHeight - 260) }}>
+              <strong>{item ? itemLabel(item) : "This text"}: {list.length} record{list.length === 1 ? "" : "s"} won’t fit</strong>
+              <ul>{list.slice(0, 6).map((p) => <li key={p.index}><span>Record {p.index + 1}</span> {recordLabel(activeRecords[p.index])} <em>{WORDS[p.kind as keyof typeof WORDS]}</em></li>)}</ul>
+              {list.length > 6 && <small>…and {list.length - 6} more</small>}
+              <div className="warn-actions">
+                <button className="button" onClick={() => { setRecordIndex(list[0].index); setWarnPopup(null); }}>Preview record {list[0].index + 1}</button>
+                <button className="button" onClick={() => { setAuditDialog({ itemId: warnPopup.itemId }); setWarnPopup(null); }}>Review all…</button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
       {pasteOpen && <PasteDialog onUse={importRecords} onCancel={() => setPasteOpen(false)} />}
       {sheetsOpen && <SheetsDialog onUse={importRecords} onPasteInstead={() => { setSheetsOpen(false); setPasteOpen(true); }} onCancel={() => setSheetsOpen(false)} />}
       {pendingImport?.stage === "choose" && (

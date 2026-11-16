@@ -82,7 +82,9 @@ Background, border and border size sit on one line. **Padding** and **Rounding**
 
 Open **Add image** to drop in pictures, a folder or a .zip. They are kept in this browser's image library, and **Download all as ZIP** saves them.
 
-**Colour effects** (Properties → Color) work on any picture: hue, saturation, brightness and contrast, black and white, and a colour overlay. The colour overlay can **tint** the picture (like a coloured filter) or **fill** it, so every visible pixel becomes one colour and the shape is kept, which turns a black icon into any colour you like. **Make transparent** cuts black or white (and tones close to it) out of a picture, so a logo on a white background can sit on a coloured card.
+**Colour effects** (Properties → Color) work on any picture: hue, saturation, brightness and contrast, black and white, and a colour overlay. The colour overlay can **tint** the picture (like a coloured filter) or **fill** it, so every visible pixel becomes one colour and the shape is kept, which turns a black icon into any colour you like. **Make transparent** comes first: it cuts black or white (and tones close to it) out of a picture, with a threshold slider for how much is cut, and the tint or fill is applied afterwards.
+
+**Moving around:** drag two fingers anywhere on the canvas, even over an object, to pan, and pinch to zoom, without moving anything. **Overflow warnings:** on the template page a small warning icon appears on a text box whose text will run off the card or out of a visible box for some records; tap it to see which records.
 
 A **data-driven picture** shows a different image for each record. Point it at a column that holds a filename, or build a pattern such as `{{band}}.jpg`. SheetShow finds the closest matching file, flags anything uncertain for you to review, and prints a warning before printing if any picture is missing. Web addresses work too.
 

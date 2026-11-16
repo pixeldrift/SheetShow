@@ -29,7 +29,7 @@ type Props = {
 type Gesture =
   | { kind: "pan"; pointerId: number; startX: number; startY: number; panX: number; panY: number; moved: boolean }
   | { kind: "marquee"; pointerId: number; startX: number; startY: number; additive: boolean; moved: boolean }
-  | { kind: "pinch"; startDistance: number; startZoom: number };
+
 
 /**
  * Pan / zoom surface. The page is centred in the viewport and offset by `view.pan`,
@@ -64,15 +64,53 @@ export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRu
     return () => el.removeEventListener("wheel", onWheel);
   }, [containerRef, onView]);
 
+  // ── Two fingers, anywhere on the canvas (over objects too): drag to pan, pinch to zoom ──
+  // This runs before objects see the touch, and the second finger never reaches them, so nothing on the page is moved by accident.
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const twoFingers = useRef<{ dist: number; zoom: number; mid: { x: number; y: number }; pan: { x: number; y: number } } | null>(null);
+  const midOf = () => { const [a, b] = [...touches.current.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) }; };
+  const onPointerDownCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch" || (event.target as HTMLElement).closest("[data-no-pan]")) return;
+    touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (touches.current.size < 2) return;
+    event.stopPropagation();
+    if (touches.current.size === 2) {
+      window.dispatchEvent(new Event("canvas-multitouch")); // a drag the first finger had started is dropped
+      gesture.current = null; setMarquee(null);
+      const m = midOf();
+      twoFingers.current = { dist: m.dist, zoom: viewRef.current.zoom, mid: { x: m.x, y: m.y }, pan: { ...viewRef.current.pan } };
+    }
+  };
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      if (!touches.current.has(e.pointerId)) return;
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const start = twoFingers.current, host = containerRef.current;
+      if (!start || touches.current.size !== 2 || !host) return;
+      const m = midOf(), box = host.getBoundingClientRect();
+      const zoom = clamp(start.zoom * (m.dist / start.dist), MIN_ZOOM, MAX_ZOOM);
+      // the spot of the page that was under the fingers stays under them, whatever the zoom does
+      const cx = box.left + box.width / 2, cy = box.top + box.height / 2;
+      const qx = (start.mid.x - cx - start.pan.x) / start.zoom, qy = (start.mid.y - cy - start.pan.y) / start.zoom;
+      onView({ zoom, pan: { x: m.x - cx - qx * zoom, y: m.y - cy - qy * zoom } });
+    };
+    const end = (e: PointerEvent) => {
+      if (!touches.current.delete(e.pointerId)) return;
+      if (touches.current.size < 2) twoFingers.current = null;
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); window.removeEventListener("pointercancel", end); };
+  }, [containerRef, onView]);
+
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest("[data-no-pan]")) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    const points = [...pointers.current.values()];
-    if (points.length >= 2) {
-      gesture.current = { kind: "pinch", startDistance: Math.max(1, Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y)), startZoom: view.zoom };
-    } else if ((marqueeMode || event.shiftKey) && onMarquee) {
+    if (twoFingers.current) return; // two fingers are panning and zooming: nothing else starts
+    if ((marqueeMode || event.shiftKey) && onMarquee) {
       gesture.current = { kind: "marquee", pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, additive: event.shiftKey || !!marqueeMode, moved: false };
     } else {
       gesture.current = { kind: "pan", pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, panX: view.pan.x, panY: view.pan.y, moved: false };
@@ -84,11 +122,7 @@ export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRu
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     const g = gesture.current;
     if (!g) return;
-    if (g.kind === "pinch") {
-      const [a, b] = [...pointers.current.values()];
-      if (!a || !b) return;
-      onView({ zoom: clamp(g.startZoom * Math.hypot(a.x - b.x, a.y - b.y) / g.startDistance, MIN_ZOOM, MAX_ZOOM) });
-    } else if (g.kind === "marquee") {
+    if (g.kind === "marquee") {
       if (g.pointerId !== event.pointerId) return;
       if (!g.moved && Math.hypot(event.clientX - g.startX, event.clientY - g.startY) < 4) return;
       g.moved = true;
@@ -162,6 +196,7 @@ export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRu
     <div
       ref={containerRef}
       className="viewport"
+      onPointerDownCapture={onPointerDownCapture}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
