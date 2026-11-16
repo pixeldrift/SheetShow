@@ -309,11 +309,10 @@ export function ImageColorSection({ item, patch }: { item: DesignItem; patch: Pa
       <div className="effect-block">
         <Pair label="Colour overlay">
           <select className="select" value={overlay?.mode ?? "none"} aria-label="Colour overlay"
-            onChange={(e) => (e.target.value === "none" ? set({ overlay: undefined }) : set({ overlay: { mode: e.target.value as "multiply" | "film" | "solid", color: overlay?.color ?? "#d17c4b", amount: overlay?.amount ?? (e.target.value === "solid" ? 100 : 60) } }))}>
+            onChange={(e) => (e.target.value === "none" ? set({ overlay: undefined }) : set({ overlay: { mode: e.target.value as "multiply" | "solid", color: overlay?.color ?? "#d17c4b", amount: overlay?.amount ?? (e.target.value === "solid" ? 100 : 60) } }))}>
             <option value="none">None</option>
             <option value="multiply">Tint (like a coloured filter)</option>
-            <option value="film">Film (a see-through layer of colour)</option>
-            <option value="solid">Recolour (keeps the shape, one colour)</option>
+            <option value="solid">Fill (one colour, keeps the shape)</option>
           </select>
         </Pair>
         {overlay && (

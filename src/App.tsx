@@ -1032,12 +1032,6 @@ function App() {
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
 
-              {!dataOpen && <button className="drawer-toggle left" title={dataOpen ? "Hide the Fields and Layers drawer" : "Show the Fields and Layers drawer (your data columns, and every object in the design)"} aria-label={dataOpen ? "Hide fields" : "Show fields"} aria-pressed={dataOpen} onPointerDown={(e) => drawers.start("left", e, "open")} onClick={(e) => { if (e.detail === 0) setDataOpen(true); }}>
-                <Braces size={15} /><span>Fields</span><ChevronRight size={13} className="toggle-arrow" />
-              </button>}
-              {!inspectorOpen && <button className="drawer-toggle right" title={inspectorOpen ? "Hide the Properties drawer" : "Show the Properties drawer (settings, layers)"} aria-label={inspectorOpen ? "Hide properties" : "Show properties"} aria-pressed={inspectorOpen} onPointerDown={(e) => drawers.start("right", e, "open")} onClick={(e) => { if (e.detail === 0) setInspectorOpen(true); }}>
-                <SlidersHorizontal size={15} /><span>Properties</span><ChevronLeft size={13} className="toggle-arrow" />
-              </button>}
               {templateTools.floating}
               {inlineEdit && workspace === "template" && (() => { const it = items.find((i) => i.id === inlineEdit.id); return it ? <InlineTextEditor item={it} svgRef={svgRef} zoom={view.zoom} draft={inlineEdit.draft} onChange={(draft) => setInlineEdit({ id: inlineEdit.id, draft })} onCommit={() => finishInlineEdit(true)} onCancel={() => finishInlineEdit(false)} fields={fields} /> : null; })()}
             </div>
@@ -1087,8 +1081,14 @@ function App() {
               onClose={() => setInspectorOpen(false)}
             />
           </div>
-          <div className="drawer-sliver left" onPointerDown={(e) => drawers.start("left", e, dataOpen ? "resize" : "open")} title={dataOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Fields and Layers drawer"} aria-hidden />
-          <div className="drawer-sliver right" onPointerDown={(e) => drawers.start("right", e, inspectorOpen ? "resize" : "open")} title={inspectorOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Properties drawer"} aria-hidden />
+          <button className="drawer-toggle left" title="Show the Fields and Layers drawer (your data columns, and every object in the design)" aria-label="Show fields" aria-pressed={dataOpen} onPointerDown={(e) => drawers.start("left", e, "open")} onClick={(e) => { if (e.detail === 0) setDataOpen(true); }}>
+                <Braces size={15} /><span>Fields</span><ChevronRight size={13} className="toggle-arrow" />
+              </button>
+          <button className="drawer-toggle right" title="Show the Properties drawer (settings, layers)" aria-label="Show properties" aria-pressed={inspectorOpen} onPointerDown={(e) => drawers.start("right", e, "open")} onClick={(e) => { if (e.detail === 0) setInspectorOpen(true); }}>
+                <SlidersHorizontal size={15} /><span>Properties</span><ChevronLeft size={13} className="toggle-arrow" />
+              </button>
+          <div className="drawer-sliver left" onPointerDown={(e) => drawers.start("left", e, dataOpen ? "resize" : "open")} title={dataOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Fields and Layers drawer"} aria-hidden><span className="sliver-pill">{dataOpen ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}</span></div>
+          <div className="drawer-sliver right" onPointerDown={(e) => drawers.start("right", e, inspectorOpen ? "resize" : "open")} title={inspectorOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Properties drawer"} aria-hidden><span className="sliver-pill">{inspectorOpen ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}</span></div>
         </div>
       </main>
 

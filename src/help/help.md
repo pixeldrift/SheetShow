@@ -82,7 +82,7 @@ Background, border and border size sit on one line. **Padding** and **Rounding**
 
 Open **Add image** to drop in pictures, a folder or a .zip. They are kept in this browser's image library, and **Download all as ZIP** saves them.
 
-**Colour effects** (Properties → Color) work on any picture: hue, saturation, brightness and contrast, black and white, and a colour overlay. Overlays can **tint** (like a coloured filter), lay a see-through **film** of colour over it, or **recolour** it so every visible pixel becomes one colour, which turns a black icon into any colour you like. **Make transparent** cuts black or white (and tones close to it) out of a picture, so a logo on a white background can sit on a coloured card.
+**Colour effects** (Properties → Color) work on any picture: hue, saturation, brightness and contrast, black and white, and a colour overlay. The colour overlay can **tint** the picture (like a coloured filter) or **fill** it, so every visible pixel becomes one colour and the shape is kept, which turns a black icon into any colour you like. **Make transparent** cuts black or white (and tones close to it) out of a picture, so a logo on a white background can sit on a coloured card.
 
 A **data-driven picture** shows a different image for each record. Point it at a column that holds a filename, or build a pattern such as `{{band}}.jpg`. SheetShow finds the closest matching file, flags anything uncertain for you to review, and prints a warning before printing if any picture is missing. Web addresses work too.
 

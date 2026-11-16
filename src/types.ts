@@ -132,8 +132,8 @@ export type Project = {
 export type ImageFx = {
   hue?: number; saturation?: number; brightness?: number; contrast?: number;
   grayscale?: boolean;
-  /** multiply: tint like a coloured filter; film: a see-through layer of colour over it; solid: every pixel becomes this colour, keeping the picture's shape. */
-  overlay?: { mode: "multiply" | "film" | "solid"; color: string; amount: number };
+  /** multiply: tint, like a coloured filter; solid: fill, every visible pixel becomes this colour (keeping the picture's shape), by `amount`. */
+  overlay?: { mode: "multiply" | "solid"; color: string; amount: number };
   /** Make black or white (and what is close to it) transparent. `amount` is how much of the dark or light range goes. */
   cutout?: { remove: "black" | "white"; amount: number };
 };

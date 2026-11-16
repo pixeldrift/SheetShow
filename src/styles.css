@@ -223,7 +223,7 @@ h2,h3,p{margin:0}
 
 /* ── Narrow screens: drawers float over the canvas ──────────────────────── */
 @media(max-width:850px){
-  .drawer-slot{position:absolute;top:0;bottom:0;z-index:50}
+  .drawer-slot{position:absolute;top:0;bottom:0;z-index:52}
   .drawer-slot.left{left:0}.drawer-slot.right{right:0}
   .drawer-slot.open{box-shadow:0 4px 24px #1c2b2030}
   :root{--left-w:clamp(168px,50vw,188px);--right-w:clamp(184px,50vw,252px)}
@@ -813,7 +813,7 @@ img,svg{-webkit-user-drag:none;user-drag:none}
 .content-frame{--left-vis:0px;--right-vis:0px}
 .content-frame.data-open{--left-vis:var(--left-w)}
 .content-frame.inspector-open{--right-vis:var(--right-w)}
-.drawer-slot{flex:none;display:flex;overflow:hidden;visibility:hidden;transition:width .26s cubic-bezier(.2,.8,.3,1),visibility 0s .26s}
+.drawer-slot{position:relative;z-index:52;flex:none;display:flex;overflow:hidden;visibility:hidden;transition:width .26s cubic-bezier(.2,.8,.3,1),visibility 0s .26s}
 .drawer-slot.left{width:var(--left-vis);justify-content:flex-end}
 .drawer-slot.right{width:var(--right-vis);justify-content:flex-start}
 .drawer-slot.open{visibility:visible;transition:width .26s cubic-bezier(.2,.8,.3,1),visibility 0s}
@@ -973,15 +973,15 @@ th.drop-before::before{left:-1px}th.drop-after::after{right:-1px}
 html,body{touch-action:manipulation}
 
 /* ── Drawer gestures: edge grips, screen-edge slivers, header tabs that never push the close button out ── */
-.drawer-sliver{position:absolute;top:0;bottom:56px;z-index:51;width:16px;display:grid;place-items:center;background:rgba(255,255,255,.82);cursor:ew-resize;touch-action:none;transition:left .26s cubic-bezier(.2,.8,.3,1),right .26s cubic-bezier(.2,.8,.3,1)}
-.drawer-sliver::before{content:"";position:absolute;top:50%;width:4px;height:52px;margin-top:-26px;border-radius:2px;background:#d4d8cf;transition:background .15s}
-.drawer-sliver.left{left:var(--left-vis);border-right:1px solid #e1e3db}.drawer-sliver.left::before{left:3px}
-.drawer-sliver.right{right:var(--right-vis);border-left:1px solid #e1e3db}.drawer-sliver.right::before{right:3px}
+.drawer-sliver{position:absolute;top:0;bottom:56px;z-index:53;width:16px;display:grid;place-items:center;background:rgba(255,255,255,.82);cursor:ew-resize;touch-action:none;transition:left .26s cubic-bezier(.2,.8,.3,1),right .26s cubic-bezier(.2,.8,.3,1)}
+.sliver-pill{position:absolute;top:50%;width:14px;height:60px;margin-top:-30px;border-radius:7px;background:#d4d8cf;color:#fff;display:grid;place-items:center;transition:background .15s}
+.drawer-sliver.left{left:var(--left-vis);border-right:1px solid #e1e3db}.drawer-sliver.left .sliver-pill{left:1px}
+.drawer-sliver.right{right:var(--right-vis);border-left:1px solid #e1e3db}.drawer-sliver.right .sliver-pill{right:1px}
 /* with a drawer open, the handle on its edge is the green one that resizes it */
-.data-open .drawer-sliver.left::before,.inspector-open .drawer-sliver.right::before{background:#8fb39e}
-.drawer-live .drawer-sliver::before{background:var(--accent)!important}
+.data-open .drawer-sliver.left .sliver-pill,.inspector-open .drawer-sliver.right .sliver-pill{background:#8fb39e}
+.drawer-live .drawer-sliver .sliver-pill{background:var(--accent)!important}
 @media(max-width:560px){.drawer-sliver{bottom:50px}}
-@media(hover:hover){.drawer-sliver:hover{background:#fffaf6}.drawer-sliver:hover::before{background:var(--accent)!important}}
+@media(hover:hover){.drawer-sliver:hover{background:#fffaf6}.drawer-sliver:hover .sliver-pill{background:var(--accent)!important}}
 .tabs-heading{touch-action:pan-y;container-type:inline-size;min-width:0}
 .tabs-heading .head-tab{min-width:0;flex:0 1 auto;padding:0 8px;overflow:hidden;white-space:nowrap}
 .tabs-heading .head-close{flex:none}

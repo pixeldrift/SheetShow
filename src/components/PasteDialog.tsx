@@ -43,7 +43,13 @@ export function PasteDialog({ onUse, onCancel }: Props) {
           <button className="icon-button" aria-label="Cancel" onClick={onCancel}><X size={17} /></button>
         </div>
         <div className="dialog-body" data-scroll>
-          <textarea ref={box} className="paste-box" value={text} onChange={(e) => setText(e.target.value)} placeholder={"Name\tSpecies\tBand\nPip\tGreen-cheeked conure\tGC-1048"} spellCheck={false} aria-label="Pasted data" />
+          <textarea ref={box} className="paste-box" value={text} onChange={(e) => setText(e.target.value)} onPaste={(e) => { // plain text only: no colours, fonts or dark-mode styling from the source come along
+            e.preventDefault();
+            const el = e.currentTarget, plain = e.clipboardData.getData("text/plain").replace(/\r\n?/g, "\n");
+            const from = el.selectionStart, to = el.selectionEnd;
+            setText(text.slice(0, from) + plain + text.slice(to));
+            window.requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = from + plain.length; });
+          }} placeholder={"Name\tSpecies\tBand\nPip\tGreen-cheeked conure\tGC-1048"} spellCheck={false} aria-label="Pasted data" />
           <div className="paste-options">
             <label className="check-row"><input type="checkbox" checked={header} onChange={(e) => setHeaderChoice(e.target.checked)} /> The first row has the column names</label>
             <label className="paste-delim">Separated by

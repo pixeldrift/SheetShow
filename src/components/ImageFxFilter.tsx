@@ -38,15 +38,12 @@ export function ImageFxFilter({ id, fx }: { id: string; fx: ImageFx }) {
   if (fx.overlay) {
     const { mode, color } = fx.overlay, amount = Math.max(0, Math.min(100, fx.overlay.amount)) / 100;
     const base = last, flood = next(), shaped = next();
-    steps.push(<feFlood key={flood} floodColor={color} floodOpacity={mode === "film" ? amount : 1} result={flood} />);
+    steps.push(<feFlood key={flood} floodColor={color} floodOpacity={1} result={flood} />);
     steps.push(<feComposite key={shaped} in={flood} in2={base} operator="in" result={shaped} />); // colour only where the picture is
-    if (mode === "film") add((_i, r) => <feBlend key={r} in={shaped} in2={base} mode="normal" result={r} />);
-    else {
-      let strong = shaped;
-      if (mode === "multiply") { strong = next(); steps.push(<feBlend key={strong} in={shaped} in2={base} mode="multiply" result={strong} />); }
-      // the effect at full strength, mixed back with the untouched picture by the amount
-      add((_i, r) => <feComposite key={r} in={strong} in2={base} operator="arithmetic" k1="0" k2={amount} k3={1 - amount} k4="0" result={r} />);
-    }
+    let strong = shaped;
+    if (mode === "multiply") { strong = next(); steps.push(<feBlend key={strong} in={shaped} in2={base} mode="multiply" result={strong} />); }
+    // the effect at full strength, mixed back with the untouched picture by the amount
+    add((_i, r) => <feComposite key={r} in={strong} in2={base} operator="arithmetic" k1="0" k2={amount} k3={1 - amount} k4="0" result={r} />);
   }
   return <filter id={id} colorInterpolationFilters="sRGB" x="0" y="0" width="100%" height="100%">{steps}</filter>;
 }

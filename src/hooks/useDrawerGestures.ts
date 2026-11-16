@@ -53,7 +53,7 @@ export function useDrawerGestures(setOpen: (side: Side, open: boolean) => void) 
       window.removeEventListener("pointercancel", up);
       document.body.classList.remove("scrubbing");
       setLive(null);
-      if (!moved) { if (mode === "open") setOpen(side, true); return; } // a tap on the sliver opens it
+      if (!moved) { if (mode === "open") setOpen(side, true); else if (mode === "resize") setOpen(side, false); return; } // a tap on the sliver opens or closes the drawer
       swiped.current = true; // the click that follows a drag must not also press a button under the pointer
       window.setTimeout(() => { swiped.current = false; }, 150);
       const width = widthAt(e.clientX);
