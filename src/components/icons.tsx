@@ -41,13 +41,13 @@ export function ShapesIcon({ size = 16, ...props }: IconProps) {
   );
 }
 
-/** Two stacked sheets: the front one is the picture, the one behind it is dotted, and dotted corner marks frame it like cut lines. Reference images sit under the design and never print. */
+/** Three stacked layers: the two on top are ordinary, and the bottom one, dotted and a little larger, is the reference image that sits under the design and never prints. */
 export function ReferenceImageIcon({ size = 16, ...props }: IconProps) {
   return (
     <svg {...base(size)} strokeWidth={1.7} {...props}>
-      <path d="M12 3.4 20 7.5 12 11.6 4 7.5Z" />
-      <path d="M4 11.6 12 15.7 20 11.6" strokeDasharray="0.1 2.4" />
-      <path d="M2 6.5V2h4.5M17.5 2H22v4.5M2 17.5V22h4.5M22 17.5V22h-4.5" strokeWidth="1.5" strokeDasharray="0.1 2.3" />
+      <path d="M12 3.6 18.8 7.2 12 10.8 5.2 7.2Z" />
+      <path d="M5.2 11.2 12 14.8 18.8 11.2" />
+      <path d="M2.8 14.6 12 19.6 21.2 14.6" strokeDasharray="0.1 2.5" />
     </svg>
   );
 }
