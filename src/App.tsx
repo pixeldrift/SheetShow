@@ -929,7 +929,7 @@ function App() {
               layers={<LayersPanel items={inLayoutEdit ? instItems : items} selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems} flat={!!instanceBanner}
                 onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
                 onUpdate={inLayoutEdit && instRecord ? (id, patch) => setInstanceItem(instRecord[ID], id, toItemPatch(patch)) : updateItem}
-                onUpdateMany={updateMany} onReorder={reorderLayer} />} />
+                onUpdateMany={updateMany} onReorder={reorderLayer} multi={multiMode} />} />
           )}
 
           <div className="editor-content">

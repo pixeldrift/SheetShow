@@ -18,10 +18,12 @@ type Props = {
   onReorder: (id: string, targetId: string, above: boolean, asGroup: boolean) => void;
   /** Hand-editing one record's copy: groups aren't offered. */
   flat: boolean;
+  /** Multi-select mode (the toolbar toggle): tapping a layer adds it to, or takes it out of, the selection. */
+  multi?: boolean;
 };
 
 /** Every object in the design, front to back: select, show/hide, lock, and drag to restack. A global view, not a property of one object. */
-export function LayersPanel({ items, selectedItems, onSelect, onUpdate, onUpdateMany, onReorder, flat: flatLayers }: Props) {
+export function LayersPanel({ items, selectedItems, onSelect, onUpdate, onUpdateMany, onReorder, flat: flatLayers, multi }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // Drag a layer by its grip: the row under the pointer shows a line where it will land.
   const [drag, setDrag] = useState<{ id: string; over: string; above: boolean } | null>(null);
@@ -50,7 +52,7 @@ export function LayersPanel({ items, selectedItems, onSelect, onUpdate, onUpdate
   return (
     <div className="layer-list">
       {(() => {
-        const pick = (ids: string[], e: React.MouseEvent) => { if (e.shiftKey || e.metaKey || e.ctrlKey) { const have = selectedItems.map((x) => x.id); onSelect(ids.every((id) => have.includes(id)) ? have.filter((id) => !ids.includes(id)) : [...new Set([...have, ...ids])]); } else { onSelect(ids); } };
+        const pick = (ids: string[], e: React.MouseEvent) => { if (multi || e.shiftKey || e.metaKey || e.ctrlKey) { const have = selectedItems.map((x) => x.id); onSelect(ids.every((id) => have.includes(id)) ? have.filter((id) => !ids.includes(id)) : [...new Set([...have, ...ids])]); } else { onSelect(ids); } };
         const itemRow = (item: DesignItem, indented: boolean) => (
           <div key={item.id} data-layer-id={item.id} className={`${selectedItems.some((x) => x.id === item.id) ? "layer-row selected" : "layer-row"}${indented ? " nested" : ""}${dropClass(item.id)}`} onClick={(e) => pick([item.id], e)}>
             <span className="layer-kind">{kindIcon(item, 13)}</span>

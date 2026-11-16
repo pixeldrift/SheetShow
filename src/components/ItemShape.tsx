@@ -19,7 +19,7 @@ type Props = {
   interactive?: boolean;
   /** Editor only: show linked text as {field} instead of the record's value, to see at a glance what is variable. */
   raw?: boolean;
-  /** Editor only: mark text that is linked to the data with a small database icon. */
+  /** Editor only: mark selected text that is linked to the data with a small database icon. */
   badge?: boolean;
   /** This item has hand edits on this record's copy. */
   overridden?: boolean;
@@ -154,7 +154,7 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
           </>
         )}
       </g>
-      {badge && isLinked(source) && (() => {
+      {badge && outline && isLinked(source) && (() => {
         const s = 14 / zoom;
         return (
           <g transform={`translate(${-s * 0.5} ${-s * 0.5}) scale(${s / 24})`} pointerEvents="none">

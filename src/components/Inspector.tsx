@@ -150,7 +150,7 @@ function MultiProperties({ count, onRotateBy, onDuplicate, onDelete, group, grou
         </div>
         <p className="hint">Drag the round handle above the selection to turn it freely (Shift for 15° steps). Items turn together around the group’s centre.</p>
       </Section>
-      <p className="hint">Shift-click items or layers to adjust the selection. Alignment is on the bar at the bottom of the canvas.</p>
+      <p className="hint">Shift-click items or layers to adjust the selection, or turn on multi-select in the toolbar and just tap. Alignment is on the bar at the bottom of the canvas.</p>
       <div className="property-actions"><button onClick={onDuplicate}><Copy size={14} /> Duplicate</button><button className="danger" onClick={onDelete}><Trash2 size={14} /> Delete</button></div>
     </>
   );
