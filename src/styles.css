@@ -1068,6 +1068,6 @@ html,body{touch-action:manipulation}
 
 /* The unit sits right against the number; the stepper stays at the far edge */
 .number-input{gap:0}
-.number-input input{flex:0 1 auto;width:auto;min-width:2ch;padding:0}
+.number-input input{flex:0 1 auto;width:auto;min-width:1.2em;padding:0}
 .number-input small.scrub-unit{padding:0 0 0 1px}
 .number-input .stepper{margin-left:auto}

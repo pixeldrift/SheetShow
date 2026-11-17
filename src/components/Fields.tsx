@@ -80,7 +80,7 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
     <div className="number-input">
       <input
         type="number" inputMode="decimal" step={step} min={min} max={max} value={draft ?? format(value)}
-        style={{ width: `${Math.max(1.5, [...String(draft ?? format(value))].reduce((w, c) => w + (c === "." ? 0.45 : c === "-" ? 0.6 : 1), 0)) + 0.15}ch` }}
+        style={{ width: `calc(${Math.max(1, [...String(draft ?? format(value))].reduce((w, c) => w + (c === "." ? 0.28 : c === "-" ? 0.36 : 0.56), 0)).toFixed(2)}em + 2px)` }}
         onPointerDown={(e) => {
           // Not editing yet: drag scrubs the value, a plain tap focuses the box for typing.
           const input = e.currentTarget;
