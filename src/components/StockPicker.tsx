@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { BadgeCheck, Link2, Search } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BadgeCheck, Link2, List, Search, X } from "lucide-react";
 import type { LabelPreset, Sheet } from "../types";
 import { averyPresets } from "../lib/data";
 import { Section } from "./Fields";
@@ -28,15 +28,22 @@ export function matchedStock(width: number, height: number, sheet: Sheet): Label
  * page layout together; both can still be changed by hand afterwards, which turns the status to "Custom".
  */
 export function StockPicker({ templateWidth, templateHeight, sheet, onPreset }: Props) {
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const current = matchedStock(templateWidth, templateHeight, sheet);
   const described = describeSize(templateWidth, templateHeight, sheet);
   const matches = averyPresets
     .map((preset) => ({ preset, error: Math.abs(preset.width - templateWidth) + Math.abs(preset.height - templateHeight) }))
-    .filter(({ preset, error }) => (q ? `${preset.code} ${preset.name} ${preset.width}x${preset.height}`.toLowerCase().includes(q) : error <= 1.25))
-    .sort((a, b) => a.error - b.error)
-    .slice(0, 8);
+    .filter(({ preset }) => !q || `${preset.code} ${preset.name} ${preset.width}x${preset.height}`.toLowerCase().includes(q))
+    .sort((a, b) => a.error - b.error);
+  const close = () => { setOpen(false); setQuery(""); };
+  useEffect(() => {
+    if (!open) return;
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [open]);
 
   return (
     <Section title="LABEL STOCK" unit={`${averyPresets.length} AVERY FORMATS`}>
@@ -44,18 +51,30 @@ export function StockPicker({ templateWidth, templateHeight, sheet, onPreset }: 
         {described.kind !== "custom" ? <BadgeCheck size={14} /> : <Link2 size={14} />}
         <div>
           <strong>{described.title}</strong>
-          <small>{described.kind === "stock" ? `${described.detail}. Template and page layout match.` : described.kind === "paper" ? described.detail : `${described.detail} Pick a sheet below to set both at once.`}</small>
+          <small>{described.kind === "stock" ? `${described.detail}. Template and page layout match.` : described.kind === "paper" ? described.detail : described.detail}</small>
         </div>
       </div>
-      <div className="field-search"><Search size={14} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by number, name, or size" aria-label="Search label formats" /></div>
-      {matches.length
-        ? matches.map(({ preset }) => (
-          <button key={preset.code} className={current?.code === preset.code ? "preset-option selected" : "preset-option"} onClick={() => { onPreset(preset); setQuery(""); }}>
-            <span><strong>Avery {preset.code}</strong><small>{preset.name}</small></span><em>{preset.width} × {preset.height}″</em>
-          </button>
-        ))
-        : <p className="empty-note">No close matches. Try a different size or search by Avery number.</p>}
-      <p className="hint">Choosing a sheet updates the individual template <strong>and</strong> the page layout. Change either afterwards to override.</p>
+      <button type="button" className="button stock-browse" onClick={() => setOpen(true)}><List size={14} /> Choose an Avery sheet…</button>
+      {open && (
+        <div className="dialog-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+          <div className="dialog stock-dialog" role="dialog" aria-modal="true" aria-labelledby="stock-title">
+            <div className="dialog-head">
+              <div><h2 id="stock-title">Choose an Avery sheet</h2><p>Picking one sets the individual template <strong>and</strong> the page layout. You can change either afterwards.</p></div>
+              <button className="icon-button" aria-label="Close" onClick={close}><X size={17} /></button>
+            </div>
+            <div className="dialog-body" data-scroll>
+              <div className="field-search"><Search size={14} /><input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by number, name, or size" aria-label="Search label formats" /></div>
+              {matches.length
+                ? matches.map(({ preset }) => (
+                  <button key={preset.code} className={current?.code === preset.code ? "preset-option selected" : "preset-option"} onClick={() => { onPreset(preset); close(); }}>
+                    <span><strong>Avery {preset.code} · {preset.width} × {preset.height}″</strong><small>{preset.name.replace(/\s*·\s*\d+ per sheet$/, "")}</small></span><em>{preset.columns * preset.rows} per sheet</em>
+                  </button>
+                ))
+                : <p className="empty-note">No matches. Try a different size or search by Avery number.</p>}
+            </div>
+          </div>
+        </div>
+      )}
     </Section>
   );
 }
