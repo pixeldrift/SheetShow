@@ -59,7 +59,7 @@ type Props = {
   /** Drag-and-drop in the layer list: put `id` above/below `targetId`. */
   onReorder: (id: string, targetId: string, above: boolean, asGroup: boolean) => void;
   templateWidth: number;
-  bleed?: Bleed; bleedInfo: { max: number; effective: number; standard: boolean }; onBleed: (bleed: Bleed | undefined) => void;
+  bleed?: Bleed; bleedInfo: { max: number; effective: number; standard: boolean; edgeLimited: boolean }; onBleed: (bleed: Bleed | undefined) => void;
   templateMargins?: { top: number; right: number; bottom: number; left: number }; onTemplateMargins: (margins: { top: number; right: number; bottom: number; left: number }) => void;
   templateHeight: number;
   onTemplateSize: (width: number, height: number) => void;
@@ -341,10 +341,10 @@ function TemplateSetup({ templateWidth, templateHeight, bleed, bleedInfo, onBlee
               )}
               <p className="hint">
                 {bleedInfo.max > 0
-                  ? <>Most the layout holds: <strong>{inchLabel(bleedInfo.max)}</strong>, half the gap between cards. </>
-                  : <>There is no gap between cards, so there is no room for bleed. </>}
+                  ? <>Most the layout holds: <strong>{inchLabel(bleedInfo.max)}</strong>, {bleedInfo.edgeLimited ? "the room to the edge of the page" : "half the gap between cards"}. </>
+                  : <>There is no room for bleed: the cards touch each other or the page edge. </>}
                 {bleedInfo.standard ? "Avery sheets always keep the bleed inside that." : b.auto ? "" : b.policy === "grow" ? "The gaps on the page layout widen to fit what you enter." : "A larger number is held to that."}{!b.auto && bleed && b.amount > bleedInfo.max + 0.0005 && bleedInfo.effective < b.amount - 0.0005 && <> You entered {inchLabel(b.amount)}.</>}
-                {bleedInfo.effective > 0 && <> Printing with <strong>{inchLabel(bleedInfo.effective)}</strong> of bleed. A dashed teal line on the template shows where it ends; extend artwork to it.</>}
+                {bleedInfo.effective > 0 && <> Printing with <strong>{inchLabel(bleedInfo.effective)}</strong> of bleed. A dashed orange line on the template shows where it ends; extend artwork to it.</>}
               </p>
             </>
           );

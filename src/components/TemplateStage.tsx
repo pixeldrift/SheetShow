@@ -319,10 +319,10 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
         <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} raw={rawFields} badge={!preview} onPointerDown={(event) => startMove(event, item)} />
       ))}
       {!preview && bleed > 0 && (
-        // Drawn over the artwork so the edge is always visible, with a pale halo under teal dashes: distinct from the orange selection, the pink snap lines and the violet margin guide.
+        // Drawn over the artwork so the edge is always visible: a long-dash-and-dot amber line with a pale halo, so it reads differently from the solid orange selection and ruler guides, the pink snap lines and the violet margin guide.
         <g fill="none" pointerEvents="none">
           <rect x={-bleed * PX_PER_IN} y={-bleed * PX_PER_IN} width={(width + bleed * 2) * PX_PER_IN} height={(height + bleed * 2) * PX_PER_IN} stroke="#fff" strokeOpacity="0.85" strokeWidth={3 / zoom} />
-          <rect x={-bleed * PX_PER_IN} y={-bleed * PX_PER_IN} width={(width + bleed * 2) * PX_PER_IN} height={(height + bleed * 2) * PX_PER_IN} stroke="#0e8fa8" strokeWidth={1.5 / zoom} strokeDasharray={`${9 / zoom} ${5 / zoom}`} />
+          <rect x={-bleed * PX_PER_IN} y={-bleed * PX_PER_IN} width={(width + bleed * 2) * PX_PER_IN} height={(height + bleed * 2) * PX_PER_IN} stroke="#f08a1c" strokeWidth={2 / zoom} strokeDasharray={`${12 / zoom} ${5 / zoom} ${2 / zoom} ${5 / zoom}`} />
         </g>
       )}
       {dropTargetId && (() => {

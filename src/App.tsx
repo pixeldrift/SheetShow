@@ -55,7 +55,7 @@ import { DataTable } from "./components/DataTable";
 import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, reorderColumns, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
 import { PrintSheets } from "./components/PrintSheets";
 import { matchedStock } from "./components/StockPicker";
-import { effectiveBleed, gapsFor, maxBleed } from "./lib/bleed";
+import { bleedLimits, effectiveBleed, gapsFor, maxBleed } from "./lib/bleed";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -199,7 +199,8 @@ function App() {
   // Bleed: standard (Avery) sheets always hold it to what the gaps allow; custom ones follow the template's own policy.
   const standardStock = matchedStock(template.width, template.height, sheet);
   const bleedIn = effectiveBleed(template, sheet, !!standardStock);
-  const bleedMax = maxBleed(sheet);
+  const bleedMax = maxBleed(sheet, template.width, template.height);
+  const bleedLimit = bleedLimits(sheet, template.width, template.height);
   const changeBleed = (bleed: Project["template"]["bleed"]) => {
     setTemplate((t) => ({ ...t, bleed }));
     if (bleed && !standardStock && !bleed.auto && bleed.policy === "grow") setSheet((s) => ({ ...s, ...gapsFor(s, bleed.amount) }));
@@ -1122,7 +1123,7 @@ function App() {
               fontLibrary={fontLibrary} onRotateBy={rotateSelectionBy} imageTools={imageTools}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onReorder={reorderLayer}
               groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
-              templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} bleed={template.bleed} bleedInfo={{ max: bleedMax, effective: bleedIn, standard: !!standardStock }} onBleed={changeBleed} templateMargins={template.margins} onTemplateMargins={(margins) => setTemplate((t) => ({ ...t, margins }))} onPreset={applyPreset}
+              templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} bleed={template.bleed} bleedInfo={{ max: bleedMax, effective: bleedIn, standard: !!standardStock, edgeLimited: bleedLimit.edge < bleedLimit.gap }} onBleed={changeBleed} templateMargins={template.margins} onTemplateMargins={(margins) => setTemplate((t) => ({ ...t, margins }))} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
               printer={printer} onCalibrationSheet={printCalibration}
               fields={fields} editedList={editedList} onJumpInstance={jumpToInstance} onResetInstanceById={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
