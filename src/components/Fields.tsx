@@ -3,7 +3,9 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 
 type ScrubStart = (event: React.PointerEvent) => void;
 /** Lets a field's label start a drag-to-scrub on the number field next to it. */
-const ScrubContext = createContext<((start: ScrubStart | null) => void) | null>(null);
+const ScrubContext = createContext<((start: ScrubStart | null, unit?: string) => void) | null>(null);
+/** Units are written out beside the label ("Width (inches)"): a bare "in" reads like a word. */
+const UNIT_WORDS: Record<string, string> = { in: "inches", pt: "points", px: "pixels", "°": "degrees", "%": "%" };
 
 const PIXELS_PER_STEP = 5;
 
@@ -61,7 +63,7 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
   }, [commit]);
   const startScrub: ScrubStart = useCallback((event) => beginScrub(event), [beginScrub]);
 
-  useEffect(() => { register?.(startScrub); return () => register?.(null); }, [register, startScrub]);
+  useEffect(() => { register?.(startScrub, unit); return () => register?.(null); }, [register, startScrub, unit]);
 
   /** Click an arrow to nudge; hold it to keep going. */
   const press = (direction: 1 | -1) => (event: React.PointerEvent) => {
@@ -77,7 +79,7 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
   };
 
   return (
-    <div className="number-input">
+    <div className={register || !unit ? "number-input fill" : "number-input"}>
       <span className="autosize" data-value={draft ?? format(value)}>
       <input
         type="number" inputMode="decimal" step={step} min={min} max={max} value={draft ?? format(value)}
@@ -96,7 +98,7 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
         }}
       />
       </span>
-      {unit && <small className="scrub-unit" onPointerDown={startScrub} title="Drag to adjust">{unit}</small>}
+      {unit && !register && <small className="scrub-unit" onPointerDown={startScrub} title="Drag to adjust">{unit}</small>}
       <span className="stepper">
         <button type="button" tabIndex={-1} aria-label="Increase" onPointerDown={press(1)}><ChevronUp size={11} /></button>
         <button type="button" tabIndex={-1} aria-label="Decrease" onPointerDown={press(-1)}><ChevronDown size={11} /></button>
@@ -126,11 +128,12 @@ export function Section({ title, unit, children }: { title: string; unit?: strin
 export function Pair({ label, children }: { label: string; children: ReactNode }) {
   const start = useRef<ScrubStart | null>(null);
   const [scrubbable, setScrubbable] = useState(false);
-  const register = useCallback((fn: ScrubStart | null) => { start.current = fn; setScrubbable(!!fn); }, []);
+  const [unit, setUnit] = useState<string | undefined>();
+  const register = useCallback((fn: ScrubStart | null, u?: string) => { start.current = fn; setScrubbable(!!fn); setUnit(u); }, []);
   return (
     <ScrubContext.Provider value={register}>
       <div className="pair">
-        <span className={scrubbable ? "scrub-label" : undefined} onPointerDown={scrubbable ? (e) => start.current?.(e) : undefined} title={scrubbable ? "Drag to adjust" : undefined}>{label}</span>
+        <span className={scrubbable ? "scrub-label" : undefined} onPointerDown={scrubbable ? (e) => start.current?.(e) : undefined} title={scrubbable ? "Drag to adjust" : undefined}>{label}{unit && ` (${UNIT_WORDS[unit] ?? unit})`}</span>
         {children}
       </div>
     </ScrubContext.Provider>

@@ -277,7 +277,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
       <EffectsSection item={item} patch={patch} />
       {!instanceMode && <ConditionsSection item={item} patch={patch} fields={imageTools.columns} records={imageTools.records} record={imageTools.record} />}
 
-      <Section title="POSITION & SIZE" unit="INCHES">
+      <Section title="POSITION & SIZE">
         <div className="two-col">
           <Pair label="X"><NumberField value={item.x} onChange={(n) => patch({ x: n })} /></Pair>
           <Pair label="Y"><NumberField value={item.y} onChange={(n) => patch({ y: n })} /></Pair>
@@ -304,13 +304,13 @@ function TemplateSetup({ templateWidth, templateHeight, templateMargins, onTempl
   return (
     <>
       <VariantsSection {...variants} />
-      <Section title="TEMPLATE SIZE" unit="INCHES">
+      <Section title="TEMPLATE SIZE">
         <div className="two-col">
           <Pair label="Width"><NumberField value={templateWidth} min={0.1} step={0.05} unit="in" onChange={(n) => onTemplateSize(n, templateHeight)} /></Pair>
           <Pair label="Height"><NumberField value={templateHeight} min={0.1} step={0.05} unit="in" onChange={(n) => onTemplateSize(templateWidth, n)} /></Pair>
         </div>
       </Section>
-      <Section title="MARGINS" unit="INCHES">
+      <Section title="MARGINS">
         <div className="two-col">
           {(["top", "right", "bottom", "left"] as const).map((side) => {
             const m = templateMargins ?? { top: 0, right: 0, bottom: 0, left: 0 };
@@ -347,13 +347,13 @@ function PageSetup({ templateWidth, templateHeight, onPreset, sheet, onSheet, pa
           <Pair label="Rows"><NumberField value={sheet.rows} min={1} max={30} step={1} places={0} onChange={(n) => onSheet({ rows: Math.round(n) })} /></Pair>
         </div>
       </Section>
-      <Section title="PAGE MARGINS" unit="INCHES">
+      <Section title="PAGE MARGINS">
         <div className="two-col">
           <Pair label="Left"><NumberField value={sheet.marginX} min={0} unit="in" onChange={(n) => onSheet({ marginX: n })} /></Pair>
           <Pair label="Top"><NumberField value={sheet.marginY} min={0} unit="in" onChange={(n) => onSheet({ marginY: n })} /></Pair>
         </div>
       </Section>
-      <Section title="ITEM SPACING" unit="INCHES">
+      <Section title="ITEM SPACING">
         <div className="two-col">
           <Pair label="Horizontal"><NumberField value={sheet.gapX} min={0} unit="in" onChange={(n) => onSheet({ gapX: n })} /></Pair>
           <Pair label="Vertical"><NumberField value={sheet.gapY} min={0} unit="in" onChange={(n) => onSheet({ gapY: n })} /></Pair>
