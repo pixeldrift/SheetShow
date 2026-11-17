@@ -1,11 +1,20 @@
 import type { Sheet, Template } from "../types";
+import { placementsOf } from "./placements";
 
-/** What limits the bleed: half the gap between neighboring cards, and the room between the outer cards and the page edge. */
+/**
+ * What limits the bleed: half the clearance between cards (two bleeds must not overlap), and the room between the outer cards and the page edge.
+ * It works from where the cards really are, so a hand-arranged page is held to its tightest spot.
+ */
 export function bleedLimits(sheet: Sheet, w: number, h: number) {
-  const gap = Math.min(sheet.columns > 1 ? sheet.gapX / 2 : Infinity, sheet.rows > 1 ? sheet.gapY / 2 : Infinity);
-  const gridW = sheet.columns * w + (sheet.columns - 1) * sheet.gapX, gridH = sheet.rows * h + (sheet.rows - 1) * sheet.gapY;
-  const edge = Math.min(sheet.marginX, sheet.marginY, sheet.pageWidth - sheet.marginX - gridW, sheet.pageHeight - sheet.marginY - gridH);
-  return { gap: Number.isFinite(gap) ? Math.max(0, gap) : Infinity, edge: Math.max(0, Number(edge.toFixed(4))) };
+  const list = placementsOf(sheet, w, h);
+  let gap = Infinity;
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const a = list[i], b = list[j];
+    const sepX = Math.max(b.x - (a.x + w), a.x - (b.x + w)), sepY = Math.max(b.y - (a.y + h), a.y - (b.y + h));
+    gap = Math.min(gap, Math.max(0, Math.max(sepX, sepY)) / 2);
+  }
+  const edge = list.length ? Math.min(...list.map((p) => Math.min(p.x, p.y, sheet.pageWidth - (p.x + w), sheet.pageHeight - (p.y + h)))) : 0;
+  return { gap: Number.isFinite(gap) ? gap : Infinity, edge: Math.max(0, Number(edge.toFixed(4))) };
 }
 
 /** Largest bleed (inches) the sheet can take: bleed never overlaps a neighbor's and never runs off the page. */

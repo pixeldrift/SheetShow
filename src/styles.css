@@ -1091,3 +1091,23 @@ html,body{touch-action:manipulation}
 .ruler-left{left:calc(-20px - var(--bleed))}
 .guide-x{top:calc(-20px - var(--bleed));bottom:-20px}
 .guide-y{left:calc(-20px - var(--bleed));right:-20px}
+
+/* Page layout cards: where this card falls in the sheet's sequence (top left) and which record of the data it shows (bottom right) */
+.slot-number{display:flex;align-items:center;gap:3px;bottom:3px;right:5px;font-size:10px;font-variant-numeric:tabular-nums}
+.slot-position{position:absolute;z-index:3;top:4px;left:4px;display:flex;align-items:center;gap:3px;padding:2px 7px;border-radius:11px;background:#efeafb;border:1px solid #cfc3f0;color:#5a45a8;font-size:11px;line-height:1.2}
+.slot-position b{font-variant-numeric:tabular-nums}
+.slot-position.editing{padding:1px 3px;background:#fff;border-color:#7c5cdb;box-shadow:0 1px 5px #7c5cdb33}
+.slot-position button{width:18px;height:18px;border:0;border-radius:9px;background:#efeafb;color:#5a45a8;display:grid;place-items:center;padding:0}
+.layout-slot.arrangeable{cursor:grab;touch-action:none}
+.layout-slot.arrangeable:active{cursor:grabbing}
+.layout-slot.card-selected{outline:2px solid #d77d4e;outline-offset:1px}
+.order-arrows{position:absolute;left:0;top:0;pointer-events:none;z-index:2;overflow:visible}
+
+.template-row .field-name{display:flex;flex-direction:column;gap:1px;min-width:0}
+.template-row .field-name small{font-size:10px;color:#9aa198;font-weight:400}
+.template-letter{font-weight:700;font-size:11px;background:#d17c4b;color:#fff;border-radius:6px}
+.row-add{flex:none;display:flex;align-items:center;gap:3px;height:24px;padding:0 8px;border:1px solid #e0d2c7;border-radius:6px;background:#fffaf6;color:#b86e46;font-size:11px;font-weight:700}
+.mode-option.static{cursor:default}.mode-option.dim{opacity:.6}
+.template-row .field-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:none}
+.template-row .row-add{margin-left:auto}
+.template-row .row-add{width:26px;padding:0;justify-content:center}

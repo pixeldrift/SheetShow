@@ -17,6 +17,7 @@ const near = (a: number, b: number) => Math.abs(a - b) < 0.006;
 
 /** The label stock the template and page currently describe, if they match a known sheet. */
 export function matchedStock(width: number, height: number, sheet: Sheet): LabelPreset | undefined {
+  if (sheet.placements) return undefined; // a hand-arranged page is no longer the stock sheet
   return averyPresets.find((p) =>
     near(p.width, width) && near(p.height, height) && p.columns === sheet.columns && p.rows === sheet.rows &&
     near(p.gapX, sheet.gapX) && near(p.gapY, sheet.gapY) && near(p.marginX, sheet.marginX) && near(p.marginY, sheet.marginY) &&

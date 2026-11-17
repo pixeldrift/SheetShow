@@ -36,9 +36,10 @@ export function customSheet(width: number, height: number, base: Sheet): Sheet {
 
 /** What the current template and page layout are, in words: a label stock, a paper size, or custom. */
 export function describeSize(width: number, height: number, sheet: Sheet): { title: string; detail: string; kind: "stock" | "paper" | "custom" } {
-  const stock = averyPresets.find((p) => near(p.width, width) && near(p.height, height) && p.columns === sheet.columns && p.rows === sheet.rows && near(p.gapX, sheet.gapX) && near(p.gapY, sheet.gapY) && near(p.marginX, sheet.marginX) && near(p.marginY, sheet.marginY) && near(8.5, sheet.pageWidth) && near(11, sheet.pageHeight));
+  const stock = sheet.placements ? undefined : averyPresets.find((p) => near(p.width, width) && near(p.height, height) && p.columns === sheet.columns && p.rows === sheet.rows && near(p.gapX, sheet.gapX) && near(p.gapY, sheet.gapY) && near(p.marginX, sheet.marginX) && near(p.marginY, sheet.marginY) && near(8.5, sheet.pageWidth) && near(11, sheet.pageHeight));
   if (stock) return { title: `Avery ${stock.code}`, detail: stock.name, kind: "stock" };
   const paper = paperMatch(width, height);
-  if (paper && sheet.columns * sheet.rows === 1) return { title: paperLabel(paper), detail: "One design fills each page.", kind: "paper" };
-  return { title: "Custom", detail: `${sizeText(width, height)} · ${sheet.columns * sheet.rows} per sheet.`, kind: "custom" };
+  const count = sheet.placements?.length ?? sheet.columns * sheet.rows;
+  if (paper && count === 1) return { title: paperLabel(paper), detail: "One design fills each page.", kind: "paper" };
+  return { title: "Custom", detail: `${sizeText(width, height)} · ${count} per sheet.`, kind: "custom" };
 }

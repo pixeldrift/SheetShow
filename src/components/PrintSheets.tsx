@@ -6,7 +6,6 @@ type Props = { bleed?: number; kind?: "sheets" | "calibration"; offset: { x: num
 
 /** Every sheet, one per printed page. Only mounted while printing. */
 export function PrintSheets({ bleed, kind = "sheets", offset, sheet, records, templateWidth, templateHeight, pageCount, recordIndex, instanceFor }: Props) {
-  const slots = sheet.columns * sheet.rows;
   return (
     <div className="print-root">
       <style>{`@page{size:${sheet.pageWidth}in ${sheet.pageHeight}in;margin:0}`}</style>
@@ -18,7 +17,6 @@ export function PrintSheets({ bleed, kind = "sheets", offset, sheet, records, te
         <div key={page} className="print-page" style={{ width: `${sheet.pageWidth}in`, height: `${sheet.pageHeight}in` }}>
           <LayoutStage
             offset={offset} sheet={sheet} records={records} templateWidth={templateWidth} templateHeight={templateHeight} instanceFor={instanceFor}
-            slotRecord={(slot) => (sheet.repeatMode === "same" ? page : page * slots + slot)}
             pageNumber={page + 1} pageCount={pageCount} showGrid={false} preview bleed={bleed}
           />
         </div>

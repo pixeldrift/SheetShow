@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, PencilLine, RotateCcw, Undo2 } from "lucide-react";
+import { AlertTriangle, Database, LayoutTemplate, Minus, PencilLine, Plus, RotateCcw, Undo2 } from "lucide-react";
 import type { DesignItem, InstanceOverride, RecordMeta, RecordRow, Sheet } from "../types";
 import { PX_PER_IN, valueFor } from "../lib/data";
 import { ID } from "../lib/records";
@@ -9,6 +9,8 @@ import { fontStack } from "../lib/fonts";
 import { fontSizePx } from "../lib/text";
 import { incomingFromDrop, type Incoming } from "../lib/importImages";
 import { TemplateThumbnail } from "./ItemShape";
+import { cropMarkLines, placementsOf, recordAt, sequence } from "../lib/placements";
+import { smartSnap } from "../lib/smartSnap";
 
 export type InstanceInfo = { variantId: string; items: DesignItem[]; override?: InstanceOverride };
 export type InstanceSelection = { recordId: string; itemId: string };
@@ -18,10 +20,8 @@ type Props = {
   templateWidth: number;
   templateHeight: number;
   records: RecordRow[];
-  /** Index into `records` for each slot on this sheet. */
-  slotRecord: (slot: number) => number;
   /** The items one record actually renders: its template (chosen by the alternating rules) plus any hand edits. */
-  instanceFor: (record: RecordRow, index: number, slot: number) => InstanceInfo;
+  instanceFor: (record: RecordRow, index: number, slot: number, variantId?: string) => InstanceInfo;
   pageNumber: number;
   pageCount: number;
   showGrid: boolean;
@@ -43,6 +43,15 @@ type Props = {
   onDropFiles?: (recordId: string, itemId: string | null, files: Incoming[]) => void;
   onToggleOff?: (recordId: string) => void;
   onResetInstance?: (recordId: string) => void;
+  /** Arrange mode (page layout, not override): pick a card to move it, or change which record it shows. */
+  arrange?: boolean;
+  selectedCard?: string | null;
+  onSelectCard?: (id: string | null) => void;
+  onMoveCard?: (id: string, x: number, y: number) => void;
+  onNumberCard?: (id: string, number: number) => void;
+  onCardDragEnd?: () => void;
+  /** Thin arrows from card to card in the order their records come. */
+  showOrder?: boolean;
 };
 
 /** Slots are placed at their true physical positions (margin + column × (size + gap)) in inches. */
@@ -50,20 +59,46 @@ export function LayoutStage(p: Props) {
   const { sheet, templateWidth, templateHeight, records, preview } = p;
   const slots = sheet.columns * sheet.rows;
   const ox = p.offset?.x ?? 0, oy = p.offset?.y ?? 0;
-  const marks = sheet.cropMarks && preview ? cropMarks(sheet, templateWidth, templateHeight) : [];
+  const list = placementsOf(sheet, templateWidth, templateHeight);
+  const marks = sheet.cropMarks && preview ? cropMarkLines(list, templateWidth, templateHeight, sheet.pageWidth, sheet.pageHeight) : [];
+  const page = p.pageNumber - 1;
+  const scale = PX_PER_IN * (p.zoom ?? 1);
+  /** Drag a card across the sheet. It snaps to the page edges and to the edges and centers of the other cards (hold Ctrl/⌘ to move freely). */
+  const startCardDrag = (event: React.PointerEvent, card: { id: string; x: number; y: number }) => {
+    if (!p.arrange || (event.pointerType === "mouse" && event.button !== 0)) return;
+    if ((event.target as HTMLElement).closest("button")) return;
+    p.onSelectCard?.(card.id);
+    const startX = event.clientX, startY = event.clientY;
+    const others = list.filter((o) => o.id !== card.id).map((o) => ({ x: o.x, y: o.y, w: templateWidth, h: templateHeight }));
+    const targets = [{ x: 0, y: 0, w: sheet.pageWidth, h: sheet.pageHeight }, ...others];
+    let moved = false;
+    const move = (e: PointerEvent) => {
+      const dx = (e.clientX - startX) / scale, dy = (e.clientY - startY) / scale;
+      if (!moved && Math.hypot(dx, dy) * scale < (e.pointerType === "mouse" ? 3 : 8)) return;
+      moved = true;
+      let x = card.x + dx, y = card.y + dy;
+      if (!(e.ctrlKey || e.metaKey)) {
+        const snap = smartSnap({ x, y, w: templateWidth, h: templateHeight }, targets, { x: [], y: [] }, 7 / scale);
+        x += snap.dx; y += snap.dy;
+      }
+      p.onMoveCard?.(card.id, Number(x.toFixed(3)), Number(y.toFixed(3)));
+    };
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); if (moved) p.onCardDragEnd?.(); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [dropOver, setDropOver] = useState<string | null>(null);
   useEffect(() => { if (preview) setMenuFor(null); }, [preview]);
 
   return (
     <div className="layout-page" style={{ width: sheet.pageWidth * PX_PER_IN, height: sheet.pageHeight * PX_PER_IN }}>
-      {Array.from({ length: slots }, (_, slot) => {
-        const col = slot % sheet.columns;
-        const row = Math.floor(slot / sheet.columns);
-        const index = p.slotRecord(slot);
+      {list.map((card, slot) => {
+        const index = recordAt(list, card, page);
         const record = records[index];
         const meta: RecordMeta | null = record ? { recordNumber: index + 1, pageNumber: p.pageNumber, recordCount: records.length, pageCount: p.pageCount } : null;
-        const info = record ? p.instanceFor(record, index, slot) : null;
+        const info = record ? p.instanceFor(record, index, slot, card.variantId) : null;
         const id = record?.[ID] as string | undefined;
         const edited = !preview && hasEdits(info?.override);
         const reverted = edited && !!info?.override?.off;
@@ -77,13 +112,16 @@ export function LayoutStage(p: Props) {
         if (showOutline(p, preview)) classes.push("outlined");
         if (edited) classes.push(reverted ? "reverted" : "edited");
         if (dropOver === id && id) classes.push("drop-target");
+        if (p.arrange) classes.push("arrangeable");
+        if (p.arrange && p.selectedCard === card.id) classes.push("card-selected");
 
         return (
           <div
-            key={slot}
+            key={card.id}
             className={classes.join(" ")}
-            data-no-pan={p.edit ? "" : undefined}
-            style={{ left: (sheet.marginX + ox + col * (templateWidth + sheet.gapX)) * PX_PER_IN, top: (sheet.marginY + oy + row * (templateHeight + sheet.gapY)) * PX_PER_IN, width: templateWidth * PX_PER_IN, height: templateHeight * PX_PER_IN }}
+            data-no-pan={p.edit || p.arrange ? "" : undefined}
+            style={{ left: (card.x + ox) * PX_PER_IN, top: (card.y + oy) * PX_PER_IN, width: templateWidth * PX_PER_IN, height: templateHeight * PX_PER_IN }}
+            onPointerDown={p.arrange ? (e) => startCardDrag(e, card) : undefined}
             onClick={p.edit && id ? (e) => { const itemId = itemAt(e.target); p.onSelect?.(itemId ? { recordId: id, itemId } : null); } : undefined}
             onDoubleClick={p.edit && id ? (e) => { const itemId = itemAt(e.target); if (itemId) p.onStartEdit?.({ recordId: id, itemId }); } : undefined}
             onDragOver={p.edit && id ? (e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDropOver(id); } } : undefined}
@@ -98,7 +136,14 @@ export function LayoutStage(p: Props) {
             {record && meta && info
               ? <TemplateThumbnail items={info.items} record={record} width={templateWidth} height={templateHeight} bleed={p.bleed} meta={meta} interactive={p.edit && !preview} selectedItemId={sel} overriddenIds={overriddenIds} zoom={p.zoom} />
               : <span className="empty-slot">Empty</span>}
-            {!preview && <span className="slot-number">#{index + 1}</span>}
+            {!preview && record && <span className="slot-number" title={`This is record ${index + 1} of your data`}><Database size={10} />{index + 1}</span>}
+            {!preview && (
+              <span className={p.arrange && p.selectedCard === card.id ? "slot-position editing" : "slot-position"} data-no-pan title={`Record ${card.number} on this sheet. Cards with the same number show the same record.`}>
+                {p.arrange && p.selectedCard === card.id && <button type="button" aria-label="Lower the record number" onClick={(e) => { e.stopPropagation(); p.onNumberCard?.(card.id, Math.max(1, card.number - 1)); }}><Minus size={10} /></button>}
+                <LayoutTemplate size={11} /><b>{card.number}</b>
+                {p.arrange && p.selectedCard === card.id && <button type="button" aria-label="Raise the record number" onClick={(e) => { e.stopPropagation(); p.onNumberCard?.(card.id, card.number + 1); }}><Plus size={10} /></button>}
+              </span>
+            )}
 
             {edited && id && (
               <>
@@ -130,6 +175,7 @@ export function LayoutStage(p: Props) {
           </div>
         );
       })}
+      {p.showOrder && !preview && <OrderArrows list={list} w={templateWidth} h={templateHeight} pageW={sheet.pageWidth} pageH={sheet.pageHeight} ox={ox} oy={oy} />}
       {marks.length > 0 && (
         <svg className="crop-marks" width={sheet.pageWidth * PX_PER_IN} height={sheet.pageHeight * PX_PER_IN} viewBox={`0 0 ${sheet.pageWidth} ${sheet.pageHeight}`}>
           {marks.map((m, i) => <line key={i} x1={m[0] + ox} y1={m[1] + oy} x2={m[2] + ox} y2={m[3] + oy} />)}
@@ -162,27 +208,22 @@ function InlineTextEditor({ item, initial, onCommit, onCancel }: { item: DesignI
   );
 }
 
-/**
- * Crop marks sit in the page margins, in line with every slot edge, so they never touch the artwork
- * (labels often have no gap between them). Coordinates are in inches.
- */
-function cropMarks(sheet: Sheet, w: number, h: number): [number, number, number, number][] {
-  const out: [number, number, number, number][] = [];
-  const offset = 0.04;
-  const xs = Array.from({ length: sheet.columns }, (_, c) => { const left = sheet.marginX + c * (w + sheet.gapX); return [left, left + w]; }).flat();
-  const ys = Array.from({ length: sheet.rows }, (_, r) => { const top = sheet.marginY + r * (h + sheet.gapY); return [top, top + h]; }).flat();
-  const gridLeft = sheet.marginX, gridTop = sheet.marginY;
-  const gridRight = gridLeft + sheet.columns * w + (sheet.columns - 1) * sheet.gapX;
-  const gridBottom = gridTop + sheet.rows * h + (sheet.rows - 1) * sheet.gapY;
-  const room = (space: number) => Math.min(0.15, Math.max(0, space - offset - 0.02));
-  const top = room(gridTop), left = room(gridLeft), bottom = room(sheet.pageHeight - gridBottom), right = room(sheet.pageWidth - gridRight);
-  for (const x of xs) {
-    if (top > 0) out.push([x, gridTop - offset - top, x, gridTop - offset]);
-    if (bottom > 0) out.push([x, gridBottom + offset, x, gridBottom + offset + bottom]);
-  }
-  for (const y of ys) {
-    if (left > 0) out.push([gridLeft - offset - left, y, gridLeft - offset, y]);
-    if (right > 0) out.push([gridRight + offset, y, gridRight + offset + right, y]);
-  }
-  return out;
+/** Thin arrows from card to card in the order their records come: solid to a new record, dotted between copies of the same record. */
+function OrderArrows({ list, w, h, pageW, pageH, ox, oy }: { list: ReturnType<typeof placementsOf>; w: number; h: number; pageW: number; pageH: number; ox: number; oy: number }) {
+  const order = sequence(list);
+  return (
+    <svg className="order-arrows" width={pageW * PX_PER_IN} height={pageH * PX_PER_IN} viewBox={`0 0 ${pageW} ${pageH}`} aria-hidden>
+      <defs><marker id="order-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1 9 5 1 9" fill="none" stroke="#7c5cdb" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></marker></defs>
+      {order.slice(0, -1).map((a, i) => {
+        const b = order[i + 1];
+        const x1 = a.x + w / 2 + ox, y1 = a.y + h / 2 + oy, x2 = b.x + w / 2 + ox, y2 = b.y + h / 2 + oy;
+        const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+        const ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+        const trim = Math.min(0.18, len / 3); // keep the line off the badges at the card centers
+        return <line key={a.id + b.id} x1={x1 + ux * trim} y1={y1 + uy * trim} x2={x2 - ux * trim} y2={y2 - uy * trim}
+          stroke="#7c5cdb" strokeOpacity="0.55" strokeWidth={0.014} strokeDasharray={a.number === b.number ? "0.03 0.03" : undefined} markerEnd="url(#order-head)" />;
+      })}
+    </svg>
+  );
 }
+

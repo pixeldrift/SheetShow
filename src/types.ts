@@ -93,6 +93,12 @@ export type View = { zoom: number; pan: { x: number; y: number }; fitted: boolea
 export type Bleed = { amount: number; auto: boolean; policy: "limit" | "grow" };
 export type Template = { width: number; height: number; margins?: { top: number; right: number; bottom: number; left: number }; bleed?: Bleed };
 
+/**
+ * One copy of the individual template on a page. `number` is its position among the records on this sheet: cards with the same
+ * number show the same record, and each higher number is the next record. `variantId` picks a template (unset = by the alternating rules).
+ */
+export type Placement = { id: string; x: number; y: number; number: number; variantId?: string };
+
 export type Sheet = {
   pageWidth: number;
   pageHeight: number;
@@ -103,6 +109,8 @@ export type Sheet = {
   marginX: number;
   marginY: number;
   repeatMode: "same" | "next";
+  /** A hand-arranged page. Unset means the columns, rows, gaps and margins above lay the cards out. */
+  placements?: Placement[];
   cropMarks: boolean;
   /** Output order: sort records by this field (unset = the data table's order). */
   sortField?: string;
