@@ -78,9 +78,9 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
 
   return (
     <div className="number-input">
+      <span className="autosize" data-value={draft ?? format(value)}>
       <input
         type="number" inputMode="decimal" step={step} min={min} max={max} value={draft ?? format(value)}
-        style={{ width: `calc(${Math.max(1, [...String(draft ?? format(value))].reduce((w, c) => w + (c === "." ? 0.28 : c === "-" ? 0.36 : 0.56), 0)).toFixed(2)}em + 2px)` }}
         onPointerDown={(e) => {
           // Not editing yet: drag scrubs the value, a plain tap focuses the box for typing.
           const input = e.currentTarget;
@@ -95,6 +95,7 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
           if (Number.isFinite(n)) commit(n);
         }}
       />
+      </span>
       {unit && <small className="scrub-unit" onPointerDown={startScrub} title="Drag to adjust">{unit}</small>}
       <span className="stepper">
         <button type="button" tabIndex={-1} aria-label="Increase" onPointerDown={press(1)}><ChevronUp size={11} /></button>
