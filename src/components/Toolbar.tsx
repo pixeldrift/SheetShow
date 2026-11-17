@@ -53,15 +53,8 @@ export function Toolbar(p: Props) {
           <div className="toolbar-divider" />
         </>
       )}
-      {p.workspace === "layout" && (
-        <>
-          <button className="button mode-button toggle" aria-pressed={p.instanceMode} onClick={p.onInstanceMode} title="Override mode: click or double-click anything on a sheet to change just that record — edit a name, drop in a different photo, tweak a color">
-            <PencilLine size={15} /> Override
-          </button>
-          <div className="toolbar-divider" />
-        </>
-      )}
       <div className="tool-group">
+        {toggle(p.instanceMode, p.workspace === "layout" ? "Override mode: click or double-click anything on a sheet to change just that record — edit a name, drop in a different photo, tweak a color" : "Override mode: edits you make to the previewed record are kept for that record only; every other record keeps the template", p.onInstanceMode, <PencilLine size={15} />)}
         {p.workspace === "template" && toggle(p.multi, "Select several: tap objects to add or remove them, or drag on empty canvas to draw a selection box", p.onMulti, <SquareDashedMousePointer size={16} />)}
         {toggle(p.showGrid, "Show grid", p.onGrid, <Grid2X2 size={15} />)}
         {toggle(p.showRulers, "Show rulers", p.onRulers, <Ruler size={15} />)}

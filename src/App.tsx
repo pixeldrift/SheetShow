@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Braces, ChevronLeft, ChevronRight, GripVertical, Hash, Redo2, SlidersHorizontal, Type, Undo2 } from "lucide-react";
+import { Braces, ChevronLeft, ChevronRight, GripVertical, Hash, PencilLine, Redo2, SlidersHorizontal, Type, Undo2 } from "lucide-react";
 import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -109,7 +109,7 @@ function App() {
   /** Edits the template being shown, so the rest of the editor keeps working with one plain list of items. */
   const history = {
     set: (update: (list: DesignItem[]) => DesignItem[], options?: { coalesce?: string }) =>
-      itemsDoc.set((map) => { const current = map[variantId] ?? []; const next = update(current); return next === current ? map : { ...map, [variantId]: next }; }, options),
+      recMode ? setRecordEdits(update, options) : itemsDoc.set((map) => { const current = map[variantId] ?? []; const next = update(current); return next === current ? map : { ...map, [variantId]: next }; }, options),
     ...shared,
   };
   const [rawRecordIndex, setRecordIndex] = useState(0);
@@ -187,7 +187,11 @@ function App() {
     return sheet.sortField ? sortRows(included, sheet.sortField, sheet.sortDir ?? 1) : included;
   }, [records, sheet.sortField, sheet.sortDir]);
   const currentRecord = activeRecords[recordIndex] ?? {};
-  const selectedItems = useMemo(() => items.filter((item) => selectedIds.includes(item.id)), [items, selectedIds]);
+  /** Override mode on the template page: every edit below is kept for the record being previewed, and only that record. */
+  const recMode = workspace === "template" && instanceMode && !preview;
+  const recOverride = recMode ? instanceOverrides[currentRecord[ID]] : undefined;
+  const liveItems = useMemo(() => (recMode ? applyOverride(items, recOverride) : items), [recMode, items, recOverride]);
+  const selectedItems = useMemo(() => liveItems.filter((item) => selectedIds.includes(item.id)), [liveItems, selectedIds]);
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
   const slots = sheet.columns * sheet.rows;
   // "Repeat same record" prints one full sheet per record; "next record" fills each sheet with the following records.
@@ -219,6 +223,28 @@ function App() {
   /** Edits one item on one record's copy. Editing while "off" switches the edits back on. */
   const setInstanceItem = (recordId: string, itemId: string, patch: ItemPatch, coalesce?: string) =>
     updateInstance(recordId, ({ off: _off, items: current }) => ({ items: { ...current, [itemId]: { ...(current[itemId] ?? {}), ...patch } } }), coalesce);
+  /** The template editor's edits, redirected: work out what changed on each object and keep just that for the current record. */
+  function setRecordEdits(update: (list: DesignItem[]) => DesignItem[], options?: { coalesce?: string }) {
+    const recordId = currentRecord[ID];
+    if (!recordId) return;
+    const base = applyOverride(itemsRef.current, instanceOverrides[recordId]);
+    const next = update(base);
+    if (next === base) return;
+    const was = new Map(base.map((i) => [i.id, i]));
+    let structural = next.length !== base.length || next.some((n, i) => n.id !== base[i].id);
+    for (const n of next) {
+      const b = was.get(n.id);
+      if (!b || n === b) continue;
+      const patch: ItemPatch = {};
+      for (const k of new Set([...Object.keys(n), ...Object.keys(b)])) {
+        const a = (n as unknown as Record<string, unknown>)[k], o = (b as unknown as Record<string, unknown>)[k];
+        if (JSON.stringify(a) !== JSON.stringify(o)) (patch as Record<string, unknown>)[k] = a === undefined ? null : a;
+      }
+      if ("groupId" in patch || "groupName" in patch) { structural = true; continue; }
+      if (Object.keys(patch).length) setInstanceItem(recordId, n.id, patch, options?.coalesce);
+    }
+    if (structural) setStatus({ text: "Override mode changes one record only. To add, delete, group or reorder objects, turn Override off.", kind: "warn" });
+  }
   const revertInstanceItem = (recordId: string, itemId: string) =>
     updateInstance(recordId, (o) => { const { [itemId]: _gone, ...rest } = o.items; return { ...o, items: rest }; });
   const toggleInstanceOff = (recordId: string) => updateInstance(recordId, (o) => (o.off ? { items: o.items } : { ...o, off: true }));
@@ -466,7 +492,7 @@ function App() {
   // ── Editing a text object in place ──
   const [inlineEdit, setInlineEdit] = useState<{ id: string; draft: string } | null>(null);
   const startInlineEdit = (id: string) => {
-    const item = items.find((i) => i.id === id);
+    const item = liveItems.find((i) => i.id === id);
     if (!item || item.type !== "text") return;
     // Linked text is edited as its tokens, so the preview pauses and field names can be typed or mixed with other words.
     setInlineEdit({ id, draft: item.field ? `{{${item.field.startsWith("__") ? fieldDisplayName(item.field) : item.field}}}` : item.text ?? "" });
@@ -474,7 +500,7 @@ function App() {
   const finishInlineEdit = (save: boolean) => {
     const edit = inlineEdit;
     setInlineEdit(null);
-    const item = edit && items.find((i) => i.id === edit.id);
+    const item = edit && liveItems.find((i) => i.id === edit.id);
     if (!edit || !item || !save) return;
     const whole = edit.draft.trim().match(/^\{\{\s*([^{}|#^/]+?)\s*\}\}$/); // exactly one field: keep it a real link
     const named = whole && [...fields, ...specialFields.map((f) => f.key)].find((f) => f === whole[1] || fieldDisplayName(f).toLowerCase() === whole[1].toLowerCase());
@@ -827,6 +853,15 @@ function App() {
     onResetInstance: () => { resetInstance(instRecord[ID]); setInstanceSel(null); },
   } : null;
 
+  const recBanner = recMode && selected && currentRecord[ID] ? {
+    recordLabel: recordLabel(currentRecord),
+    itemEdited: !!recOverride?.items[selected.id],
+    off: !!recOverride?.off,
+    onRevertItem: () => revertInstanceItem(currentRecord[ID], selected.id),
+    onToggleOff: () => toggleInstanceOff(currentRecord[ID]),
+    onResetInstance: () => resetInstance(currentRecord[ID]),
+  } : null;
+
   // ── Records ─────────────────────────────────────────────────────────────
   const stepRecord = (delta: number) => {
     if (pagedNav) {
@@ -921,7 +956,7 @@ function App() {
   // ── Render ──────────────────────────────────────────────────────────────
   const meta = { recordNumber: recordIndex + 1, pageNumber: currentPage + 1, recordCount: activeRecords.length, pageCount };
   /** The template as the previewed record sees it: conditional rules applied, rule-hidden objects kept (faded) so they stay selectable. */
-  const displayItems = applyConditions(items, currentRecord, meta, !preview);
+  const displayItems = applyConditions(liveItems, currentRecord, meta, !preview);
   const toolDefs = workspace === "template" ? [
     { id: "edit", always: true, node: (
       <EditBar canGroup={canGroup} canUngroup={canUngroup} onGroup={groupSelected} onUngroup={ungroupSelected}
@@ -971,8 +1006,8 @@ function App() {
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}${drawers.live ? " drawer-live" : ""}`} style={drawers.vars}>
           <div className={`drawer-slot left${dataOpen ? " open" : ""}`} {...({ inert: dataOpen ? undefined : "" } as Record<string, unknown>)}>
             <DataPanel chrome={{ header: (e) => drawers.start("left", e, "swipe", 10), consumeSwipe: drawers.consumeSwipe }} onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
-              layerCount={(inLayoutEdit ? instItems : items).length}
-              layers={<LayersPanel items={inLayoutEdit ? instItems : items} selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems} flat={!!instanceBanner}
+              layerCount={(inLayoutEdit ? instItems : liveItems).length}
+              layers={<LayersPanel items={inLayoutEdit ? instItems : liveItems} selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems} flat={!!instanceBanner}
                 onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
                 onUpdate={inLayoutEdit && instRecord ? (id, patch) => setInstanceItem(instRecord[ID], id, toItemPatch(patch)) : updateItem}
                 onUpdateMany={updateMany} onReorder={reorderLayer} onRenameGroup={renameGroup} multi={multiMode} />} />
@@ -980,6 +1015,7 @@ function App() {
 
           <div className="editor-content">
             <div className="canvas-frame">
+              {recMode && currentRecord[ID] && <div className="override-chip" role="status"><PencilLine size={13} /> Editing only <strong>{recordLabel(currentRecord)}</strong></div>}
               <Viewport
                 containerRef={viewportRef}
                 view={view}
@@ -1066,11 +1102,11 @@ function App() {
             <Inspector
               chrome={{ header: (e) => drawers.start("right", e, "swipe", 10), consumeSwipe: drawers.consumeSwipe }}
               workspace={workspace}
-              items={inLayoutEdit ? instItems : items}
+              items={inLayoutEdit ? instItems : liveItems}
               selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems}
               onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
               onUpdate={inLayoutEdit && instRecord ? (id, patch, coalesce) => setInstanceItem(instRecord[ID], id, toItemPatch(patch), coalesce) : updateItem}
-              instance={instanceBanner}
+              instance={instanceBanner ?? recBanner}
               fitNote={inLayoutEdit && instItem?.type === "text" && instRecord ? (() => { const p = textProblem(instItem, instRecord, metaFor(instIndex), cardSize); return p ? { bad: true, text: p.kind === "truncated" ? "This text is being cut off." : p.kind === "outside" ? "This text runs off the card." : "This text spills out of its box." } : { bad: false, text: "This text fits." }; })() : fitNote}
               fontLibrary={fontLibrary} onRotateBy={rotateSelectionBy} imageTools={imageTools}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onReorder={reorderLayer}
@@ -1090,10 +1126,10 @@ function App() {
             />
           </div>
           <button className="drawer-toggle left" title="Show the Fields and Layers drawer (your data columns, and every object in the design)" aria-label="Show fields" aria-pressed={dataOpen} onPointerDown={(e) => drawers.start("left", e, "open")} onClick={(e) => { if (e.detail === 0) setDataOpen(true); }}>
-                <Braces size={15} /><span>Fields</span><ChevronRight size={13} className="toggle-arrow" />
+                <Braces size={15} /><span>Fields</span>
               </button>
           <button className="drawer-toggle right" title="Show the Properties drawer (settings, layers)" aria-label="Show properties" aria-pressed={inspectorOpen} onPointerDown={(e) => drawers.start("right", e, "open")} onClick={(e) => { if (e.detail === 0) setInspectorOpen(true); }}>
-                <SlidersHorizontal size={15} /><span>Properties</span><ChevronLeft size={13} className="toggle-arrow" />
+                <SlidersHorizontal size={15} /><span>Properties</span>
               </button>
           <div className="drawer-sliver left" onPointerDown={(e) => drawers.start("left", e, dataOpen ? "resize" : "open")} title={dataOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Fields and Layers drawer"} aria-hidden><span className="sliver-pill">{dataOpen ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}</span></div>
           <div className="drawer-sliver right" onPointerDown={(e) => drawers.start("right", e, inspectorOpen ? "resize" : "open")} title={inspectorOpen ? "Drag to resize the drawer · flick it toward the edge to close" : "Drag to open the Properties drawer"} aria-hidden><span className="sliver-pill">{inspectorOpen ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}</span></div>

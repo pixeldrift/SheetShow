@@ -1040,3 +1040,9 @@ html,body{touch-action:manipulation}
 .property-section.folded{padding-bottom:4px}
 .stock-browse{width:100%;margin-top:8px;justify-content:center}
 .stock-dialog .field-search{margin-bottom:6px}
+
+/* Drawer buttons wear the drawer's own white and have no edge, so they read as part of the drawer strip */
+.drawer-toggle,.drawer-toggle[aria-pressed="true"]{background:#fff;border:0;box-shadow:none}
+.drawer-toggle .toggle-arrow{display:none}
+.override-chip{position:absolute;top:76px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:6px;max-width:calc(100% - 120px);padding:5px 12px;border-radius:999px;background:#f1edfb;border:1px solid #cfc3f0;color:#5a45a8;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.override-chip strong{overflow:hidden;text-overflow:ellipsis}

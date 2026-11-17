@@ -94,7 +94,7 @@ A **data-driven picture** shows a different image for each record. Point it at a
 
 - **Alternating templates**: make a second template (the **+** under the canvas) and say which records use it: odd, even, every third, or when a field equals something. Handy for alternating colors or different ticket types.
 - **Conditions**: show, hide or restyle a single object depending on a field. For example, show a ribbon only for VIPs, or turn a price red when *sale* is *yes*.
-- **Override mode**: in Page layout, turn on **Override** and click or double-click anything on a sheet to change just that record. Type a different name, drop in a different photo, or change a color. Overridden records are marked in violet, and you can switch back to the template at any time.
+- **Override mode**: turn on the pencil icon in the toolbar. On the Template page, everything you change is kept for the record you are previewing and only that record (a note over the canvas says whose). In Page layout, click or double-click anything on a sheet to change just that record. Type a different name, drop in a different photo, or change a color. Overridden records are marked in violet, and you can switch back to the template at any time.
 
 ## Page layout and printing
 
