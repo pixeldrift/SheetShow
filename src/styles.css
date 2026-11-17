@@ -27,7 +27,7 @@ h2,h3,p{margin:0}
 .canvas-frame{flex:1;min-height:0;position:relative;overflow:hidden;background:var(--canvas)}
 
 /* ── Top bar ────────────────────────────────────────────────────────────── */
-.topbar{height:64px;flex-shrink:0;background:var(--surface);display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--line);gap:24px}
+.topbar{height:calc(64px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)!important;box-sizing:border-box;flex-shrink:0;background:var(--surface);display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--line);gap:24px}
 .brand{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .brand-mark{width:34px;height:36px;position:relative;display:grid;place-items:center;background:#f4e8dc;border-radius:10px}
 .brand-sheet{width:18px;height:23px;background:#fff;border:1.5px solid #d17c4b;border-radius:3px;transform:rotate(-5deg);box-shadow:3px 2px 0 #e6c6ac}
@@ -233,7 +233,7 @@ h2,h3,p{margin:0}
   .workspace-tabs button{padding:0 9px}
 }
 @media(max-width:620px){
-  .topbar{height:54px;padding:0 8px;gap:6px}
+  .topbar{height:calc(54px + env(safe-area-inset-top));padding:0 8px;gap:6px}
   .brand-name{font-size:16px}.brand-name small{display:none}
   .brand-mark{width:29px;height:31px}
   .workspace-tabs{gap:0}.workspace-tabs button{padding:0 8px}.workspace-tabs button span{display:none}
