@@ -64,7 +64,7 @@ const DEFAULT_NAME = "Untitled project";
 
 /** Everything the undo history covers. */
 type Doc = {
-  items: Record<string, DesignItem[]>; variants: Variant[]; rules: VariantRule[]; template: { width: number; height: number }; sheet: Sheet;
+  items: Record<string, DesignItem[]>; variants: Variant[]; rules: VariantRule[]; template: Project["template"]; sheet: Sheet;
   records: RecordRow[]; fileName: string; overrides: Record<string, InstanceOverride>;
 };
 /** Applies a column mapping to the linked text and rules of every template. */
@@ -1034,7 +1034,7 @@ function App() {
                 {workspace === "template" ? (
                   <TemplateStage
                     items={inlineEdit ? displayItems.map((i) => (i.id === inlineEdit.id ? { ...i, text: "", field: undefined } : i)) : displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
-                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} dropTargetId={dropTargetId} warnings={textTrouble.byItem} onWarning={(id, x, y) => setWarnPopup({ itemId: id, x, y })} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
+                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} dropTargetId={dropTargetId} margins={template.margins} warnings={textTrouble.byItem} onWarning={(id, x, y) => setWarnPopup({ itemId: id, x, y })} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
                     onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup} onEditText={startInlineEdit}
                   />
                 ) : (
@@ -1111,7 +1111,7 @@ function App() {
               fontLibrary={fontLibrary} onRotateBy={rotateSelectionBy} imageTools={imageTools}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onReorder={reorderLayer}
               groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
-              templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate({ width, height })} onPreset={applyPreset}
+              templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} templateMargins={template.margins} onTemplateMargins={(margins) => setTemplate((t) => ({ ...t, margins }))} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
               printer={printer} onCalibrationSheet={printCalibration}
               fields={fields} editedList={editedList} onJumpInstance={jumpToInstance} onResetInstanceById={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}

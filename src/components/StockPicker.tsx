@@ -46,7 +46,7 @@ export function StockPicker({ templateWidth, templateHeight, sheet, onPreset }: 
   }, [open]);
 
   return (
-    <Section title="LABEL STOCK" unit={`${averyPresets.length} AVERY FORMATS`}>
+    <Section title="AVERY TEMPLATES" unit={`${averyPresets.length} FORMATS`}>
       <div className={described.kind !== "custom" ? "stock-status matched" : "stock-status"}>
         {described.kind !== "custom" ? <BadgeCheck size={14} /> : <Link2 size={14} />}
         <div>
@@ -54,12 +54,12 @@ export function StockPicker({ templateWidth, templateHeight, sheet, onPreset }: 
           <small>{described.kind === "stock" ? `${described.detail}. Template and page layout match.` : described.kind === "paper" ? described.detail : described.detail}</small>
         </div>
       </div>
-      <button type="button" className="button stock-browse" onClick={() => setOpen(true)}><List size={14} /> Choose an Avery sheet…</button>
+      <button type="button" className="button stock-browse" onClick={() => setOpen(true)}><List size={14} /> Avery templates…</button>
       {open && (
         <div className="dialog-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
           <div className="dialog stock-dialog" role="dialog" aria-modal="true" aria-labelledby="stock-title">
             <div className="dialog-head">
-              <div><h2 id="stock-title">Choose an Avery sheet</h2><p>Picking one sets the individual template <strong>and</strong> the page layout. You can change either afterwards.</p></div>
+              <div><h2 id="stock-title">Avery templates</h2><p>Picking one sets the individual template <strong>and</strong> the page layout. You can change either afterwards.</p></div>
               <button className="icon-button" aria-label="Close" onClick={close}><X size={17} /></button>
             </div>
             <div className="dialog-body" data-scroll>
@@ -67,7 +67,7 @@ export function StockPicker({ templateWidth, templateHeight, sheet, onPreset }: 
               {matches.length
                 ? matches.map(({ preset }) => (
                   <button key={preset.code} className={current?.code === preset.code ? "preset-option selected" : "preset-option"} onClick={() => { onPreset(preset); close(); }}>
-                    <span><strong>Avery {preset.code} · {preset.width} × {preset.height}″</strong><small>{preset.name.replace(/\s*·\s*\d+ per sheet$/, "")}</small></span><em>{preset.columns * preset.rows} per sheet</em>
+                    <span className="preset-main"><span className="preset-row"><strong>Avery {preset.code}</strong><em>{preset.width} × {preset.height}″</em></span><span className="preset-row"><small>{preset.name.replace(/\s*·\s*\d+ per sheet$/, "")}</small><small>{preset.columns * preset.rows} per sheet</small></span></span>
                   </button>
                 ))
                 : <p className="empty-note">No matches. Try a different size or search by Avery number.</p>}

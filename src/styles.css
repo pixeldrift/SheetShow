@@ -1046,3 +1046,9 @@ html,body{touch-action:manipulation}
 .drawer-toggle .toggle-arrow{display:none}
 .override-chip{position:absolute;top:76px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:6px;max-width:calc(100% - 120px);padding:5px 12px;border-radius:999px;background:#f1edfb;border:1px solid #cfc3f0;color:#5a45a8;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 .override-chip strong{overflow:hidden;text-overflow:ellipsis}
+
+/* Numbers keep their digits: when a field is narrow, the unit is what gets cut off */
+.number-input input{flex:1 1 auto;width:0;min-width:3ch}
+.number-input small.scrub-unit{flex:0 100 auto;min-width:0;overflow:hidden;white-space:nowrap}
+.preset-option>.preset-main{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.preset-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}

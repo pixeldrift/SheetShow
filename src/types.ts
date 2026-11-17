@@ -119,7 +119,8 @@ export type Project = {
   fileName: string;
   records: RecordRow[];
   items: DesignItem[];
-  template: { width: number; height: number };
+  /** The label itself. `margins` (inches) is an inner safe area, drawn as a dashed guide on the template and never printed. */
+  template: { width: number; height: number; margins?: { top: number; right: number; bottom: number; left: number } };
   sheet: Sheet;
   fonts: FontEntry[];
   /** Extra templates that rules can assign to records. `items` stays the first template for older files. */

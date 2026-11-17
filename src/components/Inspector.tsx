@@ -58,6 +58,7 @@ type Props = {
   /** Drag-and-drop in the layer list: put `id` above/below `targetId`. */
   onReorder: (id: string, targetId: string, above: boolean, asGroup: boolean) => void;
   templateWidth: number;
+  templateMargins?: { top: number; right: number; bottom: number; left: number }; onTemplateMargins: (margins: { top: number; right: number; bottom: number; left: number }) => void;
   templateHeight: number;
   onTemplateSize: (width: number, height: number) => void;
   onPreset: (preset: LabelPreset) => void;
@@ -299,7 +300,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
   );
 }
 
-function TemplateSetup({ templateWidth, templateHeight, onTemplateSize, onPreset, variants, sheet }: Props) {
+function TemplateSetup({ templateWidth, templateHeight, templateMargins, onTemplateMargins, onTemplateSize, onPreset, variants, sheet }: Props) {
   return (
     <>
       <VariantsSection {...variants} />
@@ -308,6 +309,15 @@ function TemplateSetup({ templateWidth, templateHeight, onTemplateSize, onPreset
           <Pair label="Width"><NumberField value={templateWidth} min={0.1} step={0.05} unit="in" onChange={(n) => onTemplateSize(n, templateHeight)} /></Pair>
           <Pair label="Height"><NumberField value={templateHeight} min={0.1} step={0.05} unit="in" onChange={(n) => onTemplateSize(templateWidth, n)} /></Pair>
         </div>
+      </Section>
+      <Section title="MARGINS" unit="INCHES">
+        <div className="two-col">
+          {(["top", "right", "bottom", "left"] as const).map((side) => {
+            const m = templateMargins ?? { top: 0, right: 0, bottom: 0, left: 0 };
+            return <Pair key={side} label={side[0].toUpperCase() + side.slice(1)}><NumberField value={m[side]} min={0} step={0.05} unit="in" onChange={(n) => onTemplateMargins({ ...m, [side]: n })} /></Pair>;
+          })}
+        </div>
+        <p className="hint">A dashed violet guide on the template marks the safe area. It never prints.</p>
       </Section>
       <StockPicker templateWidth={templateWidth} templateHeight={templateHeight} sheet={sheet} onPreset={onPreset} />
     </>
