@@ -21,6 +21,8 @@ type Props = {
   zoom: number;
   selectedIds: string[];
   showGrid: boolean;
+  /** Inner safe area in inches: drawn as a dashed guide, never printed. */
+  margins?: { top: number; right: number; bottom: number; left: number };
   snap: boolean;
   /** Which kinds of snapping are on (while `snap`, the master switch, is on). */
   snapOptions: SnapOptions;
@@ -68,7 +70,7 @@ const GUIDE_REACH = 0.08;
 const MIN_SIZE = 0.05;
 
 /** Editable template canvas. Items may be dragged anywhere, including past the template edge and over the rulers. */
-export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, snap, snapOptions, dropTargetId, warnings, onWarning, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd, onEditText }: Props) {
+export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, margins, snap, snapOptions, dropTargetId, warnings, onWarning, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd, onEditText }: Props) {
   const drag = useRef<Drag | null>(null);
   const lastTap = useRef<{ id: string; at: number } | null>(null);
   /** A double-click on a grouped object picks just that object, but only once the pointer is released without having moved (otherwise it was a quick click-and-drag of the group). */
@@ -93,6 +95,8 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
   /** Everything a dragged object can snap to: the page, and every other visible, non-reference object. */
   const snapTargets = (exclude: string[]): Box[] => [
     ...(snapOptions.page ? [{ x: 0, y: 0, w: width, h: height }] : []),
+    ...(snapOptions.margins && margins && (margins.top || margins.right || margins.bottom || margins.left)
+      ? [{ x: margins.left, y: margins.top, w: Math.max(0, width - margins.left - margins.right), h: Math.max(0, height - margins.top - margins.bottom) }] : []),
     ...(snapOptions.objects ? items.filter((i) => i.visible !== false && !i.reference && !exclude.includes(i.id)).map(framedBox) : []),
   ];
   /** Objects that equal-spacing snapping measures gaps against. */
@@ -303,6 +307,10 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
           <rect width={width * PX_PER_IN} height={height * PX_PER_IN} fill="url(#gridPattern)" pointerEvents="none" />
         </>
       )}
+      {!preview && margins && (margins.top || margins.right || margins.bottom || margins.left) ? (
+        <rect x={margins.left * PX_PER_IN} y={margins.top * PX_PER_IN} width={Math.max(0, width - margins.left - margins.right) * PX_PER_IN} height={Math.max(0, height - margins.top - margins.bottom) * PX_PER_IN}
+          fill="none" stroke="#7c5cdb" strokeWidth="1" strokeDasharray="5 4" opacity="0.7" pointerEvents="none" />
+      ) : null}
       {items.filter((item) => item.visible !== false && !(preview && item.reference)).map((item) => (
         <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} raw={rawFields} badge={!preview} onPointerDown={(event) => startMove(event, item)} />
       ))}

@@ -84,6 +84,8 @@ Open **Add image** to drop in pictures, a folder or a .zip. They are kept in thi
 
 **Color effects** (Properties → Color) work on any picture: hue, saturation, brightness and contrast, black and white, and a color overlay. The color overlay can **tint** the picture (like a colored filter) or **fill** it, so every visible pixel becomes one color and the shape is kept, which turns a black icon into any color you like. **Make transparent** comes first: it cuts black or white (and tones close to it) out of a picture, with a threshold slider, and the tint or fill is applied afterwards.
 
+**Avery templates** opens a window with a to-scale preview of the label and the sheet; pick one, then press **Choose this template**. **Margins** (Template page) draw a dashed safe-area guide, and objects can snap to it (Snapping options → Margins).
+
 **Properties sections** (Color, Effects and so on) fold away when you tap their headings, so you can hide the options you are not using.
 
 **Moving around:** drag two fingers anywhere on the canvas, even over an object, to pan, and pinch to zoom, without moving anything. **Overflow warnings:** on the template page a small warning icon appears on a text box whose text will run off the card or out of a visible box for some records; tap it to see which records.
@@ -94,7 +96,7 @@ A **data-driven picture** shows a different image for each record. Point it at a
 
 - **Alternating templates**: make a second template (the **+** under the canvas) and say which records use it: odd, even, every third, or when a field equals something. Handy for alternating colors or different ticket types.
 - **Conditions**: show, hide or restyle a single object depending on a field. For example, show a ribbon only for VIPs, or turn a price red when *sale* is *yes*.
-- **Override mode**: in Page layout, turn on **Override** and click or double-click anything on a sheet to change just that record. Type a different name, drop in a different photo, or change a color. Overridden records are marked in violet, and you can switch back to the template at any time.
+- **Override mode**: turn on the pencil icon in the toolbar. On the Template page, everything you change is kept for the record you are previewing and only that record (a note over the canvas says whose). In Page layout, click or double-click anything on a sheet to change just that record. Type a different name, drop in a different photo, or change a color. Overridden records are marked in violet, and you can switch back to the template at any time.
 
 ## Page layout and printing
 

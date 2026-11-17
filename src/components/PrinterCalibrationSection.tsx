@@ -16,7 +16,7 @@ export function PrinterCalibrationSection({ printer, onTestSheet }: { printer: P
   };
 
   return (
-    <Section title="PRINTER CALIBRATION" unit="INCHES">
+    <Section title="PRINTER CALIBRATION">
       <p className="hint first">If your printer lands everything a little off the paper or label, move the whole page here. It shows on the sheet, in preview and in print, and is remembered on this device.</p>
 
       <div className="nudge-pad" role="group" aria-label="Move the printed page">

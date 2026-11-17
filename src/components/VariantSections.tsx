@@ -43,7 +43,7 @@ export function VariantsSection(p: Props) {
           </div>
         ))}
       </div>
-      <button className="button wide" onClick={p.onAdd}><Plus size={14} /> Add a template (copy of this one)</button>
+      <button className="button wide" onClick={p.onAdd}><Plus size={14} /> Add alternate</button>
 
       {multiple && (
         <>
