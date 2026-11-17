@@ -23,6 +23,8 @@ type Props = {
   showGrid: boolean;
   /** Inner safe area in inches: drawn as a dashed guide, never printed. */
   margins?: { top: number; right: number; bottom: number; left: number };
+  /** Bleed in inches: artwork may run this far past the trim edge. */
+  bleed?: number;
   snap: boolean;
   /** Which kinds of snapping are on (while `snap`, the master switch, is on). */
   snapOptions: SnapOptions;
@@ -70,7 +72,7 @@ const GUIDE_REACH = 0.08;
 const MIN_SIZE = 0.05;
 
 /** Editable template canvas. Items may be dragged anywhere, including past the template edge and over the rulers. */
-export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, margins, snap, snapOptions, dropTargetId, warnings, onWarning, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd, onEditText }: Props) {
+export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, margins, bleed = 0, snap, snapOptions, dropTargetId, warnings, onWarning, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd, onEditText }: Props) {
   const drag = useRef<Drag | null>(null);
   const lastTap = useRef<{ id: string; at: number } | null>(null);
   /** A double-click on a grouped object picks just that object, but only once the pointer is released without having moved (otherwise it was a quick click-and-drag of the group). */
@@ -95,6 +97,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
   /** Everything a dragged object can snap to: the page, and every other visible, non-reference object. */
   const snapTargets = (exclude: string[]): Box[] => [
     ...(snapOptions.page ? [{ x: 0, y: 0, w: width, h: height }] : []),
+    ...(snapOptions.page && bleed > 0 ? [{ x: -bleed, y: -bleed, w: width + bleed * 2, h: height + bleed * 2 }] : []),
     ...(snapOptions.margins && margins && (margins.top || margins.right || margins.bottom || margins.left)
       ? [{ x: margins.left, y: margins.top, w: Math.max(0, width - margins.left - margins.right), h: Math.max(0, height - margins.top - margins.bottom) }] : []),
     ...(snapOptions.objects ? items.filter((i) => i.visible !== false && !i.reference && !exclude.includes(i.id)).map(framedBox) : []),
@@ -292,7 +295,8 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
   return (
     <svg
       ref={svgRef}
-      className={preview ? "template-svg clip" : "template-svg"}
+      className={preview && !bleed ? "template-svg clip" : "template-svg"}
+      style={preview && bleed ? { clipPath: `inset(${-bleed * PX_PER_IN}px)` } : undefined}
       width={width * PX_PER_IN}
       height={height * PX_PER_IN}
       viewBox={`0 0 ${width * PX_PER_IN} ${height * PX_PER_IN}`}
@@ -306,6 +310,10 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
           <defs><pattern id="gridPattern" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 12 0 L 0 0 0 12" fill="none" stroke="#e3e8e3" strokeWidth="0.7" /></pattern></defs>
           <rect width={width * PX_PER_IN} height={height * PX_PER_IN} fill="url(#gridPattern)" pointerEvents="none" />
         </>
+      )}
+      {!preview && bleed > 0 && (
+        <rect x={-bleed * PX_PER_IN} y={-bleed * PX_PER_IN} width={(width + bleed * 2) * PX_PER_IN} height={(height + bleed * 2) * PX_PER_IN}
+          fill="none" stroke="#e0524c" strokeWidth="1" strokeDasharray="6 4" opacity="0.8" pointerEvents="none" />
       )}
       {!preview && margins && (margins.top || margins.right || margins.bottom || margins.left) ? (
         <rect x={margins.left * PX_PER_IN} y={margins.top * PX_PER_IN} width={Math.max(0, width - margins.left - margins.right) * PX_PER_IN} height={Math.max(0, height - margins.top - margins.bottom) * PX_PER_IN}

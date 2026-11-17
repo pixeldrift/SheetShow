@@ -2,10 +2,10 @@ import type { RecordRow, Sheet } from "../types";
 import { LayoutStage, type InstanceInfo } from "./LayoutStage";
 import { CalibrationSheet } from "./CalibrationSheet";
 
-type Props = { kind?: "sheets" | "calibration"; offset: { x: number; y: number }; sheet: Sheet; records: RecordRow[]; templateWidth: number; templateHeight: number; pageCount: number; recordIndex: number; instanceFor: (record: RecordRow, index: number, slot: number) => InstanceInfo };
+type Props = { bleed?: number; kind?: "sheets" | "calibration"; offset: { x: number; y: number }; sheet: Sheet; records: RecordRow[]; templateWidth: number; templateHeight: number; pageCount: number; recordIndex: number; instanceFor: (record: RecordRow, index: number, slot: number) => InstanceInfo };
 
 /** Every sheet, one per printed page. Only mounted while printing. */
-export function PrintSheets({ kind = "sheets", offset, sheet, records, templateWidth, templateHeight, pageCount, recordIndex, instanceFor }: Props) {
+export function PrintSheets({ bleed, kind = "sheets", offset, sheet, records, templateWidth, templateHeight, pageCount, recordIndex, instanceFor }: Props) {
   const slots = sheet.columns * sheet.rows;
   return (
     <div className="print-root">
@@ -19,7 +19,7 @@ export function PrintSheets({ kind = "sheets", offset, sheet, records, templateW
           <LayoutStage
             offset={offset} sheet={sheet} records={records} templateWidth={templateWidth} templateHeight={templateHeight} instanceFor={instanceFor}
             slotRecord={(slot) => (sheet.repeatMode === "same" ? page : page * slots + slot)}
-            pageNumber={page + 1} pageCount={pageCount} showGrid={false} preview
+            pageNumber={page + 1} pageCount={pageCount} showGrid={false} preview bleed={bleed}
           />
         </div>
       ))}

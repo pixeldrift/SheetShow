@@ -54,6 +54,8 @@ import { itemFrame } from "./components/ItemShape";
 import { DataTable } from "./components/DataTable";
 import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, reorderColumns, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
 import { PrintSheets } from "./components/PrintSheets";
+import { matchedStock } from "./components/StockPicker";
+import { effectiveBleed, gapsFor, maxBleed } from "./lib/bleed";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -194,6 +196,14 @@ function App() {
   const selectedItems = useMemo(() => liveItems.filter((item) => selectedIds.includes(item.id)), [liveItems, selectedIds]);
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
   const slots = sheet.columns * sheet.rows;
+  // Bleed: standard (Avery) sheets always hold it to what the gaps allow; custom ones follow the template's own policy.
+  const standardStock = matchedStock(template.width, template.height, sheet);
+  const bleedIn = effectiveBleed(template, sheet, !!standardStock);
+  const bleedMax = maxBleed(sheet);
+  const changeBleed = (bleed: Project["template"]["bleed"]) => {
+    setTemplate((t) => ({ ...t, bleed }));
+    if (bleed && !standardStock && !bleed.auto && bleed.policy === "grow") setSheet((s) => ({ ...s, ...gapsFor(s, bleed.amount) }));
+  };
   // "Repeat same record" prints one full sheet per record; "next record" fills each sheet with the following records.
   const pageCount = sheet.repeatMode === "same" ? Math.max(1, activeRecords.length) : Math.max(1, Math.ceil(activeRecords.length / slots));
   const currentPage = sheet.repeatMode === "same" ? recordIndex : Math.floor(recordIndex / slots);
@@ -1034,7 +1044,7 @@ function App() {
                 {workspace === "template" ? (
                   <TemplateStage
                     items={inlineEdit ? displayItems.map((i) => (i.id === inlineEdit.id ? { ...i, text: "", field: undefined } : i)) : displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
-                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} dropTargetId={dropTargetId} margins={template.margins} warnings={textTrouble.byItem} onWarning={(id, x, y) => setWarnPopup({ itemId: id, x, y })} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
+                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} dropTargetId={dropTargetId} margins={template.margins} bleed={bleedIn} warnings={textTrouble.byItem} onWarning={(id, x, y) => setWarnPopup({ itemId: id, x, y })} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
                     onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup} onEditText={startInlineEdit}
                   />
                 ) : (
@@ -1046,7 +1056,7 @@ function App() {
                         return (
                           <div key={K} className="stack-sheet" style={{ left: pos.x * PX_PER_IN, top: pos.y * PX_PER_IN }}>
                             {near ? (
-                              <LayoutStage
+                              <LayoutStage bleed={bleedIn}
                       sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
                       slotRecord={(slot) => (sheet.repeatMode === "same" ? K : K * slots + slot)}
                       pageNumber={K + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
@@ -1063,7 +1073,7 @@ function App() {
                       })}
                     </div>
                   ) : (
-                  <LayoutStage
+                  <LayoutStage bleed={bleedIn}
                     sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
                     slotRecord={(slot) => (sheet.repeatMode === "same" ? recordIndex : currentPage * slots + slot)}
                     pageNumber={currentPage + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
@@ -1111,7 +1121,7 @@ function App() {
               fontLibrary={fontLibrary} onRotateBy={rotateSelectionBy} imageTools={imageTools}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onReorder={reorderLayer}
               groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
-              templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} templateMargins={template.margins} onTemplateMargins={(margins) => setTemplate((t) => ({ ...t, margins }))} onPreset={applyPreset}
+              templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} bleed={template.bleed} bleedInfo={{ max: bleedMax, effective: bleedIn, standard: !!standardStock }} onBleed={changeBleed} templateMargins={template.margins} onTemplateMargins={(margins) => setTemplate((t) => ({ ...t, margins }))} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
               printer={printer} onCalibrationSheet={printCalibration}
               fields={fields} editedList={editedList} onJumpInstance={jumpToInstance} onResetInstanceById={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
@@ -1218,7 +1228,7 @@ function App() {
         : <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>)}
 
       {printing && (
-        <PrintSheets kind={printing} offset={printer} sheet={sheet} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} instanceFor={instanceFor} />
+        <PrintSheets bleed={bleedIn} kind={printing} offset={printer} sheet={sheet} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} instanceFor={instanceFor} />
       )}
     </div>
     </ImageContext.Provider>

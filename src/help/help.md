@@ -86,6 +86,8 @@ Open **Add image** to drop in pictures, a folder or a .zip. They are kept in thi
 
 **Avery templates** opens a window with a to-scale preview of the label and the sheet; pick one, then press **Choose this template**. **Margins** (Template page) draw a dashed safe-area guide, and objects can snap to it (Snapping options → Margins).
 
+**Bleed** (Template page) lets artwork run past the trim edge so a slightly off cut leaves no white sliver; a dashed red line on the template shows where it ends, and you extend your artwork to it. The most the layout can hold is half the gap between cards (a ½″ gap allows ¼″, a ¼″ gap allows ⅛″). On Avery sheets the bleed is held to that, and *Automatic* uses all of it. On a custom layout you choose what gives when your bleed is larger: **limit the bleed** to the gap, or **widen the gaps** on the page layout to make room.
+
 **Properties sections** (Color, Effects and so on) fold away when you tap their headings, so you can hide the options you are not using.
 
 **Moving around:** drag two fingers anywhere on the canvas, even over an object, to pan, and pinch to zoom, without moving anything. **Overflow warnings:** on the template page a small warning icon appears on a text box whose text will run off the card or out of a visible box for some records; tap it to see which records.

@@ -7,7 +7,8 @@ import {
   CaseUpper, Hash, Image as ImageIcon, Italic, Underline, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   X, Filter,
 } from "lucide-react";
-import type { DesignItem, LabelPreset, Sheet } from "../types";
+import type { Bleed, DesignItem, LabelPreset, Sheet } from "../types";
+import { inchLabel } from "../lib/bleed";
 import { averyPresets, fieldDisplayName, prettyField, specialFields } from "../lib/data";
 import type { FontLibrary } from "../hooks/useFontLibrary";
 import { NumberField, Pair, Section } from "./Fields";
@@ -58,6 +59,7 @@ type Props = {
   /** Drag-and-drop in the layer list: put `id` above/below `targetId`. */
   onReorder: (id: string, targetId: string, above: boolean, asGroup: boolean) => void;
   templateWidth: number;
+  bleed?: Bleed; bleedInfo: { max: number; effective: number; standard: boolean }; onBleed: (bleed: Bleed | undefined) => void;
   templateMargins?: { top: number; right: number; bottom: number; left: number }; onTemplateMargins: (margins: { top: number; right: number; bottom: number; left: number }) => void;
   templateHeight: number;
   onTemplateSize: (width: number, height: number) => void;
@@ -300,7 +302,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
   );
 }
 
-function TemplateSetup({ templateWidth, templateHeight, templateMargins, onTemplateMargins, onTemplateSize, onPreset, variants, sheet }: Props) {
+function TemplateSetup({ templateWidth, templateHeight, bleed, bleedInfo, onBleed, templateMargins, onTemplateMargins, onTemplateSize, onPreset, variants, sheet }: Props) {
   return (
     <>
       <VariantsSection {...variants} />
@@ -318,6 +320,35 @@ function TemplateSetup({ templateWidth, templateHeight, templateMargins, onTempl
           })}
         </div>
         <p className="hint">A dashed violet guide on the template marks the safe area. It never prints.</p>
+      </Section>
+      <Section title="BLEED">
+        {(() => {
+          const b: Bleed = bleed ?? { amount: 0, auto: false, policy: "limit" };
+          const set = (change: Partial<Bleed>) => onBleed({ ...b, ...change });
+          const shown = !bleed ? 0 : b.auto ? bleedInfo.max : b.amount;
+          return (
+            <>
+              <Pair label="Bleed (inches)">
+                <NumberField value={shown} min={0} step={0.0625} places={3} onChange={(n) => set({ amount: n, auto: false })} />
+              </Pair>
+              <label className="check-row bleed-auto"><input type="checkbox" checked={!!bleed && b.auto} onChange={(e) => set({ auto: e.target.checked, amount: e.target.checked ? b.amount : Math.min(b.amount || bleedInfo.max, bleedInfo.max) })} /> Automatic: the largest that fits</label>
+              {!bleedInfo.standard && !b.auto && (
+                <div className="bleed-policy" role="radiogroup" aria-label="If the bleed does not fit">
+                  <span>If the bleed doesn't fit the layout:</span>
+                  <label className="check-row"><input type="radio" name="bleed-policy" checked={b.policy === "limit"} onChange={() => set({ policy: "limit" })} /> Limit the bleed to the gap</label>
+                  <label className="check-row"><input type="radio" name="bleed-policy" checked={b.policy === "grow"} onChange={() => set({ policy: "grow" })} /> Widen the gaps to make room</label>
+                </div>
+              )}
+              <p className="hint">
+                {bleedInfo.max > 0
+                  ? <>Most the layout holds: <strong>{inchLabel(bleedInfo.max)}</strong>, half the gap between cards. </>
+                  : <>There is no gap between cards, so there is no room for bleed. </>}
+                {bleedInfo.standard ? "Avery sheets always keep the bleed inside that." : b.auto ? "" : b.policy === "grow" ? "The gaps on the page layout widen to fit what you enter." : "A larger number is held to that."}{!b.auto && bleed && b.amount > bleedInfo.max + 0.0005 && bleedInfo.effective < b.amount - 0.0005 && <> You entered {inchLabel(b.amount)}.</>}
+                {bleedInfo.effective > 0 && <> Printing with <strong>{inchLabel(bleedInfo.effective)}</strong> of bleed. A dashed red line on the template shows where it ends; extend artwork to it.</>}
+              </p>
+            </>
+          );
+        })()}
       </Section>
       <StockPicker templateWidth={templateWidth} templateHeight={templateHeight} sheet={sheet} onPreset={onPreset} />
     </>

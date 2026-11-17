@@ -1080,3 +1080,6 @@ html,body{touch-action:manipulation}
 /* Fields whose unit is named in the label: the number fills the box and reads from the right, next to the steppers */
 .number-input.fill .autosize{flex:1 1 auto}
 .number-input.fill .autosize>input{text-align:right;padding-right:4px}
+
+.bleed-auto{margin-top:8px}
+.bleed-policy{display:flex;flex-direction:column;gap:6px;margin-top:8px;font-size:11px;color:#78847a}

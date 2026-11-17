@@ -107,6 +107,7 @@ All of these finish with the same choice: replace your records, add to them, or 
 - [x] Text outline, overflow policies (shrink / truncate), and a text-fit audit
 - [x] Alternating templates and rule-based assignment; sort output by a field
 - [x] Per-record overrides on the page layout, with flags and revert
+- [x] Bleed: per-template bleed amount, automatic (half the gap) on Avery sheets, and limit-or-widen choice on custom layouts
 - [ ] Scannable codes (QR, Code 128) generated from data fields
 - [x] Printer calibration offset with saved printer settings and a calibration sheet
 - [x] Template gallery with built-in examples

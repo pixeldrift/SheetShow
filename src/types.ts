@@ -86,6 +86,13 @@ export type Guide = { id: string; axis: "x" | "y"; position: number };
 /** Pan is the offset (px) of the page center from the viewport center. */
 export type View = { zoom: number; pan: { x: number; y: number }; fitted: boolean };
 
+/**
+ * Bleed: artwork that runs past the trim edge so a slightly off cut leaves no white sliver. `auto` uses the largest the sheet allows.
+ * On a custom layout, `policy` says what gives when the amount doesn't fit: "limit" holds the bleed to what fits, "grow" widens the gaps.
+ */
+export type Bleed = { amount: number; auto: boolean; policy: "limit" | "grow" };
+export type Template = { width: number; height: number; margins?: { top: number; right: number; bottom: number; left: number }; bleed?: Bleed };
+
 export type Sheet = {
   pageWidth: number;
   pageHeight: number;
@@ -120,7 +127,7 @@ export type Project = {
   records: RecordRow[];
   items: DesignItem[];
   /** The label itself. `margins` (inches) is an inner safe area, drawn as a dashed guide on the template and never printed. */
-  template: { width: number; height: number; margins?: { top: number; right: number; bottom: number; left: number } };
+  template: Template;
   sheet: Sheet;
   fonts: FontEntry[];
   /** Extra templates that rules can assign to records. `items` stays the first template for older files. */

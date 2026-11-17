@@ -30,6 +30,8 @@ type Props = {
   /** Edit mode: pick items inside a slot, double-click to edit, drop pictures onto picture boxes. */
   edit?: boolean;
   zoom?: number;
+  /** Bleed in inches: each card's artwork runs this far past its trim edge, into the gaps. */
+  bleed?: number;
   /** Printer calibration: shifts every slot (and the crop marks) by this many inches. */
   offset?: { x: number; y: number };
   selected?: InstanceSelection | null;
@@ -94,7 +96,7 @@ export function LayoutStage(p: Props) {
             } : undefined}
           >
             {record && meta && info
-              ? <TemplateThumbnail items={info.items} record={record} width={templateWidth} height={templateHeight} meta={meta} interactive={p.edit && !preview} selectedItemId={sel} overriddenIds={overriddenIds} zoom={p.zoom} />
+              ? <TemplateThumbnail items={info.items} record={record} width={templateWidth} height={templateHeight} bleed={p.bleed} meta={meta} interactive={p.edit && !preview} selectedItemId={sel} overriddenIds={overriddenIds} zoom={p.zoom} />
               : <span className="empty-slot">Empty</span>}
             {!preview && <span className="slot-number">#{index + 1}</span>}
 
