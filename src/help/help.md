@@ -92,6 +92,12 @@ Open **Add image** to drop in pictures, a folder or a .zip. They are kept in thi
 
 **Record numbers.** Each card has a purple badge with a number, its place in the sequence on this sheet. Cards with the same number show the same record, and each higher number is the next record, so 1, 1, 1, 2, 2, 3 prints three of one record, two of the next, and one of the next. The small database badge at the bottom right is the actual record from your data. Under **Record numbering** in Properties, *One record per sheet* numbers every card 1 and *Each card a new record* numbers them 1, 2, 3… in reading order; changing any card's number by hand makes it *Custom*. Turn on the arrows in the toolbar to see the order (solid to a new record, dotted between copies of the same record).
 
+**Several pages and packets.** A project can have more than one page design (a letter, a badge sheet, the back of a page). Use the tabs above the sheet, or **New page** in Properties. **WHAT PRINTS** says what prints, in order:
+- **Records per packet** is how many records go together. *All records together* prints every step for all records before the next step starts (all the badge sheets, then all the letters). *One record* prints the whole sequence for each person in turn, so a packet is a welcome letter, a thank-you letter, a badge. *A set of records* groups them, say eight at a time, so a badge sheet of eight goes with the eight letters for those eight people.
+- **Steps** are the pages in the sequence. A page with one record per sheet prints once per person in the packet; a sheet of eight badges prints once per eight. A step can be limited to *odd* or *even* packets, which gives you alternating page styles.
+- **Add back side** copies the page with its cards mirrored side to side (flip on the long edge), prints it right after the front, and groups the records by one sheet's worth, so duplex printing alternates front and back.
+Record order (sorting) and print options are shared by every page; each page has its own size, layout and numbering.
+
 **Properties sections** (Color, Effects and so on) fold away when you tap their headings, so you can hide the options you are not using.
 
 **Moving around:** drag two fingers anywhere on the canvas, even over an object, to pan, and pinch to zoom, without moving anything. **Overflow warnings:** on the template page a small warning icon appears on a text box whose text will run off the card or out of a visible box for some records; tap it to see which records.

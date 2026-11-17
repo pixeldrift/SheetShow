@@ -7,7 +7,7 @@ import {
   CaseUpper, Hash, Image as ImageIcon, Italic, Underline, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   X, Filter,
 } from "lucide-react";
-import type { Bleed, DesignItem, LabelPreset, Placement, Sheet } from "../types";
+import type { Bleed, DesignItem, LabelPreset, PageMeta, Placement, Plan, Sheet } from "../types";
 import { inchLabel } from "../lib/bleed";
 import { averyPresets, fieldDisplayName, prettyField, specialFields } from "../lib/data";
 import type { FontLibrary } from "../hooks/useFontLibrary";
@@ -59,6 +59,12 @@ type Props = {
   /** Drag-and-drop in the layer list: put `id` above/below `targetId`. */
   onReorder: (id: string, targetId: string, above: boolean, asGroup: boolean) => void;
   templateWidth: number;
+  /** Page layout: the page designs and the print plan, and the settings every page shares (record order). */
+  pages: {
+    list: PageMeta[]; activeId: string; plan: Plan; sheetCount: number; perSheet: Record<string, number>;
+    onRename: (id: string, name: string) => void; onDuplicate: (id: string) => void; onBack: (id: string) => void; onDelete: (id: string) => void; onAdd: () => void; onPlan: (plan: Plan) => void;
+  };
+  shared: Sheet; onShared: (patch: Partial<Sheet>) => void;
   /** Page layout: the cards on the sheet and the record numbering. */
   cards: {
     custom: boolean; mode: "same" | "each" | "custom"; count: number; perSheet: number; selected: Placement | null; templates: { id: string; name: string }[];
@@ -361,7 +367,67 @@ function TemplateSetup({ templateWidth, templateHeight, bleed, bleedInfo, onBlee
   );
 }
 
-function PageSetup({ cards, templateWidth, templateHeight, onPreset, sheet, onSheet, pageCount, overflow, fields, onAudit, auditCount, editedList, onJumpInstance, onResetInstanceById, printer, onCalibrationSheet }: Props) {
+/** The page designs (letter, badge sheet, the back of a page…) and what prints for each packet of records. */
+function PagesSection({ pages }: { pages: Props["pages"] }) {
+  const { list, activeId, plan } = pages;
+  const name = (id: string) => list.find((p) => p.id === id)?.name ?? "Page";
+  const active = list.find((p) => p.id === activeId);
+  const setStep = (id: string, change: Partial<Plan["steps"][number]>) => pages.onPlan({ ...plan, steps: plan.steps.map((s) => (s.id === id ? { ...s, ...change } : s)) });
+  const move = (i: number, by: number) => { const steps = [...plan.steps]; const j = i + by; if (j < 0 || j >= steps.length) return; [steps[i], steps[j]] = [steps[j], steps[i]]; pages.onPlan({ ...plan, steps }); };
+  const ruleValue = (s: Plan["steps"][number]) => (!s.when ? "all" : s.when.every === 2 && s.when.start === 1 ? "odd" : s.when.every === 2 && s.when.start === 2 ? "even" : "nth");
+  const groupMode = plan.group === 0 ? "all" : plan.group === 1 ? "one" : "set";
+  return (
+    <>
+      <Section title="THIS PAGE">
+        <input className="property-input" value={active?.name ?? ""} onChange={(e) => pages.onRename(activeId, e.target.value)} aria-label="Page name" />
+        <div className="property-actions page-actions">
+          <button className="button" onClick={() => pages.onDuplicate(activeId)}><Copy size={14} /> Duplicate</button>
+          <button className="button" title="Adds the same cards mirrored side to side, printed right after this page, for double-sided sheets" onClick={() => pages.onBack(activeId)}><RotateCcw size={14} /> Add back side</button>
+          <button className="button" onClick={pages.onAdd}><Plus size={14} /> New page</button>
+          <button className="button danger" disabled={list.length < 2 || list[0].id === activeId} title={list[0].id === activeId ? "The first page can't be deleted" : "Delete this page"} onClick={() => pages.onDelete(activeId)}><Trash2 size={14} /> Delete</button>
+        </div>
+      </Section>
+      <Section title="WHAT PRINTS">
+        <Pair label="Records per packet">
+          <select className="select" value={groupMode} onChange={(e) => pages.onPlan({ ...plan, group: e.target.value === "all" ? 0 : e.target.value === "one" ? 1 : Math.max(2, plan.group || 2) })}>
+            <option value="all">All records together</option>
+            <option value="one">One record (a packet for each person)</option>
+            <option value="set">A set of records…</option>
+          </select>
+        </Pair>
+        {groupMode === "set" && <Pair label="Records in each packet"><NumberField value={plan.group} min={2} max={999} step={1} places={0} onChange={(n) => pages.onPlan({ ...plan, group: Math.max(2, Math.round(n)) })} /></Pair>}
+        <div className="plan-steps">
+          {plan.steps.map((s, i) => (
+            <div key={s.id} className="plan-step">
+              <span className="plan-num">{i + 1}</span>
+              <select className="select" value={s.pageId} aria-label={`Step ${i + 1} page`} onChange={(e) => setStep(s.id, { pageId: e.target.value })}>
+                {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <select className="select" value={ruleValue(s)} aria-label={`Step ${i + 1} applies to`} onChange={(e) => setStep(s.id, { when: e.target.value === "all" ? undefined : e.target.value === "odd" ? { every: 2, start: 1 } : e.target.value === "even" ? { every: 2, start: 2 } : { every: 3, start: 1 } })}>
+                <option value="all">Every packet</option>
+                <option value="odd">Odd packets</option>
+                <option value="even">Even packets</option>
+                {ruleValue(s) === "nth" && <option value="nth">Every {s.when?.every}th…</option>}
+              </select>
+              <span className="plan-move">
+                <button className="mini-button" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}><ChevronDown size={12} style={{ transform: "rotate(180deg)" }} /></button>
+                <button className="mini-button" aria-label="Move down" disabled={i === plan.steps.length - 1} onClick={() => move(i, 1)}><ChevronDown size={12} /></button>
+              </span>
+              <button className="mini-button" aria-label="Remove this step" disabled={plan.steps.length < 2} onClick={() => pages.onPlan({ ...plan, steps: plan.steps.filter((x) => x.id !== s.id) })}><X size={13} /></button>
+            </div>
+          ))}
+        </div>
+        <button className="button wide" onClick={() => pages.onPlan({ ...plan, steps: [...plan.steps, { id: Math.random().toString(36).slice(2, 8), pageId: activeId }] })}><Plus size={14} /> Add a step</button>
+        <p className="hint">
+          {groupMode === "all" ? "Each step prints all the records before the next step starts." : "Each packet prints every step, in order, for its records, then the next packet."}
+          {" "}Steps in this plan: {plan.steps.map((s) => name(s.pageId)).join(" → ")}. <strong>{pages.sheetCount}</strong> {pages.sheetCount === 1 ? "sheet" : "sheets"} in all.
+        </p>
+      </Section>
+    </>
+  );
+}
+
+function PageSetup({ pages, shared, onShared, cards, templateWidth, templateHeight, onPreset, sheet, onSheet, pageCount, overflow, fields, onAudit, auditCount, editedList, onJumpInstance, onResetInstanceById, printer, onCalibrationSheet }: Props) {
   const size = sheet.pageWidth === 8.5 && sheet.pageHeight === 11 ? "letter" : sheet.pageWidth === 8.27 && sheet.pageHeight === 11.69 ? "a4" : "custom";
   const card = cards.selected;
   return (
@@ -395,6 +461,7 @@ function PageSetup({ cards, templateWidth, templateHeight, onPreset, sheet, onSh
           </div>
         </Section>
       )}
+      <PagesSection pages={pages} />
       <Section title="PAGE SIZE">
         <select className="select" value={size} onChange={(e) => {
           if (e.target.value === "letter") onSheet({ pageWidth: 8.5, pageHeight: 11 });
@@ -441,15 +508,15 @@ function PageSetup({ cards, templateWidth, templateHeight, onPreset, sheet, onSh
       )}
       <Section title="RECORD ORDER">
         <Pair label="Sort the sheets by">
-          <select className="select" value={sheet.sortField ?? ""} onChange={(e) => onSheet({ sortField: e.target.value || undefined })}>
+          <select className="select" value={shared.sortField ?? ""} onChange={(e) => onShared({ sortField: e.target.value || undefined })}>
             <option value="">The order in the data table</option>
             {fields.map((f) => <option key={f} value={f}>{prettyField(f)}</option>)}
           </select>
         </Pair>
-        {sheet.sortField && (
+        {shared.sortField && (
           <div className="segmented spaced-block">
-            <button className={(sheet.sortDir ?? 1) === 1 ? "active" : ""} onClick={() => onSheet({ sortDir: 1 })}>A → Z</button>
-            <button className={sheet.sortDir === -1 ? "active" : ""} onClick={() => onSheet({ sortDir: -1 })}>Z → A</button>
+            <button className={(shared.sortDir ?? 1) === 1 ? "active" : ""} onClick={() => onShared({ sortDir: 1 })}>A → Z</button>
+            <button className={shared.sortDir === -1 ? "active" : ""} onClick={() => onShared({ sortDir: -1 })}>Z → A</button>
           </div>
         )}
         <p className="hint">Only changes the printed and previewed order. Numbers sort as numbers.</p>
