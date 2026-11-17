@@ -87,6 +87,7 @@ export function Toolbar(p: Props) {
               ["objects", "Other objects", "Edges and centers line up"],
               ["spacing", "Equal spacing", "Matching gaps between objects"],
               ["page", "Page", "Edges and center of the template"],
+              ["margins", "Margins", "The template's dashed safe area"],
               ["guides", "Guides", "Lines dragged from the rulers"],
               ["grid", "Grid", "Only while the grid is showing"],
             ] as const).map(([key, label, hint]) => (

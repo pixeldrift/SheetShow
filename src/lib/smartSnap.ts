@@ -8,8 +8,8 @@ export type SnapLine = {
 };
 
 /** Which kinds of snapping are on. */
-export type SnapOptions = { objects: boolean; spacing: boolean; page: boolean; guides: boolean; grid: boolean };
-export const DEFAULT_SNAP_OPTIONS: SnapOptions = { objects: true, spacing: true, page: true, guides: true, grid: true };
+export type SnapOptions = { objects: boolean; spacing: boolean; page: boolean; margins: boolean; guides: boolean; grid: boolean };
+export const DEFAULT_SNAP_OPTIONS: SnapOptions = { objects: true, spacing: true, page: true, margins: true, guides: true, grid: true };
 
 export type SnapResult = { dx: number; dy: number; lines: SnapLine[] };
 

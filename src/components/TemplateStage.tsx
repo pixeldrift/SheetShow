@@ -95,6 +95,8 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
   /** Everything a dragged object can snap to: the page, and every other visible, non-reference object. */
   const snapTargets = (exclude: string[]): Box[] => [
     ...(snapOptions.page ? [{ x: 0, y: 0, w: width, h: height }] : []),
+    ...(snapOptions.margins && margins && (margins.top || margins.right || margins.bottom || margins.left)
+      ? [{ x: margins.left, y: margins.top, w: Math.max(0, width - margins.left - margins.right), h: Math.max(0, height - margins.top - margins.bottom) }] : []),
     ...(snapOptions.objects ? items.filter((i) => i.visible !== false && !i.reference && !exclude.includes(i.id)).map(framedBox) : []),
   ];
   /** Objects that equal-spacing snapping measures gaps against. */

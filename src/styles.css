@@ -1052,3 +1052,16 @@ html,body{touch-action:manipulation}
 .number-input small.scrub-unit{flex:0 100 auto;min-width:0;overflow:hidden;white-space:nowrap}
 .preset-option>.preset-main{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
 .preset-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+
+/* Avery dialog: narrow, a to-scale preview on top, scrolling list, buttons pinned below */
+.stock-dialog{width:min(380px,100%);max-height:min(720px,calc(100dvh - 32px))}
+.stock-dialog .dialog-head{padding-bottom:8px}
+.stock-preview{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 18px 10px;flex:none;border-bottom:1px solid var(--line)}
+.stock-preview figure{margin:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;background:#f6f6f2;border-radius:9px;padding:10px 6px 8px;min-height:120px}
+.stock-preview figcaption{display:flex;flex-direction:column;align-items:center;font-size:10px;color:#8f968d;line-height:1.35}
+.stock-preview figcaption strong{color:#4e5d53;font-size:11px}
+.stock-dialog .dialog-body{padding-top:8px}
+.stock-dialog .preset-option.current-stock{background:#f7f7f2}
+.stock-dialog .dialog-foot{flex:none}
+.stock-foot-note{margin:0;font-size:10px;max-width:120px}
+.stock-dialog .dialog-foot{justify-content:flex-end}.stock-dialog .dialog-foot .button{white-space:nowrap}.stock-dialog .preset-option.selected{background:#fceee3}
