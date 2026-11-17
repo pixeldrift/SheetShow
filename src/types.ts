@@ -86,6 +86,19 @@ export type Guide = { id: string; axis: "x" | "y"; position: number };
 /** Pan is the offset (px) of the page center from the viewport center. */
 export type View = { zoom: number; pan: { x: number; y: number }; fitted: boolean };
 
+/**
+ * Bleed: artwork that runs past the trim edge so a slightly off cut leaves no white sliver. `auto` uses the largest the sheet allows.
+ * On a custom layout, `policy` says what gives when the amount doesn't fit: "limit" holds the bleed to what fits, "grow" widens the gaps.
+ */
+export type Bleed = { amount: number; auto: boolean; policy: "limit" | "grow" };
+export type Template = { width: number; height: number; margins?: { top: number; right: number; bottom: number; left: number }; bleed?: Bleed };
+
+/**
+ * One copy of the individual template on a page. `number` is its position among the records on this sheet: cards with the same
+ * number show the same record, and each higher number is the next record. `variantId` picks a template (unset = by the alternating rules).
+ */
+export type Placement = { id: string; x: number; y: number; number: number; variantId?: string; /** Turned clockwise in quarter turns; x and y are the corner of the turned card's footprint. */ rotation?: 0 | 90 | 180 | 270 };
+
 export type Sheet = {
   pageWidth: number;
   pageHeight: number;
@@ -96,6 +109,8 @@ export type Sheet = {
   marginX: number;
   marginY: number;
   repeatMode: "same" | "next";
+  /** A hand-arranged page. Unset means the columns, rows, gaps and margins above lay the cards out. */
+  placements?: Placement[];
   cropMarks: boolean;
   /** Output order: sort records by this field (unset = the data table's order). */
   sortField?: string;
@@ -120,7 +135,7 @@ export type Project = {
   records: RecordRow[];
   items: DesignItem[];
   /** The label itself. `margins` (inches) is an inner safe area, drawn as a dashed guide on the template and never printed. */
-  template: { width: number; height: number; margins?: { top: number; right: number; bottom: number; left: number } };
+  template: Template;
   sheet: Sheet;
   fonts: FontEntry[];
   /** Extra templates that rules can assign to records. `items` stays the first template for older files. */

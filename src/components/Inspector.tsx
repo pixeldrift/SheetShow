@@ -2,12 +2,13 @@ import { useRef, useState } from "react";
 import { kindIcon } from "./LayersPanel";
 import type { DrawerChrome } from "./DrawerChrome";
 import {
-  ChevronDown, FileText, LayoutTemplate, Shapes, Group, Ungroup,
+  ChevronDown, FileText, LayoutTemplate, Plus, Shapes, Group, Ungroup,
   AlignCenter, AlignLeft, AlignRight, AlertTriangle, BadgeCheck, ChevronRight, Copy, Eye, EyeOff, FileImage,
   CaseUpper, Hash, Image as ImageIcon, Italic, Underline, Layers, TextCursorInput, Link2Off, ListFilter, Lock, RotateCcw, RotateCw, Search, SlidersHorizontal, Square, Trash2, Type, Unlock,
   X, Filter,
 } from "lucide-react";
-import type { DesignItem, LabelPreset, Sheet } from "../types";
+import type { Bleed, DesignItem, LabelPreset, Placement, Sheet } from "../types";
+import { inchLabel } from "../lib/bleed";
 import { averyPresets, fieldDisplayName, prettyField, specialFields } from "../lib/data";
 import type { FontLibrary } from "../hooks/useFontLibrary";
 import { NumberField, Pair, Section } from "./Fields";
@@ -58,6 +59,13 @@ type Props = {
   /** Drag-and-drop in the layer list: put `id` above/below `targetId`. */
   onReorder: (id: string, targetId: string, above: boolean, asGroup: boolean) => void;
   templateWidth: number;
+  /** Page layout: the cards on the sheet and the record numbering. */
+  cards: {
+    custom: boolean; mode: "same" | "each" | "custom"; count: number; perSheet: number; selected: Placement | null; templates: { id: string; name: string }[];
+    onNumberAll: (mode: "same" | "each") => void; onReset: () => void; onNumber: (n: number) => void; onTemplate: (id: string | undefined) => void;
+    onPosition: (x: number, y: number) => void; onRotate: (turn: 0 | 90 | 180 | 270) => void; onDuplicate: () => void; onDelete: () => void; onAdd: () => void;
+  };
+  bleed?: Bleed; bleedInfo: { max: number; effective: number; standard: boolean; custom: boolean; edgeLimited: boolean }; onBleed: (bleed: Bleed | undefined) => void;
   templateMargins?: { top: number; right: number; bottom: number; left: number }; onTemplateMargins: (margins: { top: number; right: number; bottom: number; left: number }) => void;
   templateHeight: number;
   onTemplateSize: (width: number, height: number) => void;
@@ -300,7 +308,7 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
   );
 }
 
-function TemplateSetup({ templateWidth, templateHeight, templateMargins, onTemplateMargins, onTemplateSize, onPreset, variants, sheet }: Props) {
+function TemplateSetup({ templateWidth, templateHeight, bleed, bleedInfo, onBleed, templateMargins, onTemplateMargins, onTemplateSize, onPreset, variants, sheet }: Props) {
   return (
     <>
       <VariantsSection {...variants} />
@@ -319,15 +327,74 @@ function TemplateSetup({ templateWidth, templateHeight, templateMargins, onTempl
         </div>
         <p className="hint">A dashed violet guide on the template marks the safe area. It never prints.</p>
       </Section>
+      <Section title="BLEED">
+        {(() => {
+          const b: Bleed = bleed ?? { amount: 0, auto: false, policy: "limit" };
+          const set = (change: Partial<Bleed>) => onBleed({ ...b, ...change });
+          const shown = !bleed ? 0 : b.auto ? bleedInfo.max : b.amount;
+          return (
+            <>
+              <Pair label="Bleed (inches)">
+                <NumberField value={shown} min={0} step={0.0625} places={3} onChange={(n) => set({ amount: n, auto: false })} />
+              </Pair>
+              <label className="check-row bleed-auto"><input type="checkbox" checked={!!bleed && b.auto} onChange={(e) => set({ auto: e.target.checked, amount: e.target.checked ? b.amount : Math.min(b.amount || bleedInfo.max, bleedInfo.max) })} /> Automatic: the largest that fits</label>
+              {!bleedInfo.standard && !bleedInfo.custom && !b.auto && (
+                <div className="bleed-policy" role="radiogroup" aria-label="If the bleed does not fit">
+                  <span>If the bleed doesn't fit the layout:</span>
+                  <label className="check-row"><input type="radio" name="bleed-policy" checked={b.policy === "limit"} onChange={() => set({ policy: "limit" })} /> Limit the bleed to the gap</label>
+                  <label className="check-row"><input type="radio" name="bleed-policy" checked={b.policy === "grow"} onChange={() => set({ policy: "grow" })} /> Widen the gaps to make room</label>
+                </div>
+              )}
+              <p className="hint">
+                {bleedInfo.max > 0
+                  ? <>Most the layout holds: <strong>{inchLabel(bleedInfo.max)}</strong>, {bleedInfo.edgeLimited ? "the room to the edge of the page" : "half the space between the closest cards"}. </>
+                  : <>There is no room for bleed: the cards touch each other or the page edge. </>}
+                {bleedInfo.custom ? "On a hand-arranged page the bleed is always held to that." : bleedInfo.standard ? "Avery sheets always keep the bleed inside that." : b.auto ? "" : b.policy === "grow" ? "The gaps on the page layout widen to fit what you enter." : "A larger number is held to that."}{!b.auto && bleed && b.amount > bleedInfo.max + 0.0005 && bleedInfo.effective < b.amount - 0.0005 && <> You entered {inchLabel(b.amount)}.</>}
+                {bleedInfo.effective > 0 && <> Printing with <strong>{inchLabel(bleedInfo.effective)}</strong> of bleed. A dashed orange line on the template shows where it ends; extend artwork to it.</>}
+              </p>
+            </>
+          );
+        })()}
+      </Section>
       <StockPicker templateWidth={templateWidth} templateHeight={templateHeight} sheet={sheet} onPreset={onPreset} />
     </>
   );
 }
 
-function PageSetup({ templateWidth, templateHeight, onPreset, sheet, onSheet, pageCount, overflow, fields, onAudit, auditCount, editedList, onJumpInstance, onResetInstanceById, printer, onCalibrationSheet }: Props) {
+function PageSetup({ cards, templateWidth, templateHeight, onPreset, sheet, onSheet, pageCount, overflow, fields, onAudit, auditCount, editedList, onJumpInstance, onResetInstanceById, printer, onCalibrationSheet }: Props) {
   const size = sheet.pageWidth === 8.5 && sheet.pageHeight === 11 ? "letter" : sheet.pageWidth === 8.27 && sheet.pageHeight === 11.69 ? "a4" : "custom";
+  const card = cards.selected;
   return (
     <>
+      {card && (
+        <Section title="SELECTED CARD">
+          <Pair label="Record on this sheet">
+            <NumberField value={card.number} min={1} max={99} step={1} places={0} onChange={(n) => cards.onNumber(n)} />
+          </Pair>
+          <p className="hint">Cards with the same number show the same record. Each higher number is the next record.</p>
+          {cards.templates.length > 1 && (
+            <Pair label="Template">
+              <select className="select" value={card.variantId ?? ""} onChange={(e) => cards.onTemplate(e.target.value || undefined)}>
+                <option value="">Automatic (by the alternating rules)</option>
+                {cards.templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </Pair>
+          )}
+          <Pair label="Turn">
+            <div className="segmented" role="group" aria-label="Turn the card">
+              {([0, 90, 180, 270] as const).map((d) => <button key={d} className={(card.rotation ?? 0) === d ? "active" : ""} onClick={() => cards.onRotate(d)}>{d}°</button>)}
+            </div>
+          </Pair>
+          <div className="two-col spaced">
+            <Pair label="Left (inches)"><NumberField value={card.x} min={0} step={0.05} places={3} onChange={(n) => cards.onPosition(n, card.y)} /></Pair>
+            <Pair label="Top (inches)"><NumberField value={card.y} min={0} step={0.05} places={3} onChange={(n) => cards.onPosition(card.x, n)} /></Pair>
+          </div>
+          <div className="property-actions">
+            <button className="button" onClick={cards.onDuplicate}><Copy size={14} /> Duplicate</button>
+            <button className="button danger" disabled={cards.count < 2} onClick={cards.onDelete}><Trash2 size={14} /> Delete</button>
+          </div>
+        </Section>
+      )}
       <Section title="PAGE SIZE">
         <select className="select" value={size} onChange={(e) => {
           if (e.target.value === "letter") onSheet({ pageWidth: 8.5, pageHeight: 11 });
@@ -341,11 +408,22 @@ function PageSetup({ templateWidth, templateHeight, onPreset, sheet, onSheet, pa
         </div>
       </Section>
       <StockPicker templateWidth={templateWidth} templateHeight={templateHeight} sheet={sheet} onPreset={onPreset} />
+      {cards.custom ? (
+        <Section title="ARRANGEMENT">
+          <p className="hint first"><strong>Custom layout</strong> · {cards.count} {cards.count === 1 ? "card" : "cards"}. Drag cards on the sheet, or add more from the Templates drawer.</p>
+          <div className="property-actions">
+            <button className="button" onClick={cards.onAdd}><Plus size={14} /> Add a card</button>
+            <button className="button" onClick={cards.onReset}><RotateCcw size={14} /> Back to a grid</button>
+          </div>
+        </Section>
+      ) : (
+      <>
       <Section title="ITEMS PER PAGE">
         <div className="two-col">
           <Pair label="Columns"><NumberField value={sheet.columns} min={1} max={20} step={1} places={0} onChange={(n) => onSheet({ columns: Math.round(n) })} /></Pair>
           <Pair label="Rows"><NumberField value={sheet.rows} min={1} max={30} step={1} places={0} onChange={(n) => onSheet({ rows: Math.round(n) })} /></Pair>
         </div>
+        <p className="hint">A grid fills the page evenly. Drag any card, or add one, to arrange the page by hand instead.</p>
       </Section>
       <Section title="PAGE MARGINS">
         <div className="two-col">
@@ -359,6 +437,8 @@ function PageSetup({ templateWidth, templateHeight, onPreset, sheet, onSheet, pa
           <Pair label="Vertical"><NumberField value={sheet.gapY} min={0} unit="in" onChange={(n) => onSheet({ gapY: n })} /></Pair>
         </div>
       </Section>
+      </>
+      )}
       <Section title="RECORD ORDER">
         <Pair label="Sort the sheets by">
           <select className="select" value={sheet.sortField ?? ""} onChange={(e) => onSheet({ sortField: e.target.value || undefined })}>
@@ -395,14 +475,15 @@ function PageSetup({ templateWidth, templateHeight, onPreset, sheet, onSheet, pa
         <label className="check-row"><input type="checkbox" checked={sheet.cropMarks} onChange={(e) => onSheet({ cropMarks: e.target.checked })} /> Crop marks in the page margins</label>
         <p className="hint">Shown in print preview and on printed sheets. They need roughly ¼″ of margin to appear.</p>
       </Section>
-      <Section title="DATA ASSIGNMENT">
+      <Section title="RECORD NUMBERING">
         <div className="mode-options">
-          <button className={sheet.repeatMode === "same" ? "mode-option active" : "mode-option"} onClick={() => onSheet({ repeatMode: "same" })}><Copy size={15} /><span><strong>One record per sheet</strong><small>Fill each sheet with one record, a sheet for every record</small></span></button>
-          <button className={sheet.repeatMode === "next" ? "mode-option active" : "mode-option"} onClick={() => onSheet({ repeatMode: "next" })}><ListFilter size={15} /><span><strong>Next record each time</strong><small>Fill the sheet with consecutive records</small></span></button>
+          <button className={cards.mode === "same" ? "mode-option active" : "mode-option"} onClick={() => cards.onNumberAll("same")}><Copy size={15} /><span><strong>One record per sheet</strong><small>Number every card 1: the whole sheet shows one record</small></span></button>
+          <button className={cards.mode === "each" ? "mode-option active" : "mode-option"} onClick={() => cards.onNumberAll("each")}><ListFilter size={15} /><span><strong>Each card a new record</strong><small>Number the cards 1, 2, 3… in reading order</small></span></button>
+          <div className={cards.mode === "custom" ? "mode-option active static" : "mode-option static dim"} aria-current={cards.mode === "custom"}><Hash size={15} /><span><strong>Custom</strong><small>{cards.mode === "custom" ? `${cards.perSheet} ${cards.perSheet === 1 ? "record" : "records"} per sheet. Pick a card to change its number.` : "Appears when you change a card's number by hand"}</small></span></div>
         </div>
       </Section>
-      {overflow && <p className="warning"><AlertTriangle size={14} /> This grid doesn’t fit on the page. Reduce the margins, spacing, or the number of rows and columns.</p>}
-      <div className="output-summary"><div><span>Items per sheet</span><strong>{sheet.columns * sheet.rows}</strong></div><div><span>Sheets to print</span><strong>{pageCount}</strong></div></div>
+      {overflow && <p className="warning"><AlertTriangle size={14} /> Some cards don’t fit on the page. Move them, or reduce the margins, spacing, or the number of rows and columns.</p>}
+      <div className="output-summary"><div><span>Cards per sheet</span><strong>{cards.count}</strong></div><div><span>Sheets to print</span><strong>{pageCount}</strong></div></div>
     </>
   );
 }

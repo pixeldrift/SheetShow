@@ -176,12 +176,13 @@ export function ItemShape({ item: source, record, meta, outline, zoom = 1, inter
 }
 
 /** A full template rendered at natural size, clipped to its bounds. In page edit mode its items can be picked. */
-export function TemplateThumbnail({ items, record, meta, width, height, interactive, selectedItemId, overriddenIds, zoom }: {
-  items: DesignItem[]; record: RecordRow; meta: RecordMeta; width: number; height: number;
+export function TemplateThumbnail({ items, record, meta, width, height, bleed = 0, interactive, selectedItemId, overriddenIds, zoom }: {
+  items: DesignItem[]; record: RecordRow; meta: RecordMeta; width: number; height: number; /** Artwork may run this far (inches) past the trim edge. */ bleed?: number;
   interactive?: boolean; selectedItemId?: string | null; overriddenIds?: Set<string>; zoom?: number;
 }) {
   return (
-    <svg className="template-thumb" width={width * PX_PER_IN} height={height * PX_PER_IN} viewBox={`0 0 ${width * PX_PER_IN} ${height * PX_PER_IN}`}>
+    <svg className="template-thumb" width={(width + bleed * 2) * PX_PER_IN} height={(height + bleed * 2) * PX_PER_IN} viewBox={`${-bleed * PX_PER_IN} ${-bleed * PX_PER_IN} ${(width + bleed * 2) * PX_PER_IN} ${(height + bleed * 2) * PX_PER_IN}`}
+      style={bleed ? { position: "absolute", left: -bleed * PX_PER_IN, top: -bleed * PX_PER_IN } : undefined}>
       {items.filter((item) => item.visible !== false && !item.reference).map((item) => (
         <ItemShape key={item.id} item={item} record={record} meta={meta} interactive={interactive} zoom={zoom}
           outline={interactive && selectedItemId === item.id ? "primary" : undefined} overridden={overriddenIds?.has(item.id)} />

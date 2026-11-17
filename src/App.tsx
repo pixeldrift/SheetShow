@@ -1,9 +1,9 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Braces, ChevronLeft, ChevronRight, GripVertical, Hash, PencilLine, Redo2, SlidersHorizontal, Type, Undo2 } from "lucide-react";
+import { Braces, ChevronLeft, ChevronRight, GripVertical, Hash, LayoutTemplate, PencilLine, Redo2, SlidersHorizontal, Type, Undo2 } from "lucide-react";
 import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import type { DesignItem, Guide, InstanceOverride, ItemPatch, LabelPreset, Project, RecordRow, Sheet, Variant, VariantRule, View, Workspace } from "./types";
+import type { DesignItem, Guide, Placement, InstanceOverride, ItemPatch, LabelPreset, Project, RecordRow, Sheet, Variant, VariantRule, View, Workspace } from "./types";
 import { tokenFields, upgradeProject } from "./lib/merge";
 import { DEFAULT_SNAP_OPTIONS, type SnapOptions } from "./lib/smartSnap";
 import { PX_PER_IN, clamp, fieldDisplayName, isPlaceholderData, isPlaceholderDesign, specialFields, starterItems, starterRecords, uid, valueFor } from "./lib/data";
@@ -54,6 +54,9 @@ import { itemFrame } from "./components/ItemShape";
 import { DataTable } from "./components/DataTable";
 import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, reorderColumns, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
 import { PrintSheets } from "./components/PrintSheets";
+import { matchedStock } from "./components/StockPicker";
+import { footprint, freeSpot, gridPlacements, numbering, numberingMode, placementsOf, renumber } from "./lib/placements";
+import { bleedLimits, effectiveBleed, gapsFor, maxBleed } from "./lib/bleed";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -193,25 +196,86 @@ function App() {
   const liveItems = useMemo(() => (recMode ? applyOverride(items, recOverride) : items), [recMode, items, recOverride]);
   const selectedItems = useMemo(() => liveItems.filter((item) => selectedIds.includes(item.id)), [liveItems, selectedIds]);
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
-  const slots = sheet.columns * sheet.rows;
+  // The cards on a page come from the grid settings or, on a hand-arranged page, from `sheet.placements`.
+  const placements = placementsOf(sheet, template.width, template.height);
+  const slots = placements.length;
+  const { perSheet } = numbering(placements);
+  // Bleed: standard (Avery) sheets always hold it to what the gaps allow; custom ones follow the template's own policy.
+  const standardStock = matchedStock(template.width, template.height, sheet);
+  const bleedIn = effectiveBleed(template, sheet, !!standardStock || !!sheet.placements);
+  const bleedMax = maxBleed(sheet, template.width, template.height);
+  const bleedLimit = bleedLimits(sheet, template.width, template.height);
+  const changeBleed = (bleed: Project["template"]["bleed"]) => {
+    setTemplate((t) => ({ ...t, bleed }));
+    if (bleed && !standardStock && !sheet.placements && !bleed.auto && bleed.policy === "grow") setSheet((s) => ({ ...s, ...gapsFor(s, bleed.amount) }));
+  };
+  // ── Page layout: the cards on a sheet ──────────────────────────────────
+  const [cardSel, setCardSel] = useState<string | null>(null);
+  const [showOrder, setShowOrder] = useState(false);
+  /** Hand-arranging the page: pick, drag, add and delete cards. (Override mode is the other thing you can do on a sheet.) */
+  const arranging = workspace === "layout" && !instanceMode && !preview && !showData;
+  const selectedCard = placements.find((c) => c.id === cardSel) ?? null;
+  /** Any change to the cards turns the page into a hand-arranged one (starting from what the grid gave). */
+  const editCards = (change: (list: Placement[]) => Placement[], coalesce?: string) =>
+    setSheet((s) => ({ ...s, placements: change(s.placements ?? gridPlacements(s, template.width, template.height)) }), { coalesce });
+  const moveCard = (id: string, x: number, y: number) => editCards((list) => list.map((c) => (c.id === id ? { ...c, x, y } : c)), `card-move:${id}`);
+  const numberCard = (id: string, number: number) => editCards((list) => list.map((c) => (c.id === id ? { ...c, number: Math.max(1, Math.round(number)) } : c)), `card-number:${id}`);
+  /** Turn a card by a quarter (or set it), keeping its center where it is. */
+  const rotateCard = (id: string, turn: number | "next") => editCards((list) => list.map((c) => {
+    if (c.id !== id) return c;
+    const next = (turn === "next" ? ((c.rotation ?? 0) + 90) % 360 : turn) as 0 | 90 | 180 | 270;
+    const was = footprint(c, template.width, template.height), now = footprint({ ...c, rotation: next }, template.width, template.height);
+    const x = clamp(c.x + (was.w - now.w) / 2, 0, Math.max(0, sheet.pageWidth - now.w)), y = clamp(c.y + (was.h - now.h) / 2, 0, Math.max(0, sheet.pageHeight - now.h));
+    return { ...c, rotation: next || undefined, x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) };
+  }));
+  const cardVariant = (id: string, variantId: string | undefined) => editCards((list) => list.map((c) => (c.id === id ? { ...c, variantId } : c)));
+  const addCard = (variantId?: string, at?: { x: number; y: number }) => {
+    const id = uid();
+    const spot = at ?? freeSpot(placements, template.width, template.height, sheet.pageWidth, sheet.pageHeight);
+    const mode = numberingMode(placements);
+    const number = mode === "same" ? 1 : Math.max(0, ...placements.map((c) => c.number)) + 1;
+    editCards((list) => [...list, { id, x: spot.x, y: spot.y, number, variantId }]);
+    setCardSel(id); setInstanceMode(false); setInstanceSel(null); setInspectorOpen(true);
+  };
+  const duplicateCard = (id: string) => {
+    const from = placements.find((c) => c.id === id);
+    if (!from) return;
+    const copy = uid();
+    editCards((list) => [...list, { ...from, id: copy, x: Number((from.x + 0.2).toFixed(3)), y: Number((from.y + 0.2).toFixed(3)) }]);
+    setCardSel(copy);
+  };
+  const deleteCard = (id: string) => { if (placements.length > 1) { editCards((list) => list.filter((c) => c.id !== id)); setCardSel(null); } };
+  const resetToGrid = () => { setSheet((s) => ({ ...s, placements: undefined })); setCardSel(null); };
+  const numberAll = (mode: "same" | "each") => {
+    if (sheet.placements) editCards((list) => renumber(list, mode));
+    else setSheet((s) => ({ ...s, repeatMode: mode === "same" ? "same" : "next" }));
+  };
+  /** A template dropped from the Templates drawer: place a card where it landed (centered on the pointer). */
+  const dropTemplate = (variantId: string, clientX: number, clientY: number) => {
+    const page = document.elementsFromPoint(clientX, clientY).find((el) => el.classList.contains("layout-page"));
+    if (!page) return;
+    const rect = page.getBoundingClientRect();
+    const scale = PX_PER_IN * view.zoom;
+    const x = clamp((clientX - rect.left) / scale - template.width / 2, 0, Math.max(0, sheet.pageWidth - template.width));
+    const y = clamp((clientY - rect.top) / scale - template.height / 2, 0, Math.max(0, sheet.pageHeight - template.height));
+    addCard(variantId, { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) });
+  };
   // "Repeat same record" prints one full sheet per record; "next record" fills each sheet with the following records.
-  const pageCount = sheet.repeatMode === "same" ? Math.max(1, activeRecords.length) : Math.max(1, Math.ceil(activeRecords.length / slots));
-  const currentPage = sheet.repeatMode === "same" ? recordIndex : Math.floor(recordIndex / slots);
-  const overflow =
-    sheet.marginX + sheet.columns * template.width + (sheet.columns - 1) * sheet.gapX > sheet.pageWidth + 0.005 ||
-    sheet.marginY + sheet.rows * template.height + (sheet.rows - 1) * sheet.gapY > sheet.pageHeight + 0.005;
+  const pageCount = Math.max(1, Math.ceil(activeRecords.length / perSheet));
+  const currentPage = Math.floor(recordIndex / perSheet);
+  const overflow = placements.some((p) => { const f = footprint(p, template.width, template.height); return p.x + f.w > sheet.pageWidth + 0.005 || p.y + f.h > sheet.pageHeight + 0.005 || p.x < -0.005 || p.y < -0.005; });
   const pagedNav = workspace === "layout"; // in page view the arrows turn pages
 
   // ── Alternating templates + per-record edits ────────────────────────────
   /** The items one record renders: its template (chosen by the rules) with that record's hand edits applied. */
-  const instanceFor = (record: RecordRow, index: number, slot: number): InstanceInfo => {
-    const id = pickVariant(rules, variants, record, index, slot, sheet.variantBasis ?? "record");
+  const instanceFor = (record: RecordRow, index: number, slot: number, variantOverride?: string): InstanceInfo => {
+    const id = variantOverride && variants.some((v) => v.id === variantOverride) ? variantOverride : pickVariant(rules, variants, record, index, slot, sheet.variantBasis ?? "record");
     const base = itemsDoc.value[id] ?? itemsDoc.value[variants[0].id] ?? [];
     const override = instanceOverrides[record[ID]];
     // Order: the template, then conditional rules for this record, then this record's hand edits (which win).
     return { variantId: id, items: applyOverride(applyConditions(base, record, metaFor(index)), override), override };
   };
-  const metaFor = (index: number) => ({ recordNumber: index + 1, pageNumber: sheet.repeatMode === "same" ? index + 1 : Math.floor(index / slots) + 1, recordCount: activeRecords.length, pageCount });
+  const metaFor = (index: number) => ({ recordNumber: index + 1, pageNumber: Math.floor(index / perSheet) + 1, recordCount: activeRecords.length, pageCount });
   const indexOfRecord = (recordId: string) => activeRecords.findIndex((r) => r[ID] === recordId);
 
   const updateInstance = (recordId: string, change: (current: InstanceOverride) => InstanceOverride | null, coalesce?: string) =>
@@ -268,10 +332,10 @@ function App() {
     }
     return out;
   };
-  const allIndices = () => (sheet.repeatMode === "same" ? [recordIndex] : activeRecords.map((_, i) => i));
+  const allIndices = () => activeRecords.map((_, i) => i);
   const issues = useMemo(() => (auditDialog ? computeIssues(allIndices()) : []), [auditDialog, items, itemsDoc.value, instanceOverrides, activeRecords, rules, variants, sheet]); // eslint-disable-line react-hooks/exhaustive-deps
   const sheetIssueCount = workspace === "layout" && !preview
-    ? computeIssues(sheet.repeatMode === "same" ? [recordIndex] : Array.from({ length: slots }, (_, k) => currentPage * slots + k)).length : 0;
+    ? computeIssues(Array.from({ length: perSheet }, (_, k) => currentPage * perSheet + k).filter((i) => i < activeRecords.length)).length : 0;
   /**
    * For every text in the template being edited: the records (of those that use this template) where it will cause trouble, meaning
    * it is cut off, runs off the card, or spills out of a visible box. Drives the warning icons on the canvas and the note in Properties.
@@ -651,7 +715,7 @@ function App() {
   // ── Template / page setup ───────────────────────────────────────────────
   const applyPreset = (preset: LabelPreset) => {
     // Template size and page layout change together, as a single undo step.
-    doc.set((d) => ({ ...d, template: { width: preset.width, height: preset.height }, sheet: { ...d.sheet, pageWidth: 8.5, pageHeight: 11, columns: preset.columns, rows: preset.rows, gapX: preset.gapX, gapY: preset.gapY, marginX: preset.marginX, marginY: preset.marginY } }));
+    doc.set((d) => ({ ...d, template: { ...d.template, width: preset.width, height: preset.height }, sheet: { ...d.sheet, placements: undefined, pageWidth: 8.5, pageHeight: 11, columns: preset.columns, rows: preset.rows, gapX: preset.gapX, gapY: preset.gapY, marginX: preset.marginX, marginY: preset.marginY } }));
     setViews((v) => ({ template: { ...v.template, fitted: false }, layout: { ...v.layout, fitted: false } }));
   };
 
@@ -702,7 +766,7 @@ function App() {
         setFieldDrag({ field, x: e.clientX, y: e.clientY, grab });
         const over = document.elementFromPoint(e.clientX, e.clientY);
         const id = over?.closest(".viewport") ? over.closest("[data-item-id]")?.getAttribute("data-item-id") : null;
-        setDropTargetId(id && itemsRef.current.find((i) => i.id === id)?.type === "text" ? id : null);
+        setDropTargetId(!field.startsWith("@tpl:") && id && itemsRef.current.find((i) => i.id === id)?.type === "text" ? id : null);
       }
     }
     function end(e: PointerEvent) {
@@ -711,7 +775,8 @@ function App() {
       cleanup();
       if (!wasActive) return;
       if (e.type === "pointerup") {
-        dropField(field, e.clientX, e.clientY);
+        if (field.startsWith("@tpl:")) dropTemplate(field.slice(5), e.clientX, e.clientY);
+        else dropField(field, e.clientX, e.clientY);
         if (!window.matchMedia(WIDE_QUERY).matches) { setDataOpen(false); setRecordsOpen(false); } // overlay drawers: reveal the result
       }
       justDragged.current = true; // swallow the click that follows a drag
@@ -866,7 +931,7 @@ function App() {
   const stepRecord = (delta: number) => {
     if (pagedNav) {
       const page = clamp((stack ? visiblePage : currentPage) + delta, 0, pageCount - 1);
-      setRecordIndex(Math.min(Math.max(0, activeRecords.length - 1), page * (sheet.repeatMode === "same" ? 1 : slots)));
+      setRecordIndex(Math.min(Math.max(0, activeRecords.length - 1), page * perSheet));
       if (stack) patchView({ pan: panForPage(page, view.zoom) });
     }
     else setRecordIndex((index) => clamp(index + delta, 0, Math.max(0, activeRecords.length - 1)));
@@ -930,7 +995,18 @@ function App() {
       const target = doc; // one history for the whole document
       if (mod && key === "z") { event.preventDefault(); event.shiftKey ? target.redo() : target.undo(); }
       else if (mod && key === "y") { event.preventDefault(); target.redo(); }
-      else if (workspace === "layout" && !showData) { if (key === "escape") { setInstanceSel(null); setEditingText(null); } }
+      else if (workspace === "layout" && !showData) {
+        if (key === "escape") { setInstanceSel(null); setEditingText(null); setCardSel(null); }
+        else if (arranging && selectedCard) {
+          if (key === "delete" || key === "backspace") { event.preventDefault(); deleteCard(selectedCard.id); }
+          else if (key === "r" && !mod) { event.preventDefault(); rotateCard(selectedCard.id, "next"); }
+          else if (key.startsWith("arrow")) {
+            event.preventDefault();
+            const step = event.shiftKey ? 0.1 : 0.01;
+            moveCard(selectedCard.id, Number((selectedCard.x + (key === "arrowleft" ? -step : key === "arrowright" ? step : 0)).toFixed(3)), Number((selectedCard.y + (key === "arrowup" ? -step : key === "arrowdown" ? step : 0)).toFixed(3)));
+          }
+        }
+      }
       else if (workspace !== "template" || showData) return;
       else if (mod && key === "a") { event.preventDefault(); setSelectedIds(items.filter((i) => i.visible !== false).map((i) => i.id)); }
       else if (mod && key === "c") { if (has) { event.preventDefault(); copySelected(); } }
@@ -1000,12 +1076,12 @@ function App() {
           preview={preview} onPreview={() => setPreview((v) => !v)}
           multi={multiMode} onMulti={() => setMultiMode((v) => !v)}
           zoom={view.zoom} onZoom={setZoom} onZoomPreset={toggleZoomPreset}
-          onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })} onAddReference={() => setLibraryDialog({ kind: "insert", reference: true })} docked={templateTools.docked} pageView={pageView} onPageView={setPageView} pageCount={pageCount}
+          showOrder={showOrder} onShowOrder={() => setShowOrder((v) => !v)} onAddCard={() => addCard()} onAddText={() => addText()} onAddShape={addShape} onAddImage={() => setLibraryDialog({ kind: "insert" })} onAddReference={() => setLibraryDialog({ kind: "insert", reference: true })} docked={templateTools.docked} pageView={pageView} onPageView={setPageView} pageCount={pageCount}
         />
 
         <div className={`content-frame${dataOpen ? " data-open" : ""}${inspectorOpen ? " inspector-open" : ""}${drawers.live ? " drawer-live" : ""}`} style={drawers.vars}>
           <div className={`drawer-slot left${dataOpen ? " open" : ""}`} {...({ inert: dataOpen ? undefined : "" } as Record<string, unknown>)}>
-            <DataPanel chrome={{ header: (e) => drawers.start("left", e, "swipe", 10), consumeSwipe: drawers.consumeSwipe }} onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
+            <DataPanel chrome={{ header: (e) => drawers.start("left", e, "swipe", 10), consumeSwipe: drawers.consumeSwipe }} onPasteData={() => setPasteOpen(true)} onGoogleSheet={() => setSheetsOpen(true)} fileName={fileName} fields={fields} recordCount={activeRecords.length} totalRecords={records.length} hasTextSelected={selected?.type === "text"} onImport={importData} onField={bindField} onFieldPointerDown={startFieldDrag} workspace={workspace} templates={variants.map((v, i) => ({ id: v.id, name: v.name, letter: String.fromCharCode(65 + i), count: placements.filter((c) => (c.variantId ?? "") === v.id).length }))} onAddTemplate={(id) => addCard(id)} cardCount={slots} perSheet={perSheet} dragging={!!fieldDrag} onClose={() => setDataOpen(false)}
               layerCount={(inLayoutEdit ? instItems : liveItems).length}
               layers={<LayersPanel items={inLayoutEdit ? instItems : liveItems} selectedItems={inLayoutEdit && instItem ? [instItem] : workspace === "layout" ? [] : selectedItems} flat={!!instanceBanner}
                 onSelect={(ids) => (inLayoutEdit && instanceSel ? setInstanceSel({ recordId: instanceSel.recordId, itemId: ids[0] }) : setSelectedIds(ids))}
@@ -1023,10 +1099,11 @@ function App() {
                 widthIn={widthOf(workspace)}
                 heightIn={heightOf(workspace)}
                 showRulers={showRulers && !stack}
+                bleedIn={workspace === "template" ? bleedIn : 0}
                 guides={stack ? [] : guides[workspace]}
                 onGuides={(update) => setGuides((g) => ({ ...g, [workspace]: update(g[workspace]) }))}
                 onRulerDoubleClick={() => { setSelectedIds([]); setInspectorOpen(true); }}
-                onBackgroundClick={() => { setSelectedIds([]); setInstanceSel(null); }}
+                onBackgroundClick={() => { setSelectedIds([]); setInstanceSel(null); setCardSel(null); }}
                 marqueeMode={multiMode && workspace === "template"}
                 onMarquee={workspace === "template" ? onMarquee : undefined}
                 paperClassName={`${preview ? "preview" : ""}${stack ? " stack" : ""}`}
@@ -1034,7 +1111,7 @@ function App() {
                 {workspace === "template" ? (
                   <TemplateStage
                     items={inlineEdit ? displayItems.map((i) => (i.id === inlineEdit.id ? { ...i, text: "", field: undefined } : i)) : displayItems} record={currentRecord} meta={meta} width={template.width} height={template.height} zoom={view.zoom}
-                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} dropTargetId={dropTargetId} margins={template.margins} warnings={textTrouble.byItem} onWarning={(id, x, y) => setWarnPopup({ itemId: id, x, y })} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
+                    selectedIds={selectedIds} showGrid={showGrid} snap={snap} snapOptions={snapOptions} dropTargetId={dropTargetId} margins={template.margins} bleed={bleedIn} warnings={textTrouble.byItem} onWarning={(id, x, y) => setWarnPopup({ itemId: id, x, y })} guides={guides.template} multi={multiMode} preview={preview} rawFields={showFieldNames && !preview} svgRef={svgRef}
                     onSelect={setSelectedIds} onMove={moveMany} onResize={resizeItem} onRotate={rotateItem} onRotateGroup={rotateGroup} onScaleGroup={scaleGroup} onDragEnd={history.breakGroup} onEditText={startInlineEdit}
                   />
                 ) : (
@@ -1046,9 +1123,8 @@ function App() {
                         return (
                           <div key={K} className="stack-sheet" style={{ left: pos.x * PX_PER_IN, top: pos.y * PX_PER_IN }}>
                             {near ? (
-                              <LayoutStage
+                              <LayoutStage bleed={bleedIn} arrange={arranging} selectedCard={cardSel} onSelectCard={setCardSel} onMoveCard={moveCard} onNumberCard={numberCard} onRotateCard={(id) => rotateCard(id, "next")} onCardDragEnd={doc.breakGroup} showOrder={showOrder}
                       sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
-                      slotRecord={(slot) => (sheet.repeatMode === "same" ? K : K * slots + slot)}
                       pageNumber={K + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
                       offset={printer} edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
                       onSelect={(sel) => { setInstanceSel(sel); setEditingText(null); if (sel) setInspectorOpen(true); }}
@@ -1063,9 +1139,8 @@ function App() {
                       })}
                     </div>
                   ) : (
-                  <LayoutStage
+                  <LayoutStage bleed={bleedIn} arrange={arranging} selectedCard={cardSel} onSelectCard={setCardSel} onMoveCard={moveCard} onNumberCard={numberCard} onRotateCard={(id) => rotateCard(id, "next")} onCardDragEnd={doc.breakGroup} showOrder={showOrder}
                     sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
-                    slotRecord={(slot) => (sheet.repeatMode === "same" ? recordIndex : currentPage * slots + slot)}
                     pageNumber={currentPage + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
                     offset={printer} edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
                     onSelect={(sel) => { setInstanceSel(sel); setEditingText(null); if (sel) setInspectorOpen(true); }}
@@ -1091,9 +1166,9 @@ function App() {
 
             <RecordsDrawer
               open={recordsOpen} records={activeRecords} fields={fields} current={recordIndex} excluded={records.length - activeRecords.length}
-              onPick={(index) => { setRecordIndex(index); if (stack) patchView({ pan: panForPage(sheet.repeatMode === "same" ? index : Math.floor(index / slots), view.zoom) }); if (!window.matchMedia(WIDE_QUERY).matches) setRecordsOpen(false); }} onClose={() => setRecordsOpen(false)}
+              onPick={(index) => { setRecordIndex(index); if (stack) patchView({ pan: panForPage(Math.floor(index / perSheet), view.zoom) }); if (!window.matchMedia(WIDE_QUERY).matches) setRecordsOpen(false); }} onClose={() => setRecordsOpen(false)}
               onCellPointerDown={startFieldDrag} justDragged={() => justDragged.current} dragging={!!fieldDrag}
-              pageOf={workspace === "layout" ? (index) => (sheet.repeatMode === "same" ? index : Math.floor(index / slots)) : undefined} currentPage={currentPage}
+              pageOf={workspace === "layout" ? (index) => Math.floor(index / perSheet) : undefined} currentPage={currentPage}
               sort={dataSort} onSort={dataActions.onSort} onReorderColumn={dataActions.onReorderColumn}
             />
           </div>
@@ -1111,7 +1186,11 @@ function App() {
               fontLibrary={fontLibrary} onRotateBy={rotateSelectionBy} imageTools={imageTools}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onReorder={reorderLayer}
               groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
-              templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} templateMargins={template.margins} onTemplateMargins={(margins) => setTemplate((t) => ({ ...t, margins }))} onPreset={applyPreset}
+              templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} bleed={template.bleed} bleedInfo={{ max: bleedMax, effective: bleedIn, standard: !!standardStock, custom: !!sheet.placements, edgeLimited: bleedLimit.edge < bleedLimit.gap }} onBleed={changeBleed} cards={{
+                custom: !!sheet.placements, mode: numberingMode(placements), count: slots, perSheet, selected: arranging ? selectedCard : null, templates: variants.map((v) => ({ id: v.id, name: v.name })),
+                onNumberAll: numberAll, onReset: resetToGrid, onAdd: () => addCard(), onNumber: (n) => selectedCard && numberCard(selectedCard.id, n), onTemplate: (id) => selectedCard && cardVariant(selectedCard.id, id),
+                onPosition: (x, y) => selectedCard && moveCard(selectedCard.id, x, y), onDuplicate: () => selectedCard && duplicateCard(selectedCard.id), onRotate: (turn) => selectedCard && rotateCard(selectedCard.id, turn), onDelete: () => selectedCard && deleteCard(selectedCard.id),
+              }} templateMargins={template.margins} onTemplateMargins={(margins) => setTemplate((t) => ({ ...t, margins }))} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
               printer={printer} onCalibrationSheet={printCalibration}
               fields={fields} editedList={editedList} onJumpInstance={jumpToInstance} onResetInstanceById={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
@@ -1210,15 +1289,15 @@ function App() {
       {fieldDrag && (fieldDrag.grab
         ? (
           <div className={`field-row drag-ghost chip${fieldDrag.field.startsWith("__") ? " special" : ""}`} style={{ left: fieldDrag.x - fieldDrag.grab.dx, top: fieldDrag.y - fieldDrag.grab.dy, width: fieldDrag.grab.w }}>
-            <span className="field-type">{fieldDrag.field.startsWith("__") ? <Hash size={12} /> : <Type size={12} />}</span>
-            <span className="field-name">{fieldDisplayName(fieldDrag.field)}</span>
+            <span className="field-type">{fieldDrag.field.startsWith("@tpl:") ? <LayoutTemplate size={12} /> : fieldDrag.field.startsWith("__") ? <Hash size={12} /> : <Type size={12} />}</span>
+            <span className="field-name">{fieldDrag.field.startsWith("@tpl:") ? variants.find((v) => v.id === fieldDrag.field.slice(5))?.name ?? "Template" : fieldDisplayName(fieldDrag.field)}</span>
             <span className="field-grip" aria-hidden><GripVertical size={14} /></span>
           </div>
         )
         : <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>)}
 
       {printing && (
-        <PrintSheets kind={printing} offset={printer} sheet={sheet} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} instanceFor={instanceFor} />
+        <PrintSheets bleed={bleedIn} kind={printing} offset={printer} sheet={sheet} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} instanceFor={instanceFor} />
       )}
     </div>
     </ImageContext.Provider>

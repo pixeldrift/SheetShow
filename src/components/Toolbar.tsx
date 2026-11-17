@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { SquareDashedMousePointer, ChevronDown, FileSearch, FileText, LayoutGrid, Rows3, Grid2X2, Image as ImageIcon, Magnet, PencilLine, Plus, Ruler, Type } from "lucide-react";
+import { SquareDashedMousePointer, ChevronDown, FileSearch, FileText, LayoutGrid, Rows3, Grid2X2, Image as ImageIcon, Magnet, PencilLine, Plus, Route, Ruler, Type } from "lucide-react";
 import { MAX_ZOOM, MIN_ZOOM } from "./Viewport";
 import { ZoomField } from "./ZoomField";
 import { ReferenceImageIcon, ShapesIcon } from "./icons";
@@ -16,6 +16,8 @@ type Props = {
   preview: boolean; onPreview: () => void;
   zoom: number; onZoom: (zoom: number) => void; onZoomPreset: () => void;
   multi: boolean; onMulti: () => void;
+  /** Page layout: arrows from card to card in record order, and a quick way to add a card. */
+  showOrder?: boolean; onShowOrder?: () => void; onAddCard?: () => void;
   onAddText: () => void; onAddShape: () => void; onAddImage: () => void; onAddReference: () => void;
   /** Tool palettes docked into this toolbar. */
   docked?: React.ReactNode;
@@ -37,6 +39,14 @@ export function Toolbar(p: Props) {
 
   return (
     <div className="canvas-toolbar">
+      {p.workspace === "layout" && p.onAddCard && (
+        <>
+          <div className="tool-group">
+            <button className="tool-button" title="Add a card to the sheet: another copy of the template" aria-label="Add a card" onClick={p.onAddCard}><Plus size={16} /></button>
+          </div>
+          <div className="toolbar-divider" />
+        </>
+      )}
       {p.workspace === "template" && (
         <>
           <div className="tool-group add-inline">
@@ -62,6 +72,7 @@ export function Toolbar(p: Props) {
           {toggle(p.snap, "Smart snapping: line up with other objects, the page and guides (hold Ctrl/⌘ to move freely)", p.onSnap, <Magnet size={15} />)}
           <button ref={snapRef} className="tool-button split-caret" title="Choose what snaps" aria-label="Snapping options" aria-haspopup="menu" aria-expanded={!!snapAt} onClick={() => { const r = snapRef.current?.getBoundingClientRect(); setSnapAt(snapAt || !r ? null : { x: r.left, y: r.bottom + 6 }); }}><ChevronDown size={11} /></button>
         </span>
+        {p.workspace === "layout" && p.onShowOrder && toggle(!!p.showOrder, "Show the order: thin arrows from card to card in the order their records come (dotted between copies of the same record)", p.onShowOrder, <Route size={16} />)}
         {toggle(p.preview, "Print preview", p.onPreview, <FileSearch size={16} />)}
       </div>
       {p.workspace === "layout" && p.onPageView && (

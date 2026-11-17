@@ -23,6 +23,8 @@ type Props = {
   showGrid: boolean;
   /** Inner safe area in inches: drawn as a dashed guide, never printed. */
   margins?: { top: number; right: number; bottom: number; left: number };
+  /** Bleed in inches: artwork may run this far past the trim edge. */
+  bleed?: number;
   snap: boolean;
   /** Which kinds of snapping are on (while `snap`, the master switch, is on). */
   snapOptions: SnapOptions;
@@ -70,7 +72,7 @@ const GUIDE_REACH = 0.08;
 const MIN_SIZE = 0.05;
 
 /** Editable template canvas. Items may be dragged anywhere, including past the template edge and over the rulers. */
-export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, margins, snap, snapOptions, dropTargetId, warnings, onWarning, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd, onEditText }: Props) {
+export function TemplateStage({ items, record, meta, width, height, zoom, selectedIds, showGrid, margins, bleed = 0, snap, snapOptions, dropTargetId, warnings, onWarning, guides, multi, preview, rawFields, svgRef, onSelect, onMove, onResize, onRotate, onRotateGroup, onScaleGroup, onDragEnd, onEditText }: Props) {
   const drag = useRef<Drag | null>(null);
   const lastTap = useRef<{ id: string; at: number } | null>(null);
   /** A double-click on a grouped object picks just that object, but only once the pointer is released without having moved (otherwise it was a quick click-and-drag of the group). */
@@ -95,6 +97,7 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
   /** Everything a dragged object can snap to: the page, and every other visible, non-reference object. */
   const snapTargets = (exclude: string[]): Box[] => [
     ...(snapOptions.page ? [{ x: 0, y: 0, w: width, h: height }] : []),
+    ...(snapOptions.page && bleed > 0 ? [{ x: -bleed, y: -bleed, w: width + bleed * 2, h: height + bleed * 2 }] : []),
     ...(snapOptions.margins && margins && (margins.top || margins.right || margins.bottom || margins.left)
       ? [{ x: margins.left, y: margins.top, w: Math.max(0, width - margins.left - margins.right), h: Math.max(0, height - margins.top - margins.bottom) }] : []),
     ...(snapOptions.objects ? items.filter((i) => i.visible !== false && !i.reference && !exclude.includes(i.id)).map(framedBox) : []),
@@ -292,7 +295,8 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
   return (
     <svg
       ref={svgRef}
-      className={preview ? "template-svg clip" : "template-svg"}
+      className={preview && !bleed ? "template-svg clip" : "template-svg"}
+      style={preview && bleed ? { clipPath: `inset(${-bleed * PX_PER_IN}px)` } : undefined}
       width={width * PX_PER_IN}
       height={height * PX_PER_IN}
       viewBox={`0 0 ${width * PX_PER_IN} ${height * PX_PER_IN}`}
@@ -314,6 +318,13 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       {items.filter((item) => item.visible !== false && !(preview && item.reference)).map((item) => (
         <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} raw={rawFields} badge={!preview} onPointerDown={(event) => startMove(event, item)} />
       ))}
+      {!preview && bleed > 0 && (
+        // Drawn over the artwork so the edge is always visible: a long-dash-and-dot amber line with a pale halo, so it reads differently from the solid orange selection and ruler guides, the pink snap lines and the violet margin guide.
+        <g fill="none" pointerEvents="none">
+          <rect x={-bleed * PX_PER_IN} y={-bleed * PX_PER_IN} width={(width + bleed * 2) * PX_PER_IN} height={(height + bleed * 2) * PX_PER_IN} stroke="#fff" strokeOpacity="0.85" strokeWidth={3 / zoom} />
+          <rect x={-bleed * PX_PER_IN} y={-bleed * PX_PER_IN} width={(width + bleed * 2) * PX_PER_IN} height={(height + bleed * 2) * PX_PER_IN} stroke="#f08a1c" strokeWidth={2 / zoom} strokeDasharray={`${12 / zoom} ${5 / zoom} ${2 / zoom} ${5 / zoom}`} />
+        </g>
+      )}
       {dropTargetId && (() => {
         const target = items.find((i) => i.id === dropTargetId);
         if (!target) return null;
