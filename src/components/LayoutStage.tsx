@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Database, LayoutTemplate, Minus, PencilLine, Plus, RotateCcw, Undo2 } from "lucide-react";
-import type { DesignItem, InstanceOverride, RecordMeta, RecordRow, Sheet } from "../types";
+import { AlertTriangle, Database, LayoutTemplate, Minus, PencilLine, Plus, RotateCcw, RotateCw, Undo2 } from "lucide-react";
+import type { DesignItem, InstanceOverride, Placement, RecordMeta, RecordRow, Sheet } from "../types";
 import { PX_PER_IN, valueFor } from "../lib/data";
 import { ID } from "../lib/records";
 import { hasEdits } from "../lib/instances";
@@ -9,7 +9,7 @@ import { fontStack } from "../lib/fonts";
 import { fontSizePx } from "../lib/text";
 import { incomingFromDrop, type Incoming } from "../lib/importImages";
 import { TemplateThumbnail } from "./ItemShape";
-import { cropMarkLines, placementsOf, recordAt, sequence } from "../lib/placements";
+import { cropMarkLines, footprint, placementsOf, recordAt, sequence } from "../lib/placements";
 import { smartSnap } from "../lib/smartSnap";
 
 export type InstanceInfo = { variantId: string; items: DesignItem[]; override?: InstanceOverride };
@@ -49,6 +49,7 @@ type Props = {
   onSelectCard?: (id: string | null) => void;
   onMoveCard?: (id: string, x: number, y: number) => void;
   onNumberCard?: (id: string, number: number) => void;
+  onRotateCard?: (id: string) => void;
   onCardDragEnd?: () => void;
   /** Thin arrows from card to card in the order their records come. */
   showOrder?: boolean;
@@ -64,12 +65,13 @@ export function LayoutStage(p: Props) {
   const page = p.pageNumber - 1;
   const scale = PX_PER_IN * (p.zoom ?? 1);
   /** Drag a card across the sheet. It snaps to the page edges and to the edges and centers of the other cards (hold Ctrl/⌘ to move freely). */
-  const startCardDrag = (event: React.PointerEvent, card: { id: string; x: number; y: number }) => {
+  const startCardDrag = (event: React.PointerEvent, card: Placement) => {
     if (!p.arrange || (event.pointerType === "mouse" && event.button !== 0)) return;
     if ((event.target as HTMLElement).closest("button")) return;
     p.onSelectCard?.(card.id);
     const startX = event.clientX, startY = event.clientY;
-    const others = list.filter((o) => o.id !== card.id).map((o) => ({ x: o.x, y: o.y, w: templateWidth, h: templateHeight }));
+    const others = list.filter((o) => o.id !== card.id).map((o) => ({ x: o.x, y: o.y, ...footprint(o, templateWidth, templateHeight) }));
+    const mine = footprint(card, templateWidth, templateHeight);
     const targets = [{ x: 0, y: 0, w: sheet.pageWidth, h: sheet.pageHeight }, ...others];
     let moved = false;
     const move = (e: PointerEvent) => {
@@ -78,7 +80,7 @@ export function LayoutStage(p: Props) {
       moved = true;
       let x = card.x + dx, y = card.y + dy;
       if (!(e.ctrlKey || e.metaKey)) {
-        const snap = smartSnap({ x, y, w: templateWidth, h: templateHeight }, targets, { x: [], y: [] }, 7 / scale);
+        const snap = smartSnap({ x, y, w: mine.w, h: mine.h }, targets, { x: [], y: [] }, 7 / scale);
         x += snap.dx; y += snap.dy;
       }
       p.onMoveCard?.(card.id, Number(x.toFixed(3)), Number(y.toFixed(3)));
@@ -96,6 +98,8 @@ export function LayoutStage(p: Props) {
     <div className="layout-page" style={{ width: sheet.pageWidth * PX_PER_IN, height: sheet.pageHeight * PX_PER_IN }}>
       {list.map((card, slot) => {
         const index = recordAt(list, card, page);
+        const fp = footprint(card, templateWidth, templateHeight);
+        const turned = !!card.rotation;
         const record = records[index];
         const meta: RecordMeta | null = record ? { recordNumber: index + 1, pageNumber: p.pageNumber, recordCount: records.length, pageCount: p.pageCount } : null;
         const info = record ? p.instanceFor(record, index, slot, card.variantId) : null;
@@ -120,7 +124,7 @@ export function LayoutStage(p: Props) {
             key={card.id}
             className={classes.join(" ")}
             data-no-pan={p.edit || p.arrange ? "" : undefined}
-            style={{ left: (card.x + ox) * PX_PER_IN, top: (card.y + oy) * PX_PER_IN, width: templateWidth * PX_PER_IN, height: templateHeight * PX_PER_IN }}
+            style={{ left: (card.x + ox) * PX_PER_IN, top: (card.y + oy) * PX_PER_IN, width: fp.w * PX_PER_IN, height: fp.h * PX_PER_IN }}
             onPointerDown={p.arrange ? (e) => startCardDrag(e, card) : undefined}
             onClick={p.edit && id ? (e) => { const itemId = itemAt(e.target); p.onSelect?.(itemId ? { recordId: id, itemId } : null); } : undefined}
             onDoubleClick={p.edit && id ? (e) => { const itemId = itemAt(e.target); if (itemId) p.onStartEdit?.({ recordId: id, itemId }); } : undefined}
@@ -133,9 +137,22 @@ export function LayoutStage(p: Props) {
               if (files.length) p.onDropFiles?.(id, target, files);
             } : undefined}
           >
-            {record && meta && info
+            {(() => {
+              const inner = (
+                <>
+              {record && meta && info
               ? <TemplateThumbnail items={info.items} record={record} width={templateWidth} height={templateHeight} bleed={p.bleed} meta={meta} interactive={p.edit && !preview} selectedItemId={sel} overriddenIds={overriddenIds} zoom={p.zoom} />
               : <span className="empty-slot">Empty</span>}
+              {editingHere && record && meta && id && <InlineTextEditor item={editingHere} initial={valueFor(editingHere, record, meta)} onCommit={(v) => p.onCommitText?.(v)} onCancel={() => p.onCancelEdit?.()} />}
+                </>
+              );
+              return turned
+                ? <div className="card-rotor" style={{ left: ((fp.w - templateWidth) / 2) * PX_PER_IN, top: ((fp.h - templateHeight) / 2) * PX_PER_IN, width: templateWidth * PX_PER_IN, height: templateHeight * PX_PER_IN, transform: `rotate(${card.rotation}deg)` }}>{inner}</div>
+                : inner;
+            })()}
+            {p.arrange && p.selectedCard === card.id && !preview && (
+              <button type="button" className="card-rotate" data-no-pan aria-label="Turn the card a quarter" title="Turn a quarter (R)" onClick={(e) => { e.stopPropagation(); p.onRotateCard?.(card.id); }}><RotateCw size={13} /></button>
+            )}
             {!preview && record && <span className="slot-number" title={`This is record ${index + 1} of your data`}><Database size={10} />{index + 1}</span>}
             {!preview && (
               <span className={p.arrange && p.selectedCard === card.id ? "slot-position editing" : "slot-position"} data-no-pan title={`Record ${card.number} on this sheet. Cards with the same number show the same record.`}>
@@ -171,7 +188,6 @@ export function LayoutStage(p: Props) {
               </button>
             )}
 
-            {editingHere && record && meta && id && <InlineTextEditor item={editingHere} initial={valueFor(editingHere, record, meta)} onCommit={(v) => p.onCommitText?.(v)} onCancel={() => p.onCancelEdit?.()} />}
           </div>
         );
       })}
@@ -216,7 +232,8 @@ function OrderArrows({ list, w, h, pageW, pageH, ox, oy }: { list: ReturnType<ty
       <defs><marker id="order-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1 9 5 1 9" fill="none" stroke="#7c5cdb" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></marker></defs>
       {order.slice(0, -1).map((a, i) => {
         const b = order[i + 1];
-        const x1 = a.x + w / 2 + ox, y1 = a.y + h / 2 + oy, x2 = b.x + w / 2 + ox, y2 = b.y + h / 2 + oy;
+        const fa = footprint(a, w, h), fb = footprint(b, w, h);
+        const x1 = a.x + fa.w / 2 + ox, y1 = a.y + fa.h / 2 + oy, x2 = b.x + fb.w / 2 + ox, y2 = b.y + fb.h / 2 + oy;
         const len = Math.hypot(x2 - x1, y2 - y1) || 1;
         const ux = (x2 - x1) / len, uy = (y2 - y1) / len;
         const trim = Math.min(0.18, len / 3); // keep the line off the badges at the card centers

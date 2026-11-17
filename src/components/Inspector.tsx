@@ -63,7 +63,7 @@ type Props = {
   cards: {
     custom: boolean; mode: "same" | "each" | "custom"; count: number; perSheet: number; selected: Placement | null; templates: { id: string; name: string }[];
     onNumberAll: (mode: "same" | "each") => void; onReset: () => void; onNumber: (n: number) => void; onTemplate: (id: string | undefined) => void;
-    onPosition: (x: number, y: number) => void; onDuplicate: () => void; onDelete: () => void; onAdd: () => void;
+    onPosition: (x: number, y: number) => void; onRotate: (turn: 0 | 90 | 180 | 270) => void; onDuplicate: () => void; onDelete: () => void; onAdd: () => void;
   };
   bleed?: Bleed; bleedInfo: { max: number; effective: number; standard: boolean; custom: boolean; edgeLimited: boolean }; onBleed: (bleed: Bleed | undefined) => void;
   templateMargins?: { top: number; right: number; bottom: number; left: number }; onTemplateMargins: (margins: { top: number; right: number; bottom: number; left: number }) => void;
@@ -380,6 +380,11 @@ function PageSetup({ cards, templateWidth, templateHeight, onPreset, sheet, onSh
               </select>
             </Pair>
           )}
+          <Pair label="Turn">
+            <div className="segmented" role="group" aria-label="Turn the card">
+              {([0, 90, 180, 270] as const).map((d) => <button key={d} className={(card.rotation ?? 0) === d ? "active" : ""} onClick={() => cards.onRotate(d)}>{d}°</button>)}
+            </div>
+          </Pair>
           <div className="two-col spaced">
             <Pair label="Left (inches)"><NumberField value={card.x} min={0} step={0.05} places={3} onChange={(n) => cards.onPosition(n, card.y)} /></Pair>
             <Pair label="Top (inches)"><NumberField value={card.y} min={0} step={0.05} places={3} onChange={(n) => cards.onPosition(card.x, n)} /></Pair>

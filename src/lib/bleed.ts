@@ -1,5 +1,5 @@
 import type { Sheet, Template } from "../types";
-import { placementsOf } from "./placements";
+import { footprint, placementsOf } from "./placements";
 
 /**
  * What limits the bleed: half the clearance between cards (two bleeds must not overlap), and the room between the outer cards and the page edge.
@@ -9,11 +9,11 @@ export function bleedLimits(sheet: Sheet, w: number, h: number) {
   const list = placementsOf(sheet, w, h);
   let gap = Infinity;
   for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
-    const a = list[i], b = list[j];
-    const sepX = Math.max(b.x - (a.x + w), a.x - (b.x + w)), sepY = Math.max(b.y - (a.y + h), a.y - (b.y + h));
+    const a = list[i], b = list[j], fa = footprint(a, w, h), fb = footprint(b, w, h);
+    const sepX = Math.max(b.x - (a.x + fa.w), a.x - (b.x + fb.w)), sepY = Math.max(b.y - (a.y + fa.h), a.y - (b.y + fb.h));
     gap = Math.min(gap, Math.max(0, Math.max(sepX, sepY)) / 2);
   }
-  const edge = list.length ? Math.min(...list.map((p) => Math.min(p.x, p.y, sheet.pageWidth - (p.x + w), sheet.pageHeight - (p.y + h)))) : 0;
+  const edge = list.length ? Math.min(...list.map((p) => { const f = footprint(p, w, h); return Math.min(p.x, p.y, sheet.pageWidth - (p.x + f.w), sheet.pageHeight - (p.y + f.h)); })) : 0;
   return { gap: Number.isFinite(gap) ? gap : Infinity, edge: Math.max(0, Number(edge.toFixed(4))) };
 }
 

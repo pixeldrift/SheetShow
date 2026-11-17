@@ -1,7 +1,7 @@
 import type { Sheet } from "../types";
 import { PX_PER_IN } from "../lib/data";
 import { formatOffset } from "../lib/printer";
-import { placementsOf } from "../lib/placements";
+import { footprint, placementsOf } from "../lib/placements";
 
 /**
  * A test page for printer calibration: crosshairs exactly 1 inch from every edge and an outline of every label.
@@ -20,7 +20,7 @@ export function CalibrationSheet({ sheet, templateWidth, templateHeight, offset 
   return (
     <svg className="calib" width={W * PX_PER_IN} height={H * PX_PER_IN} viewBox={`0 0 ${W} ${H}`}>
       <g transform={`translate(${offset.x} ${offset.y})`} fill="none" stroke="#000" strokeWidth={0.006}>
-        {slots.map((s, i) => <rect key={i} x={s.x} y={s.y} width={templateWidth} height={templateHeight} strokeWidth={0.004} strokeDasharray="0.04 0.03" />)}
+        {slots.map((s, i) => <rect key={i} x={s.x} y={s.y} width={footprint(s, templateWidth, templateHeight).w} height={footprint(s, templateWidth, templateHeight).h} strokeWidth={0.004} strokeDasharray="0.04 0.03" />)}
         {cross(1, 1, "1.00″ from left and top", "tl")}
         {cross(W - 1, 1, "1.00″ from right and top", "tr", "end")}
         {cross(1, H - 1, "1.00″ from left and bottom", "bl")}

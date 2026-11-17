@@ -15,6 +15,9 @@ export function gridPlacements(sheet: Sheet, w: number, h: number): Placement[] 
   return out;
 }
 
+/** The space a card takes on the page: the template size, swapped when it is turned a quarter. */
+export const footprint = (p: Placement, w: number, h: number) => (p.rotation === 90 || p.rotation === 270 ? { w: h, h: w } : { w, h });
+
 export const isCustomLayout = (sheet: Sheet) => !!sheet.placements;
 /** Every card on a page, whether it came from the grid or was placed by hand. */
 export const placementsOf = (sheet: Sheet, w: number, h: number): Placement[] => (sheet.placements ?? gridPlacements(sheet, w, h));
@@ -54,7 +57,7 @@ export const sequence = (list: Placement[]): Placement[] => {
 
 /** The next empty spot for a card of this size: first free grid position in reading order, or the page corner. */
 export function freeSpot(list: Placement[], w: number, h: number, pageW: number, pageH: number, step = 0.25): { x: number; y: number } {
-  const hits = (x: number, y: number) => list.some((p) => x < p.x + w - 0.01 && x + w > p.x + 0.01 && y < p.y + h - 0.01 && y + h > p.y + 0.01);
+  const hits = (x: number, y: number) => list.some((p) => { const f = footprint(p, w, h); return x < p.x + f.w - 0.01 && x + w > p.x + 0.01 && y < p.y + f.h - 0.01 && y + h > p.y + 0.01; });
   for (let y = 0; y + h <= pageH + 1e-6; y += step) for (let x = 0; x + w <= pageW + 1e-6; x += step) if (!hits(x, y)) return { x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) };
   return { x: 0, y: 0 };
 }
@@ -66,9 +69,10 @@ export function cropMarkLines(list: Placement[], w: number, h: number, pageW: nu
   if (!list.length) return [];
   const out: [number, number, number, number][] = [];
   const offset = 0.04;
-  const xs = [...new Set(list.flatMap((p) => [p.x, p.x + w]))], ys = [...new Set(list.flatMap((p) => [p.y, p.y + h]))];
+  const fp = list.map((p) => ({ p, f: footprint(p, w, h) }));
+  const xs = [...new Set(fp.flatMap(({ p, f }) => [p.x, p.x + f.w]))], ys = [...new Set(fp.flatMap(({ p, f }) => [p.y, p.y + f.h]))];
   const gridLeft = Math.min(...list.map((p) => p.x)), gridTop = Math.min(...list.map((p) => p.y));
-  const gridRight = Math.max(...list.map((p) => p.x + w)), gridBottom = Math.max(...list.map((p) => p.y + h));
+  const gridRight = Math.max(...fp.map(({ p, f }) => p.x + f.w)), gridBottom = Math.max(...fp.map(({ p, f }) => p.y + f.h));
   const room = (space: number) => Math.min(0.15, Math.max(0, space - offset - 0.02));
   const top = room(gridTop), left = room(gridLeft), bottom = room(pageH - gridBottom), right = room(pageW - gridRight);
   for (const x of xs) {

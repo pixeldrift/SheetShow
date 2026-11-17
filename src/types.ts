@@ -97,7 +97,7 @@ export type Template = { width: number; height: number; margins?: { top: number;
  * One copy of the individual template on a page. `number` is its position among the records on this sheet: cards with the same
  * number show the same record, and each higher number is the next record. `variantId` picks a template (unset = by the alternating rules).
  */
-export type Placement = { id: string; x: number; y: number; number: number; variantId?: string };
+export type Placement = { id: string; x: number; y: number; number: number; variantId?: string; /** Turned clockwise in quarter turns; x and y are the corner of the turned card's footprint. */ rotation?: 0 | 90 | 180 | 270 };
 
 export type Sheet = {
   pageWidth: number;

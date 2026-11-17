@@ -109,7 +109,8 @@ All of these finish with the same choice: replace your records, add to them, or 
 - [x] Per-record overrides on the page layout, with flags and revert
 - [x] Bleed: per-template bleed amount, automatic (half the gap) on Avery sheets, and limit-or-widen choice on custom layouts
 - [x] Hand-arranged pages: drag templates onto the sheet, numbered cards (same number = same record), order arrows
-  - [ ] Several page templates (odd/even sheets, front and back for duplex), rotating cards 90°
+  - [x] Turn cards in quarter turns
+  - [ ] Several page templates (odd/even sheets, front and back for duplex)
 - [ ] Scannable codes (QR, Code 128) generated from data fields
 - [x] Printer calibration offset with saved printer settings and a calibration sheet
 - [x] Template gallery with built-in examples

@@ -55,7 +55,7 @@ import { DataTable } from "./components/DataTable";
 import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, reorderColumns, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
 import { PrintSheets } from "./components/PrintSheets";
 import { matchedStock } from "./components/StockPicker";
-import { freeSpot, gridPlacements, numbering, numberingMode, placementsOf, renumber } from "./lib/placements";
+import { footprint, freeSpot, gridPlacements, numbering, numberingMode, placementsOf, renumber } from "./lib/placements";
 import { bleedLimits, effectiveBleed, gapsFor, maxBleed } from "./lib/bleed";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -220,6 +220,14 @@ function App() {
     setSheet((s) => ({ ...s, placements: change(s.placements ?? gridPlacements(s, template.width, template.height)) }), { coalesce });
   const moveCard = (id: string, x: number, y: number) => editCards((list) => list.map((c) => (c.id === id ? { ...c, x, y } : c)), `card-move:${id}`);
   const numberCard = (id: string, number: number) => editCards((list) => list.map((c) => (c.id === id ? { ...c, number: Math.max(1, Math.round(number)) } : c)), `card-number:${id}`);
+  /** Turn a card by a quarter (or set it), keeping its center where it is. */
+  const rotateCard = (id: string, turn: number | "next") => editCards((list) => list.map((c) => {
+    if (c.id !== id) return c;
+    const next = (turn === "next" ? ((c.rotation ?? 0) + 90) % 360 : turn) as 0 | 90 | 180 | 270;
+    const was = footprint(c, template.width, template.height), now = footprint({ ...c, rotation: next }, template.width, template.height);
+    const x = clamp(c.x + (was.w - now.w) / 2, 0, Math.max(0, sheet.pageWidth - now.w)), y = clamp(c.y + (was.h - now.h) / 2, 0, Math.max(0, sheet.pageHeight - now.h));
+    return { ...c, rotation: next || undefined, x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) };
+  }));
   const cardVariant = (id: string, variantId: string | undefined) => editCards((list) => list.map((c) => (c.id === id ? { ...c, variantId } : c)));
   const addCard = (variantId?: string, at?: { x: number; y: number }) => {
     const id = uid();
@@ -255,7 +263,7 @@ function App() {
   // "Repeat same record" prints one full sheet per record; "next record" fills each sheet with the following records.
   const pageCount = Math.max(1, Math.ceil(activeRecords.length / perSheet));
   const currentPage = Math.floor(recordIndex / perSheet);
-  const overflow = placements.some((p) => p.x + template.width > sheet.pageWidth + 0.005 || p.y + template.height > sheet.pageHeight + 0.005 || p.x < -0.005 || p.y < -0.005);
+  const overflow = placements.some((p) => { const f = footprint(p, template.width, template.height); return p.x + f.w > sheet.pageWidth + 0.005 || p.y + f.h > sheet.pageHeight + 0.005 || p.x < -0.005 || p.y < -0.005; });
   const pagedNav = workspace === "layout"; // in page view the arrows turn pages
 
   // ── Alternating templates + per-record edits ────────────────────────────
@@ -991,6 +999,7 @@ function App() {
         if (key === "escape") { setInstanceSel(null); setEditingText(null); setCardSel(null); }
         else if (arranging && selectedCard) {
           if (key === "delete" || key === "backspace") { event.preventDefault(); deleteCard(selectedCard.id); }
+          else if (key === "r" && !mod) { event.preventDefault(); rotateCard(selectedCard.id, "next"); }
           else if (key.startsWith("arrow")) {
             event.preventDefault();
             const step = event.shiftKey ? 0.1 : 0.01;
@@ -1114,7 +1123,7 @@ function App() {
                         return (
                           <div key={K} className="stack-sheet" style={{ left: pos.x * PX_PER_IN, top: pos.y * PX_PER_IN }}>
                             {near ? (
-                              <LayoutStage bleed={bleedIn} arrange={arranging} selectedCard={cardSel} onSelectCard={setCardSel} onMoveCard={moveCard} onNumberCard={numberCard} onCardDragEnd={doc.breakGroup} showOrder={showOrder}
+                              <LayoutStage bleed={bleedIn} arrange={arranging} selectedCard={cardSel} onSelectCard={setCardSel} onMoveCard={moveCard} onNumberCard={numberCard} onRotateCard={(id) => rotateCard(id, "next")} onCardDragEnd={doc.breakGroup} showOrder={showOrder}
                       sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
                       pageNumber={K + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
                       offset={printer} edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
@@ -1130,7 +1139,7 @@ function App() {
                       })}
                     </div>
                   ) : (
-                  <LayoutStage bleed={bleedIn} arrange={arranging} selectedCard={cardSel} onSelectCard={setCardSel} onMoveCard={moveCard} onNumberCard={numberCard} onCardDragEnd={doc.breakGroup} showOrder={showOrder}
+                  <LayoutStage bleed={bleedIn} arrange={arranging} selectedCard={cardSel} onSelectCard={setCardSel} onMoveCard={moveCard} onNumberCard={numberCard} onRotateCard={(id) => rotateCard(id, "next")} onCardDragEnd={doc.breakGroup} showOrder={showOrder}
                     sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
                     pageNumber={currentPage + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
                     offset={printer} edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
@@ -1180,7 +1189,7 @@ function App() {
               templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} bleed={template.bleed} bleedInfo={{ max: bleedMax, effective: bleedIn, standard: !!standardStock, custom: !!sheet.placements, edgeLimited: bleedLimit.edge < bleedLimit.gap }} onBleed={changeBleed} cards={{
                 custom: !!sheet.placements, mode: numberingMode(placements), count: slots, perSheet, selected: arranging ? selectedCard : null, templates: variants.map((v) => ({ id: v.id, name: v.name })),
                 onNumberAll: numberAll, onReset: resetToGrid, onAdd: () => addCard(), onNumber: (n) => selectedCard && numberCard(selectedCard.id, n), onTemplate: (id) => selectedCard && cardVariant(selectedCard.id, id),
-                onPosition: (x, y) => selectedCard && moveCard(selectedCard.id, x, y), onDuplicate: () => selectedCard && duplicateCard(selectedCard.id), onDelete: () => selectedCard && deleteCard(selectedCard.id),
+                onPosition: (x, y) => selectedCard && moveCard(selectedCard.id, x, y), onDuplicate: () => selectedCard && duplicateCard(selectedCard.id), onRotate: (turn) => selectedCard && rotateCard(selectedCard.id, turn), onDelete: () => selectedCard && deleteCard(selectedCard.id),
               }} templateMargins={template.margins} onTemplateMargins={(margins) => setTemplate((t) => ({ ...t, margins }))} onPreset={applyPreset}
               sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
               printer={printer} onCalibrationSheet={printCalibration}

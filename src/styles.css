@@ -1111,3 +1111,6 @@ html,body{touch-action:manipulation}
 .template-row .field-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:none}
 .template-row .row-add{margin-left:auto}
 .template-row .row-add{width:26px;padding:0;justify-content:center}
+
+.card-rotor{position:absolute;transform-origin:50% 50%}
+.card-rotate{position:absolute;z-index:4;top:-12px;right:-12px;width:24px;height:24px;border-radius:12px;border:2px solid #fff;background:#d77d4e;color:#fff;display:grid;place-items:center;padding:0;box-shadow:0 1px 4px #0004}
