@@ -1065,3 +1065,9 @@ html,body{touch-action:manipulation}
 .stock-dialog .dialog-foot{flex:none}
 .stock-foot-note{margin:0;font-size:10px;max-width:120px}
 .stock-dialog .dialog-foot{justify-content:flex-end}.stock-dialog .dialog-foot .button{white-space:nowrap}.stock-dialog .preset-option.selected{background:#fceee3}
+
+/* The unit sits right against the number; the stepper stays at the far edge */
+.number-input{gap:0}
+.number-input input{flex:0 1 auto;width:auto;min-width:2ch;padding:0}
+.number-input small.scrub-unit{padding:0 0 0 1px}
+.number-input .stepper{margin-left:auto}
