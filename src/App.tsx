@@ -1033,6 +1033,7 @@ function App() {
                 widthIn={widthOf(workspace)}
                 heightIn={heightOf(workspace)}
                 showRulers={showRulers && !stack}
+                bleedIn={workspace === "template" ? bleedIn : 0}
                 guides={stack ? [] : guides[workspace]}
                 onGuides={(update) => setGuides((g) => ({ ...g, [workspace]: update(g[workspace]) }))}
                 onRulerDoubleClick={() => { setSelectedIds([]); setInspectorOpen(true); }}

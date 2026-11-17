@@ -344,7 +344,7 @@ function TemplateSetup({ templateWidth, templateHeight, bleed, bleedInfo, onBlee
                   ? <>Most the layout holds: <strong>{inchLabel(bleedInfo.max)}</strong>, half the gap between cards. </>
                   : <>There is no gap between cards, so there is no room for bleed. </>}
                 {bleedInfo.standard ? "Avery sheets always keep the bleed inside that." : b.auto ? "" : b.policy === "grow" ? "The gaps on the page layout widen to fit what you enter." : "A larger number is held to that."}{!b.auto && bleed && b.amount > bleedInfo.max + 0.0005 && bleedInfo.effective < b.amount - 0.0005 && <> You entered {inchLabel(b.amount)}.</>}
-                {bleedInfo.effective > 0 && <> Printing with <strong>{inchLabel(bleedInfo.effective)}</strong> of bleed. A dashed red line on the template shows where it ends; extend artwork to it.</>}
+                {bleedInfo.effective > 0 && <> Printing with <strong>{inchLabel(bleedInfo.effective)}</strong> of bleed. A dashed teal line on the template shows where it ends; extend artwork to it.</>}
               </p>
             </>
           );

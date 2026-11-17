@@ -13,6 +13,8 @@ type Props = {
   widthIn: number;
   heightIn: number;
   showRulers: boolean;
+  /** Bleed in inches (template page): the rulers and guide lines sit outside it, and guides may be placed within it. */
+  bleedIn?: number;
   guides: Guide[];
   onGuides: (update: (guides: Guide[]) => Guide[]) => void;
   onRulerDoubleClick: () => void;
@@ -35,7 +37,7 @@ type Gesture =
  * Pan / zoom surface. The page is centered in the viewport and offset by `view.pan`,
  * so a pan of (0, 0) is always "centered" regardless of drawer state or zoom.
  */
-export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRulers, guides, onGuides, onRulerDoubleClick, onBackgroundClick, marqueeMode, onMarquee, children, paperClassName }: Props) {
+export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRulers, bleedIn = 0, guides, onGuides, onRulerDoubleClick, onBackgroundClick, marqueeMode, onMarquee, children, paperClassName }: Props) {
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<Gesture | null>(null);
@@ -176,7 +178,7 @@ export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRu
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
       const p = pageInches(event.clientX, event.clientY);
-      if ((axis === "x" ? p.x : p.y) < 0) onGuides((current) => current.filter((g) => g.id !== id));
+      if ((axis === "x" ? p.x : p.y) < -bleedIn) onGuides((current) => current.filter((g) => g.id !== id));
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -188,7 +190,7 @@ export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRu
     event.stopPropagation();
     const id = crypto.randomUUID();
     const p = pageInches(event.clientX, event.clientY);
-    onGuides((current) => [...current, { id, axis, position: Math.max(0, axis === "x" ? p.x : p.y) }]);
+    onGuides((current) => [...current, { id, axis, position: Math.max(-bleedIn, axis === "x" ? p.x : p.y) }]);
     dragGuide(id, axis);
   };
 
@@ -203,7 +205,7 @@ export function Viewport({ containerRef, view, onView, widthIn, heightIn, showRu
       onPointerCancel={onPointerUp}
     >
       {marquee && <div className="marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}
-      <div className="stage" style={{ transform: `translate(calc(-50% + ${view.pan.x}px), calc(-50% + ${view.pan.y}px))`, width: paperW, height: paperH }}>
+      <div className="stage" style={{ transform: `translate(calc(-50% + ${view.pan.x}px), calc(-50% + ${view.pan.y}px))`, width: paperW, height: paperH, ["--bleed" as string]: `${bleedIn * PX_PER_IN * view.zoom}px` }}>
         {showRulers && <div className="ruler-corner" />}
         {showRulers && <Ruler axis="x" lengthIn={widthIn} zoom={view.zoom} onPointerDown={(e) => startGuideFromRuler(e, "y")} onDoubleClick={onRulerDoubleClick} />}
         {showRulers && <Ruler axis="y" lengthIn={heightIn} zoom={view.zoom} onPointerDown={(e) => startGuideFromRuler(e, "x")} onDoubleClick={onRulerDoubleClick} />}

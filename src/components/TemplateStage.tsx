@@ -311,10 +311,6 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
           <rect width={width * PX_PER_IN} height={height * PX_PER_IN} fill="url(#gridPattern)" pointerEvents="none" />
         </>
       )}
-      {!preview && bleed > 0 && (
-        <rect x={-bleed * PX_PER_IN} y={-bleed * PX_PER_IN} width={(width + bleed * 2) * PX_PER_IN} height={(height + bleed * 2) * PX_PER_IN}
-          fill="none" stroke="#e0524c" strokeWidth="1" strokeDasharray="6 4" opacity="0.8" pointerEvents="none" />
-      )}
       {!preview && margins && (margins.top || margins.right || margins.bottom || margins.left) ? (
         <rect x={margins.left * PX_PER_IN} y={margins.top * PX_PER_IN} width={Math.max(0, width - margins.left - margins.right) * PX_PER_IN} height={Math.max(0, height - margins.top - margins.bottom) * PX_PER_IN}
           fill="none" stroke="#7c5cdb" strokeWidth="1" strokeDasharray="5 4" opacity="0.7" pointerEvents="none" />
@@ -322,6 +318,13 @@ export function TemplateStage({ items, record, meta, width, height, zoom, select
       {items.filter((item) => item.visible !== false && !(preview && item.reference)).map((item) => (
         <ItemShape key={item.id} item={item} record={record} meta={meta} outline={!preview && selectedIds.includes(item.id) ? (selectedIds.length === 1 ? "primary" : "member") : undefined} zoom={zoom} raw={rawFields} badge={!preview} onPointerDown={(event) => startMove(event, item)} />
       ))}
+      {!preview && bleed > 0 && (
+        // Drawn over the artwork so the edge is always visible, with a pale halo under teal dashes: distinct from the orange selection, the pink snap lines and the violet margin guide.
+        <g fill="none" pointerEvents="none">
+          <rect x={-bleed * PX_PER_IN} y={-bleed * PX_PER_IN} width={(width + bleed * 2) * PX_PER_IN} height={(height + bleed * 2) * PX_PER_IN} stroke="#fff" strokeOpacity="0.85" strokeWidth={3 / zoom} />
+          <rect x={-bleed * PX_PER_IN} y={-bleed * PX_PER_IN} width={(width + bleed * 2) * PX_PER_IN} height={(height + bleed * 2) * PX_PER_IN} stroke="#0e8fa8" strokeWidth={1.5 / zoom} strokeDasharray={`${9 / zoom} ${5 / zoom}`} />
+        </g>
+      )}
       {dropTargetId && (() => {
         const target = items.find((i) => i.id === dropTargetId);
         if (!target) return null;

@@ -1083,3 +1083,11 @@ html,body{touch-action:manipulation}
 
 .bleed-auto{margin-top:8px}
 .bleed-policy{display:flex;flex-direction:column;gap:6px;margin-top:8px;font-size:11px;color:#78847a}
+
+/* With bleed, the rulers sit outside it (0 is still the trim edge) and guide lines run out to them */
+.stage{--bleed:0px}
+.ruler-corner{left:calc(-20px - var(--bleed));top:calc(-20px - var(--bleed))}
+.ruler-top{top:calc(-20px - var(--bleed))}
+.ruler-left{left:calc(-20px - var(--bleed))}
+.guide-x{top:calc(-20px - var(--bleed));bottom:-20px}
+.guide-y{left:calc(-20px - var(--bleed));right:-20px}
