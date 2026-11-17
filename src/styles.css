@@ -1038,3 +1038,5 @@ html,body{touch-action:manipulation}
 .section-chevron{transition:transform .15s;flex:0 0 auto}
 .property-section.folded .section-chevron{transform:rotate(-90deg)}
 .property-section.folded{padding-bottom:4px}
+.stock-browse{width:100%;margin-top:8px;justify-content:center}
+.stock-dialog .field-search{margin-bottom:6px}

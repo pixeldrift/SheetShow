@@ -8,7 +8,14 @@ const OPEN_ABOVE = 80;    // dragged open at least this far, it stays open
 const FLICK = 0.6;        // px per ms toward the edge counts as a swipe to close
 
 const load = (): { left?: number; right?: number } => { try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; } };
+const GAP = 12; // always leave this much room between the two drawers
 const maxWidth = () => Math.min(window.innerWidth * 0.85, 480);
+/** Widest this drawer may get: the screen minus the other drawer (if it is showing) and a little breathing room. */
+const roomFor = (side: Side) => {
+  const other = document.querySelector<HTMLElement>(`.drawer-slot.${side === "left" ? "right" : "left"}.open`);
+  const used = other ? other.getBoundingClientRect().width : 0;
+  return Math.max(MIN, Math.min(maxWidth(), window.innerWidth - used - GAP));
+};
 
 /**
  * Drag a drawer's edge to resize it (the width is remembered), flick it toward its edge of the screen to close it, or drag
@@ -35,7 +42,8 @@ export function useDrawerGestures(setOpen: (side: Side, open: boolean) => void) 
     const dir = side === "left" ? 1 : -1; // moving this way makes the drawer wider
     const samples: { t: number; x: number }[] = [{ t: performance.now(), x: startX }];
     let moved = false;
-    const widthAt = (x: number) => Math.max(0, Math.min(mode === "open" ? panelW : maxWidth(), startW + (x - startX) * dir));
+    const room = roomFor(side);
+    const widthAt = (x: number) => Math.max(0, Math.min(mode === "open" ? Math.min(panelW, room) : room, startW + (x - startX) * dir));
     const move = (e: PointerEvent) => {
       if (!moved) {
         if (Math.abs(e.clientX - startX) < threshold) return;
