@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardPaste, Copy, Download, Sheet, FilePlus2, Plus, Redo2, Search, Trash2, Undo2, Upload } from "lucide-react";
+import { ArrowLeftRight, ClipboardPaste, Copy, Download, Sheet, Shrink, FilePlus2, Plus, Redo2, Search, Trash2, Undo2, Upload } from "lucide-react";
 import type { RecordRow } from "../types";
 import { prettyField } from "../lib/data";
 import { ID, isIncluded } from "../lib/records";
@@ -7,6 +7,9 @@ import { parseGrid } from "../lib/importText";
 import { SortArrow, useColumnHeaders, type SortState } from "./columnDrag";
 
 const ROW_H = 38;
+const MIN_COL = 64, MAX_COL = 600;
+const WIDTHS_KEY = "sheetshow.columnWidths";
+const loadWidths = (): Record<string, number> => { try { return JSON.parse(localStorage.getItem(WIDTHS_KEY) ?? "{}"); } catch { return {}; } };
 const OVERSCAN = 8;
 
 type Props = {
@@ -48,6 +51,52 @@ export function DataTable(p: Props) {
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600);
   const scroller = useRef<HTMLDivElement>(null);
+  // Column widths: each starts as wide as its longest content (within reason); drag a header's right edge to change it,
+  // double-tap the edge to fit it again. Long values are cut off with … and show in full when you edit the cell.
+  const [custom, setCustom] = useState<Record<string, number>>(loadWidths);
+  const fit = useMemo(() => {
+    const ctx = document.createElement("canvas").getContext("2d");
+    const text = (font: string, value: string) => { if (!ctx) return value.length * 7.5; ctx.font = font; return ctx.measureText(value).width; };
+    const out: Record<string, number> = {};
+    for (const column of columns) {
+      let longest = ["", "", ""];
+      for (const row of rows.slice(0, 500)) {
+        const v = row[column] ?? "";
+        if (v.length > longest[2].length) longest = [...longest.slice(1), v].sort((a, b) => a.length - b.length);
+      }
+      const cell = Math.max(...longest.map((v) => text('13px "DM Sans", system-ui, sans-serif', v))) + 26;
+      const head = text('700 10px "DM Sans", system-ui, sans-serif', prettyField(column).toUpperCase()) + prettyField(column).length * 0.6 + 46;
+      out[column] = Math.round(Math.min(MAX_COL, Math.max(MIN_COL + 16, cell, head)));
+    }
+    return out;
+  }, [p.fileName, columns.join("\u0001")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const widthOf = (column: string) => custom[column] ?? fit[column] ?? 140;
+  const saveWidths = (next: Record<string, number>) => { setCustom(next); try { localStorage.setItem(WIDTHS_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ } };
+  const fitColumns = () => saveWidths({});
+  /** Squeeze every column so they all fit on screen at once, trimming the widest first. */
+  const squeezeColumns = () => {
+    const room = (scroller.current?.clientWidth ?? 800) - 44 - 46 - 4;
+    const auto = columns.map((c) => fit[c] ?? 140);
+    const total = auto.reduce((a, b) => a + b, 0);
+    if (total <= room) { saveWidths({}); return; }
+    const next: Record<string, number> = {};
+    columns.forEach((c, i) => { next[c] = Math.max(MIN_COL, Math.floor(auto[i] * room / total)); });
+    saveWidths(next);
+  };
+  const startResize = (column: string, event: React.PointerEvent) => {
+    event.stopPropagation(); event.preventDefault();
+    const startX = event.clientX, startW = widthOf(column);
+    document.body.classList.add("scrubbing");
+    const move = (e: PointerEvent) => setCustom((c) => ({ ...c, [column]: Math.round(Math.min(MAX_COL, Math.max(MIN_COL, startW + e.clientX - startX))) }));
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+      document.body.classList.remove("scrubbing");
+      setCustom((c) => { try { localStorage.setItem(WIDTHS_KEY, JSON.stringify(c)); } catch { /* storage unavailable */ } return c; });
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
+  const refitOne = (column: string) => { const { [column]: _gone, ...rest } = custom; saveWidths(rest); };
+  const tableWidth = 44 + 46 + columns.reduce((sum, c) => sum + widthOf(c), 0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -117,6 +166,10 @@ export function DataTable(p: Props) {
           <button className="tool-button" title="Redo data edit" aria-label="Redo data edit" disabled={!p.canRedo} onClick={p.onRedo}><Redo2 size={16} /></button>
         </div>
         <div className="tool-group">
+          <button className="tool-button" title="Fit each column to its contents" aria-label="Fit columns to contents" onClick={fitColumns}><ArrowLeftRight size={16} /></button>
+          <button className="tool-button" title="Squeeze the columns so they all fit on screen (long values are cut off)" aria-label="Fit all columns on screen" onClick={squeezeColumns}><Shrink size={16} /></button>
+        </div>
+        <div className="tool-group">
           <button className="button" onClick={p.onAddRow}><Plus size={15} /> Row</button>
           <button className="button" onClick={p.onAddColumn}><FilePlus2 size={15} /> Column</button>
           <button className="tool-button" title="Open another CSV…" aria-label="Open another CSV" onClick={() => fileRef.current?.click()}><Upload size={16} /></button>
@@ -140,7 +193,8 @@ export function DataTable(p: Props) {
       )}
 
       <div className="table-scroll" ref={scroller} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)} data-scroll>
-        <table className="data-table">
+        <table className="data-table" style={{ width: tableWidth }}>
+          <colgroup><col style={{ width: 44 }} /><col style={{ width: 46 }} />{columns.map((c) => <col key={c} style={{ width: widthOf(c) }} />)}</colgroup>
           <thead>
             <tr>
               <th className="col-include" title="Include in print"><input type="checkbox" aria-label="Include all shown records" checked={allIncluded} ref={(el) => { if (el) el.indeterminate = !allIncluded && someIncluded; }} onChange={() => p.onInclude(visibleIds, !allIncluded)} /></th>
@@ -148,11 +202,13 @@ export function DataTable(p: Props) {
               {columns.map((column) => (
                 <th key={column} {...headerProps(column)} title="Click to sort · click again to reverse · drag to move the column">
                   <div className="th-inner"><span title={column}>{prettyField(column)}<SortArrow sort={p.sort} column={column} /></span><button className="mini-button" aria-label={`Column options for ${column}`} onClick={() => setMenu(menu === column ? null : column)}>⋯</button></div>
+                  <span className="col-resize" role="separator" aria-orientation="vertical" aria-label={`Resize ${column}`} title="Drag to change the width · double-tap to fit" onPointerDown={(e) => startResize(column, e)} onDoubleClick={() => refitOne(column)} />
                   {menu === column && (
                     <>
                       <div className="menu-scrim" onClick={() => setMenu(null)} />
                       <div className="menu col-menu" role="menu">
                         <button role="menuitem" onClick={() => { setMenu(null); p.onRenameColumn(column); }}>Rename…</button>
+                        <button role="menuitem" onClick={() => { setMenu(null); refitOne(column); }}>Fit width to contents</button>
                         <button role="menuitem" onClick={() => { setMenu(null); p.onSort(column, 1); }}>Sort A → Z</button>
                         <button role="menuitem" onClick={() => { setMenu(null); p.onSort(column, -1); }}>Sort Z → A</button>
                         <button role="menuitem" className="danger" onClick={() => { setMenu(null); p.onDeleteColumn(column); }}>Delete column</button>
