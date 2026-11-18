@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { guideSettings, updateGuide, useGuide } from "../lib/guide";
 
 /**
@@ -8,7 +9,7 @@ import { guideSettings, updateGuide, useGuide } from "../lib/guide";
 export function Spark({ id, title, text }: { id: string; title: string; text: string }) {
   const guide = useGuide();
   const ref = useRef<HTMLSpanElement>(null);
-  const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
+  const [open, setOpen] = useState<{ x: number; y: number; above: boolean } | null>(null);
   const seen = !!guide.sparksSeen[id];
   const hide = () => { updateGuide({ sparksSeen: { ...guideSettings().sparksSeen, [id]: true } }); setOpen(null); };
 
@@ -36,17 +37,20 @@ export function Spark({ id, title, text }: { id: string; title: string; text: st
         onClick={(e) => {
           e.stopPropagation(); e.preventDefault();
           const r = e.currentTarget.getBoundingClientRect();
-          setOpen(open ? null : { x: Math.min(Math.max(r.left + r.width / 2, 130), window.innerWidth - 130), y: r.bottom + 8 });
+          const above = r.bottom + 170 > window.innerHeight;
+          setOpen(open ? null : { x: Math.min(Math.max(r.left + r.width / 2, 134), window.innerWidth - 134), y: above ? r.top - 8 : r.bottom + 8, above });
         }}>✦</span>
-      {open && (
-        <span className="spark-tip" role="status" style={{ left: open.x, top: open.y }} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      {open && createPortal(
+        // Drawn on the page itself, so a transformed parent (the tab strip, a drawer) can't throw it off the screen.
+        <span className={open.above ? "spark-tip above" : "spark-tip"} role="status" style={{ left: open.x, top: open.y }} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
           <strong>{title}</strong>
           <span>{text}</span>
           <span className="spark-actions">
             <button type="button" onClick={() => { updateGuide({ sparks: false }); setOpen(null); }}>Hide all tips</button>
             <button type="button" className="spark-ok" onClick={hide}>Got it</button>
           </span>
-        </span>
+        </span>,
+        document.body,
       )}
     </>
   );

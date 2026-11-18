@@ -20,19 +20,18 @@ export function TapTips() {
       if (!start || Math.hypot(e.clientX - start.x, e.clientY - start.y) > 12 || performance.now() - start.t > 700) { start = null; return; }
       start = null;
       const el = (e.target as Element | null)?.closest<HTMLElement>(TAPPABLE);
-      if (!el || el.closest(".tap-tip")) return;
+      if (!el || (e.target as Element).closest(".tap-tip, .spark, .spark-tip")) return;
       const raw = el.dataset.tip || el.getAttribute("title") || el.getAttribute("aria-label") || "";
       const text = raw.replace(/\s+/g, " ").trim();
       if (!text || text.length < 2) return;
       const r = el.getBoundingClientRect();
       const below = r.top < 90;
       setTip({ text: text.length > 120 ? text.slice(0, 117).trimEnd() + "…" : text, x: Math.min(Math.max(r.left + r.width / 2, 130), window.innerWidth - 130), y: below ? r.bottom + 8 : r.top - 8, below });
-      timer.current = window.setTimeout(() => setTip(null), 2200);
     };
     window.addEventListener("pointerdown", down, true);
     window.addEventListener("pointerup", up, true);
     return () => { window.removeEventListener("pointerdown", down, true); window.removeEventListener("pointerup", up, true); window.clearTimeout(timer.current); };
   }, [tapTips]);
   if (!tip) return null;
-  return <div className={tip.below ? "tap-tip below" : "tap-tip"} role="status" style={{ left: tip.x, top: tip.y }}><span aria-hidden>✦</span> {tip.text}</div>;
+  return <div className={tip.below ? "tap-tip below" : "tap-tip"} role="status" style={{ left: tip.x, top: tip.y }} onPointerDown={(e) => { e.stopPropagation(); setTip(null); }}><span aria-hidden>✦</span> {tip.text}</div>;
 }
