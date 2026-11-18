@@ -1130,3 +1130,57 @@ html,body{touch-action:manipulation}
 .plan-step>.plan-move{grid-row:1;grid-column:3}
 .plan-step>button{grid-row:1;grid-column:4}
 .plan-step>select:nth-of-type(2){grid-row:2;grid-column:2/5}
+
+/* ── Welcome guide ── */
+.welcome-scrim{background:#2a1d1488}
+.welcome-dialog{width:min(520px,100%);max-height:min(640px,calc(100dvh - 32px));position:relative;overflow:hidden}
+.welcome-skip{position:absolute;top:10px;right:10px;z-index:2}
+.welcome-body{padding:34px 30px 8px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;flex:1;min-height:0;overflow-y:auto;animation:welcome-in .22s ease}
+@keyframes welcome-in{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+.welcome-art{width:76px;height:76px;border-radius:20px;background:#fceee3;color:#d17c4b;display:grid;place-items:center;margin-bottom:10px}
+.welcome-kicker{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#d17c4b}
+.welcome-body h2{font:700 22px Manrope,sans-serif;color:#3f2f26;margin:0 0 4px}
+.welcome-text{font-size:14px;line-height:1.55;color:#5d5149;display:flex;flex-direction:column;gap:9px}
+.welcome-text p{margin:0}
+.welcome-go{margin-top:12px;display:inline-flex;align-items:center;gap:6px;border:1px solid #efd6c5;background:#fffaf6;color:#b86e46;border-radius:999px;padding:7px 14px;font-weight:700;font-size:12px}
+.welcome-dots{display:flex;justify-content:center;gap:7px;padding:10px 0 4px}
+.welcome-dots button{width:8px;height:8px;border-radius:50%;border:0;padding:0;background:#e5d8cd}
+.welcome-dots button.active{background:#d17c4b;width:20px;border-radius:4px}
+.welcome-foot{flex-wrap:wrap}
+.welcome-foot .check-row{font-size:12px}
+@media(max-width:480px){.welcome-body{padding:30px 20px 6px}}
+/* ── Tap tips: a label that floats up when a button is tapped on a touch screen ── */
+.tap-tip{position:fixed;z-index:500;transform:translate(-50%,-100%);max-width:250px;padding:7px 12px;border-radius:12px;background:#3f2f26;color:#fff7ef;font-size:12px;line-height:1.35;box-shadow:0 6px 20px #2a1d1455;pointer-events:none;animation:tip-pop .16s ease-out}
+.tap-tip span{color:#f2a45f;margin-right:3px}
+.tap-tip.below{transform:translate(-50%,0)}
+@keyframes tip-pop{from{opacity:0;transform:translate(-50%,-90%) scale(.94)}to{opacity:1}}
+.tap-tip.below{animation-name:tip-pop-below}
+@keyframes tip-pop-below{from{opacity:0;transform:translate(-50%,-10%) scale(.94)}to{opacity:1}}
+/* ── Help: guides and tips settings ── */
+.guide-settings{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid #efd6c5;background:#fffaf6;border-radius:10px;margin-bottom:16px}
+.guide-settings h3{font-size:13px;margin:0 0 2px;color:#8a4a26}
+.guide-settings .button{align-self:flex-start}
+.welcome-foot .check-row{flex-basis:100%;margin-bottom:2px}
+
+/* ── Tours: a spotlight and a small card ── */
+.tour-layer{position:fixed;inset:0;z-index:450}
+.tour-block{position:absolute;inset:0}
+.tour-spot{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px #2a1d1470;outline:2px solid #f2a45f;outline-offset:0;pointer-events:none;transition:top .22s ease,left .22s ease,width .22s ease,height .22s ease}
+.tour-pop{position:fixed;background:#fff;border-radius:14px;padding:14px 16px 12px;box-shadow:0 12px 36px #2a1d1466;display:flex;flex-direction:column;gap:6px;transition:top .22s ease,left .22s ease}
+.tour-count{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#d17c4b}
+.tour-pop h3{font:700 16px Manrope,sans-serif;color:#3f2f26;margin:0}
+.tour-pop p{margin:0;font-size:13px;line-height:1.5;color:#5d5149}
+.tour-stop{font-size:11px;color:#8f968d;margin-top:2px}
+.tour-actions{display:flex;align-items:center;gap:6px;margin-top:6px}
+.tour-actions .spacer{flex:1}
+/* ── Sparks: a pulsing ✦ on features you haven't tried ── */
+.has-spark{position:relative}
+.spark{position:absolute;top:-6px;right:-6px;z-index:6;width:16px;height:16px;border-radius:50%;background:#fff;color:#d17c4b;font-size:11px;line-height:16px;text-align:center;box-shadow:0 0 0 2px #f2a45f66;cursor:pointer;animation:spark-pulse 1.8s ease-in-out infinite;user-select:none}
+@keyframes spark-pulse{0%,100%{box-shadow:0 0 0 0 #f2a45f99}60%{box-shadow:0 0 0 7px #f2a45f00}}
+.section-toggle .spark{top:50%;right:auto;left:auto;margin-left:6px;position:relative;display:inline-block;transform:none;top:0}
+.spark-tip{position:fixed;z-index:520;transform:translateX(-50%);width:250px;display:flex;flex-direction:column;gap:5px;padding:11px 13px;border-radius:12px;background:#3f2f26;color:#fff7ef;font-size:12px;line-height:1.45;box-shadow:0 8px 26px #2a1d1466;text-align:left;font-weight:400;text-transform:none;letter-spacing:0}
+.spark-tip strong{color:#f2a45f;font-size:13px}
+.spark-actions{display:flex;justify-content:space-between;align-items:center;margin-top:4px}
+.spark-actions button{border:0;background:transparent;color:#d9c7b8;font-size:11px;padding:4px 0}
+.spark-actions .spark-ok{background:#d17c4b;color:#fff;border-radius:8px;padding:5px 12px;font-weight:700}
+.guide-tours{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#78847a}

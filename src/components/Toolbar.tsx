@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { SquareDashedMousePointer, ChevronDown, FileSearch, FileText, LayoutGrid, Rows3, Grid2X2, Image as ImageIcon, Magnet, PencilLine, Plus, Route, Ruler, Type } from "lucide-react";
 import { MAX_ZOOM, MIN_ZOOM } from "./Viewport";
 import { ZoomField } from "./ZoomField";
+import { Spark } from "./Spark";
 import { ReferenceImageIcon, ShapesIcon } from "./icons";
 import type { SnapOptions } from "../lib/smartSnap";
 
@@ -64,7 +65,7 @@ export function Toolbar(p: Props) {
         </>
       )}
       <div className="tool-group">
-        {toggle(p.instanceMode, p.workspace === "layout" ? "Override mode: click or double-click anything on a sheet to change just that record — edit a name, drop in a different photo, tweak a color" : "Override mode: edits you make to the previewed record are kept for that record only; every other record keeps the template", p.onInstanceMode, <PencilLine size={15} />)}
+        {toggle(p.instanceMode, p.workspace === "layout" ? "Override mode: click or double-click anything on a sheet to change just that record — edit a name, drop in a different photo, tweak a color" : "Override mode: edits you make to the previewed record are kept for that record only; every other record keeps the template", p.onInstanceMode, <><PencilLine size={15} /><Spark id="override" title="Change one record" text="Turn this on, then edit anything for a single record, like one misspelled name. Every other record keeps the template." /></>)}
         {p.workspace === "template" && toggle(p.multi, "Select several: tap objects to add or remove them, or drag on empty canvas to draw a selection box", p.onMulti, <SquareDashedMousePointer size={16} />)}
         {toggle(p.showGrid, "Show grid", p.onGrid, <Grid2X2 size={15} />)}
         {toggle(p.showRulers, "Show rulers", p.onRulers, <Ruler size={15} />)}
@@ -72,7 +73,7 @@ export function Toolbar(p: Props) {
           {toggle(p.snap, "Smart snapping: line up with other objects, the page and guides (hold Ctrl/⌘ to move freely)", p.onSnap, <Magnet size={15} />)}
           <button ref={snapRef} className="tool-button split-caret" title="Choose what snaps" aria-label="Snapping options" aria-haspopup="menu" aria-expanded={!!snapAt} onClick={() => { const r = snapRef.current?.getBoundingClientRect(); setSnapAt(snapAt || !r ? null : { x: r.left, y: r.bottom + 6 }); }}><ChevronDown size={11} /></button>
         </span>
-        {p.workspace === "layout" && p.onShowOrder && toggle(!!p.showOrder, "Show the order: thin arrows from card to card in the order their records come (dotted between copies of the same record)", p.onShowOrder, <Route size={16} />)}
+        {p.workspace === "layout" && p.onShowOrder && toggle(!!p.showOrder, "Show the order: thin arrows from card to card in the order their records come (dotted between copies of the same record)", p.onShowOrder, <><Route size={16} /><Spark id="order" title="See the record order" text="Draws thin arrows from card to card in the order their records come. Dotted arrows join cards that show the same record." /></>)}
         {toggle(p.preview, "Print preview", p.onPreview, <FileSearch size={16} />)}
       </div>
       {p.workspace === "layout" && p.onPageView && (

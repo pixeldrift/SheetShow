@@ -1,6 +1,6 @@
 # SheetShow
 
-SheetShow turns a spreadsheet into printed labels, cards, badges and tags. You design **one** item, connect parts of it to your data, and SheetShow fills in a copy for every record and lays the copies out on the sheet.
+SheetShow turns a spreadsheet into printed labels, cards, badges and tags. You design **one** card (or label, or badge), connect parts of it to your data, and SheetShow fills in a copy for every record and lays the copies out on sheets.
 
 > New here? Open the **Project menu** (the pill at the top left) and choose **New project** for a blank design (you pick a paper size, a label stock, or your own size) or **New from template…** to start from a ready-made business card, address label, conference badge, cage card or price tag.
 
@@ -9,15 +9,15 @@ SheetShow turns a spreadsheet into printed labels, cards, badges and tags. You d
 The tabs at the top switch between three views of the same project.
 
 - **Data**: your records as an editable table. Type in any cell, paste a block from a spreadsheet, and tick which records should print. **Click a column heading to sort by it, click again to reverse it, and drag a heading to move the column**, which is handy when the column you use most (a last name, say) isn't first. The records list under the canvas has the same sortable, movable headings.
-- **Template**: the design of a single item. This is where you add text, shapes and pictures and link them to your data.
-- **Page layout**: how copies of the template are arranged on the paper. This is where you pick your label stock, preview every sheet and print.
+- **Template**: the design of one card. This is where you add text, shapes and pictures and link them to your data.
+- **Page layout**: how cards (copies of the template) are arranged on sheets of paper. This is where you pick your label stock, preview every sheet and print.
 
 The **Project menu** (a pill with an arrow, left of the tabs) is different: it isn't a view. It holds New project, New from template, Open and Save.
 
 ## Quick start
 
 1. Open the **Data** tab and import a CSV or TSV file, or edit the sample records.
-2. Switch to **Template** and set the size of one item (or pick a label sheet).
+2. Switch to **Template** and set the size of one card (or pick an Avery sheet).
 3. Open the **Fields** drawer and tap a field to add it as linked text, or drag it onto the design.
 4. Switch to **Page layout**, choose your label stock, and check the preview.
 5. Press **Print**.

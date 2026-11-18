@@ -32,7 +32,7 @@ export function VariantsSection(p: Props) {
   const addRule = () => p.onRules([...p.rules, { id: uid(), variantId: p.variants[1]?.id ?? p.variants[0].id, kind: "nth", every: 2, start: 2 }]);
 
   return (
-    <Section title="ALTERNATING TEMPLATES">
+    <Section key={p.variants.length > 1 ? "many" : "one"} title="ALTERNATING TEMPLATES" defaultOpen={p.variants.length > 1}>
       <p className="hint first">Make more than one template, then say which records use which — for example every other badge in a different color.</p>
       <div className="variant-list">
         {p.variants.map((v, i) => (
