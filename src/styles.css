@@ -2,6 +2,9 @@
 
 /* ── Tokens ─────────────────────────────────────────────────────────────── */
 :root{
+  /* On a phone the status bar is translucent glass over the page: leave its height plus a little more clear. */
+  --top-pad:calc(env(safe-area-inset-top) + min(env(safe-area-inset-top), 1px) * 10);
+  --bottom-pad:env(safe-area-inset-bottom);
   --ink:#27352f; --ink-2:#536157; --ink-3:#78847a; --ink-4:#9aa198;
   --line:#e7e7e0; --line-2:#efeee9; --surface:#fff; --canvas:#f3f2ee;
   --accent:#cf7949; --accent-ink:#b96d42; --accent-soft:#f8eee7; --accent-line:#e8c3aa;
@@ -20,14 +23,14 @@ h2,h3,p{margin:0}
 
 /* ── App shell ──────────────────────────────────────────────────────────── */
 .app-shell{height:100dvh;display:flex;flex-direction:column;overflow:hidden;background:#f4f3ef;
-  padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  padding:0 env(safe-area-inset-right) 0 env(safe-area-inset-left)}
 .workspace{flex:1;min-height:0;display:flex;flex-direction:column}
 .content-frame{flex:1;min-height:0;display:flex;position:relative}
 .editor-content{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
 .canvas-frame{flex:1;min-height:0;position:relative;overflow:hidden;background:var(--canvas)}
 
 /* ── Top bar ────────────────────────────────────────────────────────────── */
-.topbar{height:calc(64px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)!important;box-sizing:border-box;flex-shrink:0;background:var(--surface);display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--line);gap:24px}
+.topbar{height:calc(64px + var(--top-pad));padding-top:var(--top-pad)!important;box-sizing:border-box;flex-shrink:0;background:var(--surface);display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--line);gap:24px}
 .brand{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .brand-mark{width:34px;height:36px;position:relative;display:grid;place-items:center;background:#f4e8dc;border-radius:10px}
 .brand-sheet{width:18px;height:23px;background:#fff;border:1.5px solid #d17c4b;border-radius:3px;transform:rotate(-5deg);box-shadow:3px 2px 0 #e6c6ac}
@@ -112,7 +115,7 @@ h2,h3,p{margin:0}
 .edit-divider{width:1px;height:20px;background:#e3e5de;margin:0 4px}
 
 /* ── Record bar ─────────────────────────────────────────────────────────── */
-.record-bar{height:56px;flex-shrink:0;background:#fff;border-top:1px solid var(--line);display:flex;align-items:center;padding:0 20px;gap:16px}
+.record-bar{height:calc(56px + var(--bottom-pad));box-sizing:border-box;flex-shrink:0;background:#fff;border-top:1px solid var(--line);display:flex;align-items:center;padding:0 20px var(--bottom-pad);gap:16px}
 .record-info{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
 .record-icon{width:30px;height:30px;flex:none;background:#f0f3ed;border-radius:7px;color:#849783;display:grid;place-items:center}
 .record-info>div+div{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -233,14 +236,14 @@ h2,h3,p{margin:0}
   .workspace-tabs button{padding:0 9px}
 }
 @media(max-width:620px){
-  .topbar{height:calc(54px + env(safe-area-inset-top));padding:0 8px;gap:6px}
+  .topbar{height:calc(54px + var(--top-pad));padding:0 8px;gap:6px}
   .brand-name{font-size:16px}.brand-name small{display:none}
   .brand-mark{width:29px;height:31px}
   .workspace-tabs{gap:0}.workspace-tabs button{padding:0 8px}.workspace-tabs button span{display:none}
   .top-actions .button span{display:none}.top-actions .button{padding:0 10px}
   .canvas-toolbar{padding:0 6px;gap:4px;height:42px}
   .zoom-slider{display:none}
-  .record-bar{height:50px;padding:0 10px;gap:8px}
+  .record-bar{height:calc(50px + var(--bottom-pad));padding:0 10px var(--bottom-pad);gap:8px}
   .record-info>div+div{display:none}
   .edit-bar{bottom:10px;padding:3px 4px}.edit-bar .tool-button{width:31px}
   .canvas-caption{top:14px;font-size:8px;gap:6px}
@@ -743,7 +746,7 @@ kbd,.help-body kbd{font:600 11px ui-monospace,Menlo,monospace;background:#f3f1ec
   .topbar{gap:4px;padding:0 6px}.topbar-center{gap:2px}
   .peek-label{display:none}
   .record-peek{padding:4px}.peek-chevron{display:none}
-  .record-bar{gap:6px;padding:0 8px}
+  .record-bar{gap:6px;padding:0 8px var(--bottom-pad)}
 }
 
 .add-collapsed{display:none}
@@ -1150,7 +1153,7 @@ html,body{touch-action:manipulation}
 .welcome-foot .check-row{font-size:12px}
 @media(max-width:480px){.welcome-body{padding:30px 20px 6px}}
 /* ── Tap tips: a label that floats up when a button is tapped on a touch screen ── */
-.tap-tip{position:fixed;z-index:500;transform:translate(-50%,-100%);max-width:250px;padding:7px 12px;border-radius:12px;background:#3f2f26;color:#fff7ef;font-size:12px;line-height:1.35;box-shadow:0 6px 20px #2a1d1455;pointer-events:none;animation:tip-pop .16s ease-out}
+.tap-tip{position:fixed;z-index:500;transform:translate(-50%,-100%);max-width:250px;padding:7px 12px;border-radius:12px;background:#3f2f26;color:#fff7ef;font-size:12px;line-height:1.35;box-shadow:0 6px 20px #2a1d1455;animation:tip-pop .16s ease-out}
 .tap-tip span{color:#f2a45f;margin-right:3px}
 .tap-tip.below{transform:translate(-50%,0)}
 @keyframes tip-pop{from{opacity:0;transform:translate(-50%,-90%) scale(.94)}to{opacity:1}}
@@ -1184,3 +1187,10 @@ html,body{touch-action:manipulation}
 .spark-actions button{border:0;background:transparent;color:#d9c7b8;font-size:11px;padding:4px 0}
 .spark-actions .spark-ok{background:#d17c4b;color:#fff;border-radius:8px;padding:5px 12px;font-weight:700}
 .guide-tours{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#78847a}
+.data-view{padding-bottom:var(--bottom-pad)}
+
+/* Sparks: a soft shadow and a faint outline so they stay visible over anything, with the pulse drawn as a ring behind */
+.spark{box-shadow:0 1px 3px #2a1d1459,0 0 0 1px #d17c4b73!important;animation:none!important;overflow:visible}
+.spark::after{content:"";position:absolute;inset:-1px;border-radius:50%;border:2px solid #f2a45f;opacity:0;animation:spark-ring 1.8s ease-out infinite;pointer-events:none}
+@keyframes spark-ring{0%{transform:scale(1);opacity:.8}70%,100%{transform:scale(1.9);opacity:0}}
+.spark-tip.above{transform:translate(-50%,-100%)}
