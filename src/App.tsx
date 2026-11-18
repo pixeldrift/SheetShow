@@ -306,6 +306,9 @@ function App() {
   /** After adding a page, show it as soon as the print run includes it. */
   const [wantPage, setWantPage] = useState<string | null>(null);
   useEffect(() => { if (wantPage && seq.some((r) => r.pageId === wantPage)) { goToPage(wantPage); setWantPage(null); } });
+  /** Every page template shares one paper size: a print job can't mix paper sources. */
+  const setPaperSize = (pageWidth: number, pageHeight: number) =>
+    doc.set((d) => ({ ...d, sheets: Object.fromEntries(Object.entries(d.sheets).map(([id, s]) => [id, { ...s, pageWidth, pageHeight }])) }), { coalesce: "paper-size" });
   const newPageId = () => `p${uid().slice(0, 6)}`;
   const nextPageName = (base: string) => { let n = 2; const names = new Set(D.pages.map((p) => p.name)); while (names.has(`${base} ${n}`)) n++; return `${base} ${n}`; };
   /** Adds a page design (a copy of this one's settings, with an empty grid when `blank`) and makes it print after the others. */
@@ -802,7 +805,7 @@ function App() {
   // ── Template / page setup ───────────────────────────────────────────────
   const applyPreset = (preset: LabelPreset) => {
     // Template size and page layout change together, as a single undo step.
-    doc.set((d) => ({ ...d, template: { ...d.template, width: preset.width, height: preset.height }, sheets: { ...d.sheets, [activeId]: { ...d.sheets[activeId], placements: undefined, pageWidth: 8.5, pageHeight: 11, columns: preset.columns, rows: preset.rows, gapX: preset.gapX, gapY: preset.gapY, marginX: preset.marginX, marginY: preset.marginY } } }));
+    doc.set((d) => ({ ...d, template: { ...d.template, width: preset.width, height: preset.height }, sheets: { ...Object.fromEntries(Object.entries(d.sheets).map(([id, s]) => [id, { ...s, pageWidth: 8.5, pageHeight: 11 }])), [activeId]: { ...d.sheets[activeId], placements: undefined, pageWidth: 8.5, pageHeight: 11, columns: preset.columns, rows: preset.rows, gapX: preset.gapX, gapY: preset.gapY, marginX: preset.marginX, marginY: preset.marginY } } }));
     setViews((v) => ({ template: { ...v.template, fitted: false }, layout: { ...v.layout, fitted: false } }));
   };
 
@@ -1243,8 +1246,8 @@ function App() {
 
               {workspace === "layout" && !preview && (
                 <div className="variant-bar" data-no-pan role="tablist" aria-label="Pages">
-                  {D.pages.map((p) => <button key={p.id} role="tab" aria-selected={p.id === activeId} className={p.id === activeId ? "variant-chip active" : "variant-chip"} onClick={() => goToPage(p.id)} title={`Show ${p.name}`}>{p.name}</button>)}
-                  <button className="variant-chip" onClick={() => addPage()} title="Add another page design: a letter, the back of a page, a second sheet style" aria-label="Add a page">+</button>
+                  {D.pages.map((p, i) => <button key={p.id} role="tab" aria-selected={p.id === activeId} className={p.id === activeId ? "variant-chip active" : "variant-chip"} onClick={() => goToPage(p.id)} title={`Show ${p.name}`}>{D.pages.length > 1 ? `${String.fromCharCode(65 + i)} · ${p.name}` : p.name}</button>)}
+                  <button className="variant-chip" onClick={() => addPage()} title="Add another page template: a letter, the back of a page, a second sheet style" aria-label="Add a page">+</button>
                 </div>
               )}
               {workspace === "template" && !preview && (
@@ -1283,7 +1286,7 @@ function App() {
               groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
               templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} bleed={template.bleed} bleedInfo={{ max: bleedMax, effective: bleedIn, standard: !!standardStock, custom: bleedHeld, edgeLimited: bleedLimit.edge < bleedLimit.gap }} onBleed={changeBleed} pages={{
                 list: D.pages, activeId, plan: D.plan, sheetCount: seq.length, perSheet: Object.fromEntries(Object.keys(D.sheets).map((id) => [id, perSheetFor(id)])),
-                onRename: renamePage, onDuplicate: (id) => { addPage({ name: nextPageName(D.pages.find((p) => p.id === id)?.name ?? "Page"), from: D.sheets[id] }); }, onBack: addBackSide, onDelete: deletePage,
+                onActivate: goToPage, onRename: renamePage, onDuplicate: (id) => { addPage({ name: nextPageName(D.pages.find((p) => p.id === id)?.name ?? "Page"), from: D.sheets[id] }); }, onBack: addBackSide, onDelete: deletePage,
                 onAdd: () => addPage(), onPlan: setPlan,
               }} shared={mainSheet} onShared={(patch) => setMainSheet((s) => ({ ...s, ...patch }))}
               cards={{
@@ -1291,7 +1294,7 @@ function App() {
                 onNumberAll: numberAll, onReset: () => resetToGrid(), onAdd: () => addCard(), onNumber: (n) => selectedCard && numberCard(cardPage, selectedCard.id, n), onTemplate: (id) => selectedCard && cardVariant(cardPage, selectedCard.id, id),
                 onPosition: (x, y) => selectedCard && moveCard(cardPage, selectedCard.id, x, y), onDuplicate: () => selectedCard && duplicateCard(cardPage, selectedCard.id), onRotate: (turn) => selectedCard && rotateCard(cardPage, selectedCard.id, turn), onDelete: () => selectedCard && deleteCard(cardPage, selectedCard.id),
               }} templateMargins={template.margins} onTemplateMargins={(margins) => setTemplate((t) => ({ ...t, margins }))} onPreset={applyPreset}
-              sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
+              sheet={sheet} onSheet={(patch) => ("pageWidth" in patch || "pageHeight" in patch ? setPaperSize(patch.pageWidth ?? sheet.pageWidth, patch.pageHeight ?? sheet.pageHeight) : setSheet((s) => ({ ...s, ...patch })))} pageCount={pageCount} overflow={overflow}
               printer={printer} onCalibrationSheet={printCalibration}
               fields={fields} editedList={editedList} onJumpInstance={jumpToInstance} onResetInstanceById={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
               onAudit={(itemId) => setAuditDialog({ itemId })} auditCount={sheetIssueCount}

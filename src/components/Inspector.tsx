@@ -62,7 +62,7 @@ type Props = {
   /** Page layout: the page designs and the print plan, and the settings every page shares (record order). */
   pages: {
     list: PageMeta[]; activeId: string; plan: Plan; sheetCount: number; perSheet: Record<string, number>;
-    onRename: (id: string, name: string) => void; onDuplicate: (id: string) => void; onBack: (id: string) => void; onDelete: (id: string) => void; onAdd: () => void; onPlan: (plan: Plan) => void;
+    onActivate: (id: string) => void; onRename: (id: string, name: string) => void; onDuplicate: (id: string) => void; onBack: (id: string) => void; onDelete: (id: string) => void; onAdd: () => void; onPlan: (plan: Plan) => void;
   };
   shared: Sheet; onShared: (patch: Partial<Sheet>) => void;
   /** Page layout: the cards on the sheet and the record numbering. */
@@ -371,20 +371,27 @@ function TemplateSetup({ templateWidth, templateHeight, bleed, bleedInfo, onBlee
 function PagesSection({ pages }: { pages: Props["pages"] }) {
   const { list, activeId, plan } = pages;
   const name = (id: string) => list.find((p) => p.id === id)?.name ?? "Page";
-  const active = list.find((p) => p.id === activeId);
   const setStep = (id: string, change: Partial<Plan["steps"][number]>) => pages.onPlan({ ...plan, steps: plan.steps.map((s) => (s.id === id ? { ...s, ...change } : s)) });
   const move = (i: number, by: number) => { const steps = [...plan.steps]; const j = i + by; if (j < 0 || j >= steps.length) return; [steps[i], steps[j]] = [steps[j], steps[i]]; pages.onPlan({ ...plan, steps }); };
   const ruleValue = (s: Plan["steps"][number]) => (!s.when ? "all" : s.when.every === 2 && s.when.start === 1 ? "odd" : s.when.every === 2 && s.when.start === 2 ? "even" : "nth");
   const groupMode = plan.group === 0 ? "all" : plan.group === 1 ? "one" : "set";
   return (
     <>
-      <Section title="THIS PAGE">
-        <input className="property-input" value={active?.name ?? ""} onChange={(e) => pages.onRename(activeId, e.target.value)} aria-label="Page name" />
+      <Section title="PAGE TEMPLATES">
+        <p className="hint first">A page template is a sheet layout: a letter, a badge sheet, the back of a page. All of them are the same paper size, so one print job can use them together. Name them here, then say below what prints and in what order.</p>
+        <div className="variant-list">
+          {list.map((p, i) => (
+            <div key={p.id} className={p.id === activeId ? "variant-row active" : "variant-row"}>
+              <button className="variant-letter" onClick={() => pages.onActivate(p.id)} aria-label={`Show ${p.name}`} title="Show this page template">{String.fromCharCode(65 + i)}</button>
+              <input className="variant-name" value={p.name} onChange={(e) => pages.onRename(p.id, e.target.value)} aria-label="Page template name" />
+              {list.length > 1 && i > 0 && <button className="mini-button" title="Delete this page template" aria-label={`Delete ${p.name}`} onClick={() => pages.onDelete(p.id)}><Trash2 size={13} /></button>}
+            </div>
+          ))}
+        </div>
         <div className="property-actions page-actions">
+          <button className="button" onClick={pages.onAdd}><Plus size={14} /> Add page</button>
           <button className="button" onClick={() => pages.onDuplicate(activeId)}><Copy size={14} /> Duplicate</button>
           <button className="button" title="Adds the same cards mirrored side to side, printed right after this page, for double-sided sheets" onClick={() => pages.onBack(activeId)}><RotateCcw size={14} /> Add back side</button>
-          <button className="button" onClick={pages.onAdd}><Plus size={14} /> New page</button>
-          <button className="button danger" disabled={list.length < 2 || list[0].id === activeId} title={list[0].id === activeId ? "The first page can't be deleted" : "Delete this page"} onClick={() => pages.onDelete(activeId)}><Trash2 size={14} /> Delete</button>
         </div>
       </Section>
       <Section title="WHAT PRINTS">
@@ -473,6 +480,7 @@ function PageSetup({ pages, shared, onShared, cards, templateWidth, templateHeig
           <Pair label="Width"><NumberField value={sheet.pageWidth} min={1} step={0.05} unit="in" onChange={(n) => onSheet({ pageWidth: n })} /></Pair>
           <Pair label="Height"><NumberField value={sheet.pageHeight} min={1} step={0.05} unit="in" onChange={(n) => onSheet({ pageHeight: n })} /></Pair>
         </div>
+        {pages.list.length > 1 && <p className="hint">Every page template uses this paper size.</p>}
       </Section>
       <StockPicker templateWidth={templateWidth} templateHeight={templateHeight} sheet={sheet} onPreset={onPreset} />
       {cards.custom ? (
