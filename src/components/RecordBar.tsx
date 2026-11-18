@@ -1,3 +1,4 @@
+import { Spark } from "./Spark";
 import { Braces, ChevronLeft, ChevronRight, ChevronUp, Rows3, Variable } from "lucide-react";
 
 type Props = {
@@ -27,7 +28,7 @@ export function RecordBar({ label, position, total, preview, onStep, drawerOpen,
         <button className="tool-button" aria-label={`Next ${label.toLowerCase()}`} onClick={() => onStep(1)} disabled={position >= total}><ChevronRight size={17} /></button>
       </div>
       {onToggleNames && (
-        <button className="tool-button toggle names-toggle" aria-pressed={!!showNames} onClick={onToggleNames} title={showNames ? "Showing field names. Switch back to the record's values" : "Show field names instead of values, to see what is variable"} aria-label="Show field names">
+        <button className="tool-button toggle names-toggle" aria-pressed={!!showNames} onClick={onToggleNames} title={showNames ? "Showing field names. Switch back to the record's values" : "Show field names instead of values, to see what is variable"} aria-label="Show field names"><Spark id="names" title="See what is variable" text="Shows field names instead of values, so you can see which parts of the card change from record to record." />
           {showNames ? <Braces size={16} /> : <Variable size={16} />}
         </button>
       )}

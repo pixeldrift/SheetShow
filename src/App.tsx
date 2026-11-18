@@ -19,7 +19,10 @@ import { TemplateGalleryDialog } from "./components/TemplateGalleryDialog";
 import { HelpDialog } from "./components/HelpDialog";
 import { WelcomeDialog } from "./components/WelcomeDialog";
 import { TapTips } from "./components/TapTips";
-import { shouldWelcome } from "./lib/guide";
+import { Spark } from "./components/Spark";
+import { shouldWelcome, useGuide } from "./lib/guide";
+import { TourOverlay } from "./components/TourOverlay";
+import type { TourId } from "./lib/tours";
 import { useHistory } from "./hooks/useHistory";
 import { useFontLibrary } from "./hooks/useFontLibrary";
 import { aabb, alignItems, boundsOf, centerOf, distributeItems, rotateAbout, type AlignMode, type Transform } from "./lib/align";
@@ -172,6 +175,8 @@ function App() {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [welcomeOpen, setWelcomeOpen] = useState(() => shouldWelcome(!!initial));
+  const guide = useGuide();
+  const [tour, setTour] = useState<TourId | null>(null);
   const [recordsOpen, setRecordsOpen] = useState(false);
   const [showFieldNames, setShowFieldNames] = useState(false);
   const [instanceMode, setInstanceMode] = useState(false);
@@ -1148,6 +1153,14 @@ function App() {
     ? { title: variants.length > 1 ? `INDIVIDUAL TEMPLATE · ${variants.find((v) => v.id === variantId)?.name.toUpperCase()}` : "INDIVIDUAL TEMPLATE", detail: `${template.width.toFixed(2)} × ${template.height.toFixed(2)} in` }
     : { title: D.pages.length > 1 ? `PAGE LAYOUT · ${(D.pages.find((p) => p.id === activeId)?.name ?? "").toUpperCase()}` : "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet${printer.x || printer.y ? ` · printer offset ${printer.x >= 0 ? "+" : ""}${printer.x.toFixed(3)}, ${printer.y >= 0 ? "+" : ""}${printer.y.toFixed(3)} in` : ""}` };
 
+  // The first time a tab opens, offer its tour (once; switch tours off, or replay them, in Help).
+  const tourPlace: TourId = showData ? "data" : workspace;
+  const quiet = !welcomeOpen && !helpOpen && !tour && !newProjectOpen && !pasteOpen && !sheetsOpen && !galleryOpen && !libraryDialog && !auditDialog;
+  useEffect(() => {
+    if (!guide.tours || guide.tourSeen[tourPlace] || !quiet) return;
+    const timer = window.setTimeout(() => setTour(tourPlace), 900);
+    return () => window.clearTimeout(timer);
+  }, [tourPlace, guide.tours, guide.tourSeen, quiet]);
   /** One sheet of the print run: its own page design, showing the records its place in the plan gives it. */
   const renderSheet = (K: number) => {
     const ref = seq[K] ?? { pageId: mainId, base: 0, limit: 0, group: 0 };
@@ -1251,13 +1264,13 @@ function App() {
               {workspace === "layout" && !preview && (
                 <div className="variant-bar" data-no-pan role="tablist" aria-label="Pages">
                   {D.pages.map((p, i) => <button key={p.id} role="tab" aria-selected={p.id === activeId} className={p.id === activeId ? "variant-chip active" : "variant-chip"} onClick={() => goToPage(p.id)} title={`Show ${p.name}`}>{D.pages.length > 1 ? `${String.fromCharCode(65 + i)} · ${p.name}` : p.name}</button>)}
-                  <button className="variant-chip" onClick={() => addPage()} title="Add another page template: a letter, the back of a page, a second sheet style" aria-label="Add a page">+</button>
+                  <button className="variant-chip" onClick={() => addPage()} title="Add another page template: a letter, the back of a page, a second sheet style" aria-label="Add a page">+<Spark id="add-page" title="Add a page template" text="Make a second layout, like the back of a page or a letter, then choose what prints under What prints." /></button>
                 </div>
               )}
               {workspace === "template" && !preview && (
                 <div className="variant-bar" data-no-pan role="tablist" aria-label="Templates">
                   {variants.map((v, i) => <button key={v.id} role="tab" aria-selected={v.id === variantId} className={v.id === variantId ? "variant-chip active" : "variant-chip"} onClick={() => { setActiveVariant(v.id); setSelectedIds([]); }} title={`Edit ${v.name}`}>{variants.length > 1 ? `${String.fromCharCode(65 + i)} · ${v.name}` : v.name}</button>)}
-                  <button className="variant-chip" onClick={addVariant} title="Add another template, e.g. to alternate colors between records" aria-label="Add a template">+</button>
+                  <button className="variant-chip" onClick={addVariant} title="Add another template, e.g. to alternate colors between records" aria-label="Add a template">+<Spark id="add-template" title="Alternate templates" text="Add a second design, then set rules so some records, like presenters, use it." /></button>
                 </div>
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>
@@ -1347,7 +1360,8 @@ function App() {
       )}
 
       {welcomeOpen && <WelcomeDialog onClose={() => setWelcomeOpen(false)} onGo={(place) => { if (place === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(place); } }} />}
-      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} onReplayWelcome={() => { setHelpOpen(false); setWelcomeOpen(true); }} />}
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} onReplayWelcome={() => { setHelpOpen(false); setWelcomeOpen(true); }} onStartTour={(id) => { setHelpOpen(false); if (id === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(id); } window.setTimeout(() => setTour(id), 350); }} />}
+      {tour && <TourOverlay key={tour} tour={tour} onClose={() => setTour(null)} />}
       <TapTips />
       {galleryOpen && <TemplateGalleryDialog onUse={useTemplate} onClose={() => setGalleryOpen(false)} />}
       {auditDialog && <TextAuditDialog issues={issues} itemId={auditDialog.itemId} onFix={(issue) => fixOnPage(issue.recordId, issue.itemId)} onClose={() => setAuditDialog(null)} />}

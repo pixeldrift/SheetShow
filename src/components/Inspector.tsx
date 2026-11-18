@@ -324,7 +324,7 @@ function TemplateSetup({ templateWidth, templateHeight, bleed, bleedInfo, onBlee
           <Pair label="Height"><NumberField value={templateHeight} min={0.1} step={0.05} unit="in" onChange={(n) => onTemplateSize(templateWidth, n)} /></Pair>
         </div>
       </Section>
-      <Section title="MARGINS" defaultOpen={false}>
+      <Section title="MARGINS" defaultOpen={false} spark={{ id: "margins", title: "Safe area", text: "A dashed guide showing how far from the edge to keep text. It never prints, and objects can snap to it." }}>
         <div className="two-col">
           {(["top", "right", "bottom", "left"] as const).map((side) => {
             const m = templateMargins ?? { top: 0, right: 0, bottom: 0, left: 0 };
@@ -333,7 +333,7 @@ function TemplateSetup({ templateWidth, templateHeight, bleed, bleedInfo, onBlee
         </div>
         <p className="hint">A dashed violet guide on the template marks the safe area. It never prints.</p>
       </Section>
-      <Section title="BLEED" defaultOpen={false}>
+      <Section title="BLEED" defaultOpen={false} spark={{ id: "bleed", title: "Bleed", text: "Lets artwork run past the cut edge so a slightly off cut leaves no white sliver. Avery sheets use the largest amount that fits." }}>
         {(() => {
           const b: Bleed = bleed ?? { amount: 0, auto: false, policy: "limit" };
           const set = (change: Partial<Bleed>) => onBleed({ ...b, ...change });
@@ -394,7 +394,7 @@ function PagesSection({ pages }: { pages: Props["pages"] }) {
           <button className="button" title="Adds the same cards mirrored side to side, printed right after this page, for double-sided sheets" onClick={() => pages.onBack(activeId)}><RotateCcw size={14} /> Add back side</button>
         </div>
       </Section>
-      <Section key={list.length > 1 ? "many" : "one"} title="WHAT PRINTS" defaultOpen={list.length > 1}>
+      <Section key={list.length > 1 ? "many" : "one"} title="WHAT PRINTS" defaultOpen={list.length > 1} spark={{ id: "plan", title: "Packets and plans", text: "Print a letter, a thank-you, and a badge for every person, or all the badges first. Set the steps here." }}>
         <Pair label="Records per packet">
           <select className="select" value={groupMode} onChange={(e) => pages.onPlan({ ...plan, group: e.target.value === "all" ? 0 : e.target.value === "one" ? 1 : Math.max(2, plan.group || 2) })}>
             <option value="all">All records together</option>

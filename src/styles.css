@@ -1161,3 +1161,26 @@ html,body{touch-action:manipulation}
 .guide-settings h3{font-size:13px;margin:0 0 2px;color:#8a4a26}
 .guide-settings .button{align-self:flex-start}
 .welcome-foot .check-row{flex-basis:100%;margin-bottom:2px}
+
+/* ── Tours: a spotlight and a small card ── */
+.tour-layer{position:fixed;inset:0;z-index:450}
+.tour-block{position:absolute;inset:0}
+.tour-spot{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px #2a1d1470;outline:2px solid #f2a45f;outline-offset:0;pointer-events:none;transition:top .22s ease,left .22s ease,width .22s ease,height .22s ease}
+.tour-pop{position:fixed;background:#fff;border-radius:14px;padding:14px 16px 12px;box-shadow:0 12px 36px #2a1d1466;display:flex;flex-direction:column;gap:6px;transition:top .22s ease,left .22s ease}
+.tour-count{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#d17c4b}
+.tour-pop h3{font:700 16px Manrope,sans-serif;color:#3f2f26;margin:0}
+.tour-pop p{margin:0;font-size:13px;line-height:1.5;color:#5d5149}
+.tour-stop{font-size:11px;color:#8f968d;margin-top:2px}
+.tour-actions{display:flex;align-items:center;gap:6px;margin-top:6px}
+.tour-actions .spacer{flex:1}
+/* ── Sparks: a pulsing ✦ on features you haven't tried ── */
+.has-spark{position:relative}
+.spark{position:absolute;top:-6px;right:-6px;z-index:6;width:16px;height:16px;border-radius:50%;background:#fff;color:#d17c4b;font-size:11px;line-height:16px;text-align:center;box-shadow:0 0 0 2px #f2a45f66;cursor:pointer;animation:spark-pulse 1.8s ease-in-out infinite;user-select:none}
+@keyframes spark-pulse{0%,100%{box-shadow:0 0 0 0 #f2a45f99}60%{box-shadow:0 0 0 7px #f2a45f00}}
+.section-toggle .spark{top:50%;right:auto;left:auto;margin-left:6px;position:relative;display:inline-block;transform:none;top:0}
+.spark-tip{position:fixed;z-index:520;transform:translateX(-50%);width:250px;display:flex;flex-direction:column;gap:5px;padding:11px 13px;border-radius:12px;background:#3f2f26;color:#fff7ef;font-size:12px;line-height:1.45;box-shadow:0 8px 26px #2a1d1466;text-align:left;font-weight:400;text-transform:none;letter-spacing:0}
+.spark-tip strong{color:#f2a45f;font-size:13px}
+.spark-actions{display:flex;justify-content:space-between;align-items:center;margin-top:4px}
+.spark-actions button{border:0;background:transparent;color:#d9c7b8;font-size:11px;padding:4px 0}
+.spark-actions .spark-ok{background:#d17c4b;color:#fff;border-radius:8px;padding:5px 12px;font-weight:700}
+.guide-tours{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#78847a}

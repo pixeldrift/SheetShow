@@ -8,10 +8,16 @@ export type GuideSettings = {
   welcomeOnStart: boolean;
   /** On a touch screen, show a small label bubble when a button is tapped. */
   tapTips: boolean;
+  /** Spotlight tours of each tab, shown the first time you open it. */
+  tours: boolean;
+  tourSeen: Record<string, boolean>;
+  /** Small pulsing ✦ marks on features you haven't tried; tap one for a tip. */
+  sparks: boolean;
+  sparksSeen: Record<string, boolean>;
 };
 
 const KEY = "sheetshow.guide";
-const DEFAULTS: GuideSettings = { welcomeSeen: false, welcomeOnStart: false, tapTips: true };
+const DEFAULTS: GuideSettings = { welcomeSeen: false, welcomeOnStart: false, tapTips: true, tours: true, tourSeen: {}, sparks: true, sparksSeen: {} };
 
 const read = (): GuideSettings => {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") }; } catch { return DEFAULTS; }
@@ -30,6 +36,6 @@ export const useGuide = () => useSyncExternalStore(subscribe, () => current, () 
 
 /** Whether the welcome guide should open by itself right now. */
 export const shouldWelcome = (hasSavedProject: boolean) => {
-  if (hasSavedProject && !current.welcomeSeen) { updateGuide({ welcomeSeen: true }); return false; } // someone who was already using SheetShow doesn't need the greeting
+  if (hasSavedProject && !current.welcomeSeen) { updateGuide({ welcomeSeen: true, tourSeen: { data: true, template: true, layout: true }, sparksSeen: current.sparksSeen }); return false; } // someone who was already using SheetShow doesn't need the greeting
   return !current.welcomeSeen || current.welcomeOnStart;
 };
