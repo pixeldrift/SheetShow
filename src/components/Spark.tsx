@@ -43,7 +43,7 @@ export function Spark({ id, title, text }: { id: string; title: string; text: st
       {open && createPortal(
         // Drawn on the page itself, so a transformed parent (the tab strip, a drawer) can't throw it off the screen.
         <span className={open.above ? "spark-tip above" : "spark-tip"} role="status" style={{ left: open.x, top: open.y }} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-          <strong>{title}</strong>
+          <strong><span aria-hidden className="spark-glyph">✦</span> {title}</strong>
           <span>{text}</span>
           <span className="spark-actions">
             <button type="button" onClick={() => { updateGuide({ sparks: false }); setOpen(null); }}>Hide all tips</button>

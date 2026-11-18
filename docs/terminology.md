@@ -39,3 +39,12 @@ One name per idea, used everywhere in the interface, the help, and the code comm
 - Spell out units in labels: "Width (inches)", "Border size (points)".
 - American spelling everywhere (see CLAUDE.md).
 - Button and menu labels are verbs ("Add alternate", "Add back side"), titles are nouns.
+
+## Guidance (four kinds, each looks and behaves differently)
+| Say | Looks like | Holds | Goes away |
+|---|---|---|---|
+| **button label** | Small brown pill, touch screens only | Just the button's name ("Add text") | By itself, after about a second |
+| **feature tip** (the badge is a **spark**) | Pulsing ✦ badge; tapping it opens a light callout | A sentence or two about one feature | When you tap Got it, tap away, or use the feature |
+| **tour** | Dimmed page with a spotlight and a white card | A short walk through one tab, step by step | Skip or Done; once per tab |
+| **welcome guide** | Full dialog with steps | What SheetShow is for and how the steps fit together; the fullest descriptions | Done or Close; once, replayable from Help |
+Button labels never describe a feature. Descriptions belong in the welcome guide, tours, feature tips, and Help.

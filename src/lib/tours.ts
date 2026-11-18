@@ -21,7 +21,7 @@ export const TOURS: Record<TourId, TourStep[]> = {
     { target: [".paper"], title: "Your card", text: "Click an object to select it, drag to move it, and use the handles to resize or turn it." },
     { target: [".right-panel"], title: "Properties", text: "Colors, fonts, size, and effects for whatever is selected. With nothing selected, it holds the card size, margins, and bleed." },
     { target: [".record-bar"], title: "Step through your records", text: "See every record on the card. Tap the name here to open the full list, or use the arrows." },
-    { target: [".variant-bar"], title: "More than one template", text: "Press + to add an alternate template, then set rules so some records use it." },
+    { target: [".variant-bar"], title: "More than one template", text: "Press + to add an alternate template, then set rules for when it applies, like every other record, or when an attendee is a presenter." },
   ],
   layout: [
     { target: [".stock-browse", ".right-panel"], title: "Choose a sheet", text: "Pick an Avery sheet and the layout is done for you. Or set your own columns, rows, and margins." },

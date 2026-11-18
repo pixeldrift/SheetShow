@@ -37,9 +37,9 @@ export function HelpDialog({ onClose, onReplayWelcome, onStartTour }: { onClose:
               <label className="check-row"><input type="checkbox" checked={guide.welcomeOnStart} onChange={(e) => updateGuide({ welcomeOnStart: e.target.checked })} /> Show the welcome guide whenever SheetShow opens</label>
               <label className="check-row"><input type="checkbox" checked={guide.tours} onChange={(e) => updateGuide({ tours: e.target.checked })} /> Offer a short tour the first time I open each tab</label>
               <div className="guide-tours"><span>Show the tour for:</span>{(Object.keys(TOUR_NAMES) as TourId[]).map((id) => <button key={id} className="button" onClick={() => onStartTour(id)}>{TOUR_NAMES[id]}</button>)}</div>
-              <label className="check-row"><input type="checkbox" checked={guide.sparks} onChange={(e) => updateGuide({ sparks: e.target.checked })} /> Show ✦ sparks on features I haven't tried</label>
-              <button className="button" onClick={() => updateGuide({ sparksSeen: {}, sparks: true })}>Bring the sparks back</button>
-              <label className="check-row"><input type="checkbox" checked={guide.tapTips} onChange={(e) => updateGuide({ tapTips: e.target.checked })} /> On a touch screen, show a label when I tap a button</label>
+              <label className="check-row"><input type="checkbox" checked={guide.sparks} onChange={(e) => updateGuide({ sparks: e.target.checked })} /> Show ✦ feature tips on things I haven't tried</label>
+              <button className="button" onClick={() => updateGuide({ sparksSeen: {}, sparks: true })}>Show the feature tips again</button>
+              <label className="check-row"><input type="checkbox" checked={guide.tapTips} onChange={(e) => updateGuide({ tapTips: e.target.checked })} /> On a touch screen, show the button's name when I tap it</label>
             </section>
             {content}
           </div>
