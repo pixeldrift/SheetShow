@@ -5,7 +5,13 @@ import { footprint, placementsOf } from "./placements";
  * What limits the bleed: half the clearance between cards (two bleeds must not overlap), and the room between the outer cards and the page edge.
  * It works from where the cards really are, so a hand-arranged page is held to its tightest spot.
  */
-export function bleedLimits(sheet: Sheet, w: number, h: number) {
+export function bleedLimits(sheet: Sheet | Sheet[], w: number, h: number) {
+  const sheets = Array.isArray(sheet) ? sheet : [sheet];
+  const per = sheets.map((sh) => limitsOf(sh, w, h));
+  return { gap: Math.min(...per.map((l) => l.gap)), edge: Math.min(...per.map((l) => l.edge)) };
+}
+
+function limitsOf(sheet: Sheet, w: number, h: number) {
   const list = placementsOf(sheet, w, h);
   let gap = Infinity;
   for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
@@ -18,7 +24,7 @@ export function bleedLimits(sheet: Sheet, w: number, h: number) {
 }
 
 /** Largest bleed (inches) the sheet can take: bleed never overlaps a neighbor's and never runs off the page. */
-export function maxBleed(sheet: Sheet, w: number, h: number): number {
+export function maxBleed(sheet: Sheet | Sheet[], w: number, h: number): number {
   const { gap, edge } = bleedLimits(sheet, w, h);
   return Number(Math.max(0, Math.min(gap, edge)).toFixed(4));
 }
@@ -28,7 +34,7 @@ export function maxBleed(sheet: Sheet, w: number, h: number): number {
  * (Avery) sheet or when the layout is set to limit it; on a custom layout set to "widen", the gaps grow instead (see `gapsFor`).
  * Either way it is never allowed past the page edge.
  */
-export function effectiveBleed(template: Template, sheet: Sheet, standard: boolean): number {
+export function effectiveBleed(template: Template, sheet: Sheet | Sheet[], standard: boolean): number {
   const b = template.bleed;
   if (!b) return 0;
   const max = maxBleed(sheet, template.width, template.height);

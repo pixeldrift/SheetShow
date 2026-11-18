@@ -128,6 +128,16 @@ export type RecordMeta = { recordNumber: number; pageNumber: number; recordCount
 
 export type FontEntry = { family: string; source: "google" | "local" | "custom" };
 
+/**
+ * A document can have several page designs (a letter, a badge sheet, the back of a page…) and a print plan: for each packet of
+ * records, which page designs print, in order. `group` is how many records make a packet (0 = all of them together, so every page
+ * prints for all records before the next page starts). `when` limits a step to some packets (odd ones, every third…).
+ */
+export type PageMeta = { id: string; name: string };
+export type StepRule = { every: number; start: number };
+export type PlanStep = { id: string; pageId: string; when?: StepRule };
+export type Plan = { group: number; steps: PlanStep[] };
+
 export type Project = {
   version: 1;
   name: string;
@@ -136,7 +146,10 @@ export type Project = {
   items: DesignItem[];
   /** The label itself. `margins` (inches) is an inner safe area, drawn as a dashed guide on the template and never printed. */
   template: Template;
+  /** The first page design; `pages` (when present) lists them all, with this one first. */
   sheet: Sheet;
+  pages?: { id: string; name: string; sheet: Sheet }[];
+  plan?: Plan;
   fonts: FontEntry[];
   /** Extra templates that rules can assign to records. `items` stays the first template for older files. */
   variants?: { id: string; name: string; items: DesignItem[] }[];

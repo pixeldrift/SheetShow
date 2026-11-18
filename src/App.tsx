@@ -3,7 +3,7 @@ import { Braces, ChevronLeft, ChevronRight, GripVertical, Hash, LayoutTemplate, 
 import Papa from "papaparse";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import type { DesignItem, Guide, Placement, InstanceOverride, ItemPatch, LabelPreset, Project, RecordRow, Sheet, Variant, VariantRule, View, Workspace } from "./types";
+import type { DesignItem, Guide, PageMeta, Placement, Plan, InstanceOverride, ItemPatch, LabelPreset, Project, RecordRow, Sheet, Variant, VariantRule, View, Workspace } from "./types";
 import { tokenFields, upgradeProject } from "./lib/merge";
 import { DEFAULT_SNAP_OPTIONS, type SnapOptions } from "./lib/smartSnap";
 import { PX_PER_IN, clamp, fieldDisplayName, isPlaceholderData, isPlaceholderDesign, specialFields, starterItems, starterRecords, uid, valueFor } from "./lib/data";
@@ -55,6 +55,7 @@ import { DataTable } from "./components/DataTable";
 import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, reorderColumns, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
 import { PrintSheets } from "./components/PrintSheets";
 import { matchedStock } from "./components/StockPicker";
+import { buildSequence, defaultPlan, perSheetOf, sheetIndexOf } from "./lib/packet";
 import { footprint, freeSpot, gridPlacements, numbering, numberingMode, placementsOf, renumber } from "./lib/placements";
 import { bleedLimits, effectiveBleed, gapsFor, maxBleed } from "./lib/bleed";
 
@@ -67,7 +68,7 @@ const DEFAULT_NAME = "Untitled project";
 
 /** Everything the undo history covers. */
 type Doc = {
-  items: Record<string, DesignItem[]>; variants: Variant[]; rules: VariantRule[]; template: Project["template"]; sheet: Sheet;
+  items: Record<string, DesignItem[]>; variants: Variant[]; rules: VariantRule[]; template: Project["template"]; sheets: Record<string, Sheet>; pages: PageMeta[]; plan: Plan;
   records: RecordRow[]; fileName: string; overrides: Record<string, InstanceOverride>;
 };
 /** Applies a column mapping to the linked text and rules of every template. */
@@ -81,9 +82,11 @@ function App() {
   // data, and per-record edits. The pieces below are thin views onto it, so the rest of the editor reads as before.
   const [startDoc] = useState<Doc>(() => {
     const vs = initial?.variants?.length ? initial.variants : [{ id: "a", name: "Template A", items: initial?.items ?? starterItems }];
+    const pgs = initial?.pages?.length ? initial.pages : [{ id: "p1", name: "Page 1", sheet: initial?.sheet ?? defaultSheet }];
     return {
       items: Object.fromEntries(vs.map((v) => [v.id, v.items])), variants: vs.map(({ id, name }) => ({ id, name })), rules: initial?.rules ?? [],
-      template: initial?.template ?? { width: 3.5, height: 2 }, sheet: initial?.sheet ?? defaultSheet,
+      template: initial?.template ?? { width: 3.5, height: 2 },
+      sheets: Object.fromEntries(pgs.map((p) => [p.id, p.sheet])), pages: pgs.map(({ id, name }) => ({ id, name })), plan: initial?.plan ?? defaultPlan(pgs[0].id),
       records: withIds(initial?.records ?? starterRecords), fileName: initial?.fileName ?? "people.csv", overrides: initial?.overrides ?? {},
     };
   });
@@ -95,9 +98,11 @@ function App() {
   const shared = { undo: doc.undo, redo: doc.redo, breakGroup: doc.breakGroup, canUndo: doc.canUndo, canRedo: doc.canRedo };
   const records = D.records;
   const fileName = D.fileName;
-  const variants = D.variants, rules = D.rules, template = D.template, sheet = D.sheet;
+  const variants = D.variants, rules = D.rules, template = D.template;
+  /** The first page design holds the settings every page shares (record order, how alternating templates count). */
+  const mainId = D.pages[0].id, mainSheet = D.sheets[mainId];
   const instanceOverrides = D.overrides;
-  const setVariants = part("variants", "variants"), setRules = part("rules", "rules"), setTemplate = part("template", "template"), setSheet = part("sheet", "sheet");
+  const setVariants = part("variants", "variants"), setRules = part("rules", "rules"), setTemplate = part("template", "template");
   const recordHistory = { value: records, set: part("records"), ...shared };
   const [dataSort, setDataSort] = useState<SortState>(null);
   const editRecords = (update: (rows: RecordRow[]) => RecordRow[], coalesce?: string) => recordHistory.set(update, { coalesce });
@@ -116,6 +121,8 @@ function App() {
     ...shared,
   };
   const [rawRecordIndex, setRecordIndex] = useState(0);
+  /** Which sheet of the print run is on screen. The same record can sit on several sheets (a letter, then its back…), so this is kept apart from the record. */
+  const [rawSheet, setSheetIndex] = useState(0);
   const fontLibrary = useFontLibrary(initial?.fonts ?? []);
 
   // ── UI state ────────────────────────────────────────────────────────────
@@ -187,9 +194,24 @@ function App() {
   // Only records switched on in the Data table are previewed, laid out, counted and printed.
   const activeRecords = useMemo(() => {
     const included = records.filter(isIncluded);
-    return sheet.sortField ? sortRows(included, sheet.sortField, sheet.sortDir ?? 1) : included;
-  }, [records, sheet.sortField, sheet.sortDir]);
+    return mainSheet.sortField ? sortRows(included, mainSheet.sortField, mainSheet.sortDir ?? 1) : included;
+  }, [records, mainSheet.sortField, mainSheet.sortDir]);
   const currentRecord = activeRecords[recordIndex] ?? {};
+  // ── Sheets: every page that prints, in order. The sheet on screen decides which page design is being edited. ──
+  const seq = useMemo(() => buildSequence(D.plan, D.sheets, D.template.width, D.template.height, activeRecords.length), [D.plan, D.sheets, D.template.width, D.template.height, activeRecords.length]);
+  const perSheetFor = (pageId: string) => perSheetOf(D.sheets[pageId] ?? mainSheet, D.template.width, D.template.height);
+  const sheetOf = (index: number) => Math.max(0, sheetIndexOf(seq, index, perSheetFor));
+  const pageCount = Math.max(1, seq.length);
+  const showsRecord = (i: number, K: number) => { const r = seq[K]; return !!r && i >= r.base && i < Math.min(r.limit, r.base + perSheetFor(r.pageId)); };
+  const currentPage = showsRecord(recordIndex, rawSheet) ? rawSheet : sheetOf(recordIndex);
+  const activeId = seq[currentPage]?.pageId ?? mainId;
+  const sheet = D.sheets[activeId] ?? mainSheet;
+  /** Edits one page design (as one undo step; repeated edits to the same thing merge). */
+  const setSheetOf = (id: string) => (update: Sheet | ((s: Sheet) => Sheet), options?: { coalesce?: string }) =>
+    doc.set((d) => { const cur = d.sheets[id]; if (!cur) return d; const next = typeof update === "function" ? update(cur) : update; return next === cur ? d : { ...d, sheets: { ...d.sheets, [id]: next } }; }, { coalesce: options?.coalesce ?? `sheet:${id}` });
+  const setSheet = setSheetOf(activeId);
+  const setMainSheet = setSheetOf(mainId);
+  const setPlan = part("plan", "plan");
   /** Override mode on the template page: every edit below is kept for the record being previewed, and only that record. */
   const recMode = workspace === "template" && instanceMode && !preview;
   const recOverride = recMode ? instanceOverrides[currentRecord[ID]] : undefined;
@@ -202,67 +224,133 @@ function App() {
   const { perSheet } = numbering(placements);
   // Bleed: standard (Avery) sheets always hold it to what the gaps allow; custom ones follow the template's own policy.
   const standardStock = matchedStock(template.width, template.height, sheet);
-  const bleedIn = effectiveBleed(template, sheet, !!standardStock || !!sheet.placements);
-  const bleedMax = maxBleed(sheet, template.width, template.height);
-  const bleedLimit = bleedLimits(sheet, template.width, template.height);
+  // With several page designs the bleed must fit every one that prints, so it is held to the tightest.
+  const usedSheets = [...new Set(seq.map((r) => r.pageId))].map((id) => D.sheets[id]).filter(Boolean);
+  const bleedHeld = usedSheets.some((s) => !!s.placements) || usedSheets.length > 1; // no "widen the gaps" on hand-arranged or multi-page documents
+  const bleedIn = effectiveBleed(template, usedSheets, !!standardStock || bleedHeld);
+  const bleedMax = maxBleed(usedSheets, template.width, template.height);
+  const bleedLimit = bleedLimits(usedSheets, template.width, template.height);
   const changeBleed = (bleed: Project["template"]["bleed"]) => {
     setTemplate((t) => ({ ...t, bleed }));
-    if (bleed && !standardStock && !sheet.placements && !bleed.auto && bleed.policy === "grow") setSheet((s) => ({ ...s, ...gapsFor(s, bleed.amount) }));
+    if (bleed && !standardStock && !bleedHeld && !bleed.auto && bleed.policy === "grow") setSheet((s) => ({ ...s, ...gapsFor(s, bleed.amount) }));
   };
   // ── Page layout: the cards on a sheet ──────────────────────────────────
-  const [cardSel, setCardSel] = useState<string | null>(null);
+  const [cardSel, setCardSel] = useState<{ page: string; id: string } | null>(null);
   const [showOrder, setShowOrder] = useState(false);
   /** Hand-arranging the page: pick, drag, add and delete cards. (Override mode is the other thing you can do on a sheet.) */
   const arranging = workspace === "layout" && !instanceMode && !preview && !showData;
-  const selectedCard = placements.find((c) => c.id === cardSel) ?? null;
-  /** Any change to the cards turns the page into a hand-arranged one (starting from what the grid gave). */
-  const editCards = (change: (list: Placement[]) => Placement[], coalesce?: string) =>
-    setSheet((s) => ({ ...s, placements: change(s.placements ?? gridPlacements(s, template.width, template.height)) }), { coalesce });
-  const moveCard = (id: string, x: number, y: number) => editCards((list) => list.map((c) => (c.id === id ? { ...c, x, y } : c)), `card-move:${id}`);
-  const numberCard = (id: string, number: number) => editCards((list) => list.map((c) => (c.id === id ? { ...c, number: Math.max(1, Math.round(number)) } : c)), `card-number:${id}`);
+  const selectedCard = cardSel ? placementsOf(D.sheets[cardSel.page] ?? sheet, template.width, template.height).find((c) => c.id === cardSel.id) ?? null : null;
+  const cardPage = cardSel?.page ?? activeId;
+  /** Any change to the cards turns that page into a hand-arranged one (starting from what the grid gave). */
+  const editCards = (pageId: string, change: (list: Placement[]) => Placement[], coalesce?: string) =>
+    setSheetOf(pageId)((s) => ({ ...s, placements: change(s.placements ?? gridPlacements(s, template.width, template.height)) }), { coalesce: coalesce ? `${pageId}:${coalesce}` : undefined });
+  const moveCard = (pageId: string, id: string, x: number, y: number) => editCards(pageId, (list) => list.map((c) => (c.id === id ? { ...c, x, y } : c)), `card-move:${id}`);
+  const numberCard = (pageId: string, id: string, number: number) => editCards(pageId, (list) => list.map((c) => (c.id === id ? { ...c, number: Math.max(1, Math.round(number)) } : c)), `card-number:${id}`);
   /** Turn a card by a quarter (or set it), keeping its center where it is. */
-  const rotateCard = (id: string, turn: number | "next") => editCards((list) => list.map((c) => {
-    if (c.id !== id) return c;
-    const next = (turn === "next" ? ((c.rotation ?? 0) + 90) % 360 : turn) as 0 | 90 | 180 | 270;
-    const was = footprint(c, template.width, template.height), now = footprint({ ...c, rotation: next }, template.width, template.height);
-    const x = clamp(c.x + (was.w - now.w) / 2, 0, Math.max(0, sheet.pageWidth - now.w)), y = clamp(c.y + (was.h - now.h) / 2, 0, Math.max(0, sheet.pageHeight - now.h));
-    return { ...c, rotation: next || undefined, x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) };
-  }));
-  const cardVariant = (id: string, variantId: string | undefined) => editCards((list) => list.map((c) => (c.id === id ? { ...c, variantId } : c)));
-  const addCard = (variantId?: string, at?: { x: number; y: number }) => {
-    const id = uid();
-    const spot = at ?? freeSpot(placements, template.width, template.height, sheet.pageWidth, sheet.pageHeight);
-    const mode = numberingMode(placements);
-    const number = mode === "same" ? 1 : Math.max(0, ...placements.map((c) => c.number)) + 1;
-    editCards((list) => [...list, { id, x: spot.x, y: spot.y, number, variantId }]);
-    setCardSel(id); setInstanceMode(false); setInstanceSel(null); setInspectorOpen(true);
+  const rotateCard = (pageId: string, id: string, turn: number | "next") => {
+    const page = D.sheets[pageId] ?? sheet;
+    editCards(pageId, (list) => list.map((c) => {
+      if (c.id !== id) return c;
+      const next = (turn === "next" ? ((c.rotation ?? 0) + 90) % 360 : turn) as 0 | 90 | 180 | 270;
+      const was = footprint(c, template.width, template.height), now = footprint({ ...c, rotation: next }, template.width, template.height);
+      const x = clamp(c.x + (was.w - now.w) / 2, 0, Math.max(0, page.pageWidth - now.w)), y = clamp(c.y + (was.h - now.h) / 2, 0, Math.max(0, page.pageHeight - now.h));
+      return { ...c, rotation: next || undefined, x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) };
+    }));
   };
-  const duplicateCard = (id: string) => {
-    const from = placements.find((c) => c.id === id);
+  const cardVariant = (pageId: string, id: string, variantId: string | undefined) => editCards(pageId, (list) => list.map((c) => (c.id === id ? { ...c, variantId } : c)));
+  const addCard = (variantId?: string, at?: { x: number; y: number }, pageId = activeId) => {
+    const id = uid();
+    const page = D.sheets[pageId] ?? sheet, list = placementsOf(page, template.width, template.height);
+    const spot = at ?? freeSpot(list, template.width, template.height, page.pageWidth, page.pageHeight);
+    const number = numberingMode(list) === "same" ? 1 : Math.max(0, ...list.map((c) => c.number)) + 1;
+    editCards(pageId, (cards) => [...cards, { id, x: spot.x, y: spot.y, number, variantId }]);
+    setCardSel({ page: pageId, id }); setInstanceMode(false); setInstanceSel(null); setInspectorOpen(true);
+  };
+  const duplicateCard = (pageId: string, id: string) => {
+    const from = placementsOf(D.sheets[pageId] ?? sheet, template.width, template.height).find((c) => c.id === id);
     if (!from) return;
     const copy = uid();
-    editCards((list) => [...list, { ...from, id: copy, x: Number((from.x + 0.2).toFixed(3)), y: Number((from.y + 0.2).toFixed(3)) }]);
-    setCardSel(copy);
+    editCards(pageId, (list) => [...list, { ...from, id: copy, x: Number((from.x + 0.2).toFixed(3)), y: Number((from.y + 0.2).toFixed(3)) }]);
+    setCardSel({ page: pageId, id: copy });
   };
-  const deleteCard = (id: string) => { if (placements.length > 1) { editCards((list) => list.filter((c) => c.id !== id)); setCardSel(null); } };
-  const resetToGrid = () => { setSheet((s) => ({ ...s, placements: undefined })); setCardSel(null); };
+  const deleteCard = (pageId: string, id: string) => {
+    if (placementsOf(D.sheets[pageId] ?? sheet, template.width, template.height).length > 1) { editCards(pageId, (list) => list.filter((c) => c.id !== id)); setCardSel(null); }
+  };
+  const resetToGrid = (pageId = activeId) => { setSheetOf(pageId)((s) => ({ ...s, placements: undefined })); setCardSel(null); };
   const numberAll = (mode: "same" | "each") => {
-    if (sheet.placements) editCards((list) => renumber(list, mode));
+    if (sheet.placements) editCards(activeId, (list) => renumber(list, mode));
     else setSheet((s) => ({ ...s, repeatMode: mode === "same" ? "same" : "next" }));
+  };
+  /** Pick a card. In a stack of sheets this also brings that sheet's page design into the editor. */
+  const selectCard = (pageId: string, id: string | null, sheetIdx?: number) => {
+    setCardSel(id ? { page: pageId, id } : null);
+    if (id && sheetIdx !== undefined) { setSheetIndex(sheetIdx); setRecordIndex(Math.min(seq[sheetIdx]?.base ?? 0, Math.max(0, activeRecords.length - 1))); }
   };
   /** A template dropped from the Templates drawer: place a card where it landed (centered on the pointer). */
   const dropTemplate = (variantId: string, clientX: number, clientY: number) => {
-    const page = document.elementsFromPoint(clientX, clientY).find((el) => el.classList.contains("layout-page"));
-    if (!page) return;
-    const rect = page.getBoundingClientRect();
+    const el = document.elementsFromPoint(clientX, clientY).find((e) => e.classList.contains("layout-page"));
+    if (!el) return;
+    const pageId = el.getAttribute("data-page-id") ?? activeId, page = D.sheets[pageId] ?? sheet;
+    const rect = el.getBoundingClientRect();
     const scale = PX_PER_IN * view.zoom;
-    const x = clamp((clientX - rect.left) / scale - template.width / 2, 0, Math.max(0, sheet.pageWidth - template.width));
-    const y = clamp((clientY - rect.top) / scale - template.height / 2, 0, Math.max(0, sheet.pageHeight - template.height));
-    addCard(variantId, { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) });
+    const x = clamp((clientX - rect.left) / scale - template.width / 2, 0, Math.max(0, page.pageWidth - template.width));
+    const y = clamp((clientY - rect.top) / scale - template.height / 2, 0, Math.max(0, page.pageHeight - template.height));
+    addCard(variantId, { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) }, pageId);
+  };
+
+  // ── Page designs and the print plan ─────────────────────────────────────
+  const goToPage = (pageId: string) => {
+    const K = Math.max(0, seq.findIndex((r) => r.pageId === pageId));
+    setSheetIndex(K); setRecordIndex(Math.min(seq[K]?.base ?? 0, Math.max(0, activeRecords.length - 1))); setCardSel(null);
+  };
+  /** After adding a page, show it as soon as the print run includes it. */
+  const [wantPage, setWantPage] = useState<string | null>(null);
+  useEffect(() => { if (wantPage && seq.some((r) => r.pageId === wantPage)) { goToPage(wantPage); setWantPage(null); } });
+  /** Every page template shares one paper size: a print job can't mix paper sources. */
+  const setPaperSize = (pageWidth: number, pageHeight: number) =>
+    doc.set((d) => ({ ...d, sheets: Object.fromEntries(Object.entries(d.sheets).map(([id, s]) => [id, { ...s, pageWidth, pageHeight }])) }), { coalesce: "paper-size" });
+  const newPageId = () => `p${uid().slice(0, 6)}`;
+  const nextPageName = (base: string) => { let n = 2; const names = new Set(D.pages.map((p) => p.name)); while (names.has(`${base} ${n}`)) n++; return `${base} ${n}`; };
+  /** Adds a page design (a copy of this one's settings, with an empty grid when `blank`) and makes it print after the others. */
+  const addPage = (options: { name?: string; from?: Sheet; step?: boolean } = {}) => {
+    const id = newPageId();
+    const from = options.from ?? { ...sheet, placements: undefined };
+    doc.set((d) => ({
+      ...d, sheets: { ...d.sheets, [id]: { ...from } }, pages: [...d.pages, { id, name: options.name ?? nextPageName("Page") }],
+      plan: options.step === false ? d.plan : { ...d.plan, steps: [...d.plan.steps, { id: uid(), pageId: id }] },
+    }));
+    setWantPage(id);
+    return id;
+  };
+  const renamePage = (id: string, name: string) => doc.set((d) => ({ ...d, pages: d.pages.map((p) => (p.id === id ? { ...p, name } : p)) }), { coalesce: `page-name:${id}` });
+  const deletePage = (id: string) => {
+    if (D.pages.length < 2 || D.pages[0].id === id) return;
+    doc.set((d) => {
+      const { [id]: _gone, ...rest } = d.sheets;
+      const steps = d.plan.steps.filter((s) => s.pageId !== id);
+      return { ...d, sheets: rest, pages: d.pages.filter((p) => p.id !== id), plan: { ...d.plan, steps: steps.length ? steps : [{ id: uid(), pageId: d.pages[0].id }] } };
+    });
+    setCardSel(null); setRecordIndex(0); setSheetIndex(0);
+  };
+  /** The back of a page for double-sided printing: the same cards mirrored side to side (flip on the long edge), printed right after it, one back for each front. */
+  const addBackSide = (id: string) => {
+    const front = D.sheets[id];
+    if (!front) return;
+    const cards = placementsOf(front, template.width, template.height).map((c) => {
+      const f = footprint(c, template.width, template.height);
+      return { ...c, id: uid(), x: Number(Math.max(0, front.pageWidth - c.x - f.w).toFixed(3)) };
+    });
+    const backId = newPageId();
+    const frontName = D.pages.find((p) => p.id === id)?.name ?? "Page";
+    const perFront = perSheetOf(front, template.width, template.height);
+    doc.set((d) => {
+      const at = d.plan.steps.findIndex((s) => s.pageId === id);
+      const steps = [...d.plan.steps];
+      steps.splice(at < 0 ? steps.length : at + 1, 0, { id: uid(), pageId: backId });
+      return { ...d, sheets: { ...d.sheets, [backId]: { ...front, placements: cards } }, pages: [...d.pages, { id: backId, name: `${frontName} (back)` }], plan: { group: d.plan.group > 0 ? d.plan.group : perFront, steps } };
+    });
   };
   // "Repeat same record" prints one full sheet per record; "next record" fills each sheet with the following records.
-  const pageCount = Math.max(1, Math.ceil(activeRecords.length / perSheet));
-  const currentPage = Math.floor(recordIndex / perSheet);
   const overflow = placements.some((p) => { const f = footprint(p, template.width, template.height); return p.x + f.w > sheet.pageWidth + 0.005 || p.y + f.h > sheet.pageHeight + 0.005 || p.x < -0.005 || p.y < -0.005; });
   const pagedNav = workspace === "layout"; // in page view the arrows turn pages
 
@@ -275,7 +363,7 @@ function App() {
     // Order: the template, then conditional rules for this record, then this record's hand edits (which win).
     return { variantId: id, items: applyOverride(applyConditions(base, record, metaFor(index)), override), override };
   };
-  const metaFor = (index: number) => ({ recordNumber: index + 1, pageNumber: Math.floor(index / perSheet) + 1, recordCount: activeRecords.length, pageCount });
+  const metaFor = (index: number) => ({ recordNumber: index + 1, pageNumber: sheetOf(index) + 1, recordCount: activeRecords.length, pageCount });
   const indexOfRecord = (recordId: string) => activeRecords.findIndex((r) => r[ID] === recordId);
 
   const updateInstance = (recordId: string, change: (current: InstanceOverride) => InstanceOverride | null, coalesce?: string) =>
@@ -335,7 +423,7 @@ function App() {
   const allIndices = () => activeRecords.map((_, i) => i);
   const issues = useMemo(() => (auditDialog ? computeIssues(allIndices()) : []), [auditDialog, items, itemsDoc.value, instanceOverrides, activeRecords, rules, variants, sheet]); // eslint-disable-line react-hooks/exhaustive-deps
   const sheetIssueCount = workspace === "layout" && !preview
-    ? computeIssues(Array.from({ length: perSheet }, (_, k) => currentPage * perSheet + k).filter((i) => i < activeRecords.length)).length : 0;
+    ? computeIssues(Array.from({ length: perSheet }, (_, k) => (seq[currentPage]?.base ?? 0) + k).filter((i) => i < Math.min(activeRecords.length, seq[currentPage]?.limit ?? 0))).length : 0;
   /**
    * For every text in the template being edited: the records (of those that use this template) where it will cause trouble, meaning
    * it is cut off, runs off the card, or spills out of a visible box. Drives the warning icons on the canvas and the note in Properties.
@@ -372,16 +460,18 @@ function App() {
   const GAP = 0.35; // inches between sheets
   const stackCols = pageView === "grid" ? (pageCount <= 1 ? 1 : pageCount <= 4 ? 2 : pageCount <= 9 ? 3 : 4) : 1;
   const stackRows = Math.ceil(pageCount / stackCols);
-  const stackW = stackCols * sheet.pageWidth + (stackCols - 1) * GAP;
-  const stackH = stackRows * sheet.pageHeight + (stackRows - 1) * GAP;
-  const pagePos = (k: number) => ({ x: (k % stackCols) * (sheet.pageWidth + GAP), y: Math.floor(k / stackCols) * (sheet.pageHeight + GAP) });
+  /** Sheets may be different paper sizes; each sits in a cell big enough for the largest. */
+  const cellW = Math.max(...Object.values(D.sheets).map((x) => x.pageWidth)), cellH = Math.max(...Object.values(D.sheets).map((x) => x.pageHeight));
+  const stackW = stackCols * cellW + (stackCols - 1) * GAP;
+  const stackH = stackRows * cellH + (stackRows - 1) * GAP;
+  const pagePos = (k: number) => ({ x: (k % stackCols) * (cellW + GAP), y: Math.floor(k / stackCols) * (cellH + GAP) });
   /** The pan that brings sheet k into view: its top near the top of the window when it is taller than the window, else its middle. */
   const panForPage = (k: number, zoom: number) => {
     const scale = PX_PER_IN * zoom, pos = pagePos(Math.max(0, Math.min(pageCount - 1, k)));
     const vh = viewportRef.current?.clientHeight ?? 600;
-    const x = -(pos.x + sheet.pageWidth / 2 - stackW / 2) * scale;
-    const tall = sheet.pageHeight * scale > vh - 70;
-    const y = tall ? 40 - vh / 2 - (pos.y - stackH / 2) * scale : -(pos.y + sheet.pageHeight / 2 - stackH / 2) * scale;
+    const x = -(pos.x + cellW / 2 - stackW / 2) * scale;
+    const tall = cellH * scale > vh - 70;
+    const y = tall ? 40 - vh / 2 - (pos.y - stackH / 2) * scale : -(pos.y + cellH / 2 - stackH / 2) * scale;
     return { x, y };
   };
   /** In a scrolling column or grid: the sheet nearest the middle of the window. */
@@ -389,8 +479,8 @@ function App() {
     if (!stack) return currentPage;
     const scale = PX_PER_IN * view.zoom;
     const cx = stackW / 2 - view.pan.x / scale, cy = stackH / 2 - view.pan.y / scale;
-    const col = Math.max(0, Math.min(stackCols - 1, Math.floor(cx / (sheet.pageWidth + GAP))));
-    const row = Math.max(0, Math.min(stackRows - 1, Math.floor(cy / (sheet.pageHeight + GAP))));
+    const col = Math.max(0, Math.min(stackCols - 1, Math.floor(cx / (cellW + GAP))));
+    const row = Math.max(0, Math.min(stackRows - 1, Math.floor(cy / (cellH + GAP))));
     return Math.min(pageCount - 1, row * stackCols + col);
   })();
   const patchView = useCallback((patch: Partial<View>) => setViews((v) => ({ ...v, [workspace]: { ...v[workspace], ...patch } })), [workspace]);
@@ -715,7 +805,7 @@ function App() {
   // ── Template / page setup ───────────────────────────────────────────────
   const applyPreset = (preset: LabelPreset) => {
     // Template size and page layout change together, as a single undo step.
-    doc.set((d) => ({ ...d, template: { ...d.template, width: preset.width, height: preset.height }, sheet: { ...d.sheet, placements: undefined, pageWidth: 8.5, pageHeight: 11, columns: preset.columns, rows: preset.rows, gapX: preset.gapX, gapY: preset.gapY, marginX: preset.marginX, marginY: preset.marginY } }));
+    doc.set((d) => ({ ...d, template: { ...d.template, width: preset.width, height: preset.height }, sheets: { ...Object.fromEntries(Object.entries(d.sheets).map(([id, s]) => [id, { ...s, pageWidth: 8.5, pageHeight: 11 }])), [activeId]: { ...d.sheets[activeId], placements: undefined, pageWidth: 8.5, pageHeight: 11, columns: preset.columns, rows: preset.rows, gapX: preset.gapX, gapY: preset.gapY, marginX: preset.marginX, marginY: preset.marginY } } }));
     setViews((v) => ({ template: { ...v.template, fitted: false }, layout: { ...v.layout, fitted: false } }));
   };
 
@@ -790,7 +880,7 @@ function App() {
 
   // ── Projects: autosave to this browser, plus save / open as a file ──
   const snapshot = (): Project => ({
-    version: 1, name: docName, fileName, records, items: itemsDoc.value[variants[0].id] ?? [], template, sheet, fonts: fontLibrary.fonts,
+    version: 1, name: docName, fileName, records, items: itemsDoc.value[variants[0].id] ?? [], template, sheet: mainSheet, pages: D.pages.map((p) => ({ ...p, sheet: D.sheets[p.id] })), plan: D.plan, fonts: fontLibrary.fonts,
     variants: variants.map((v) => ({ ...v, items: itemsDoc.value[v.id] ?? [] })), rules, overrides: instanceOverrides,
   });
   useEffect(() => {
@@ -802,13 +892,14 @@ function App() {
     const project = upgradeProject(raw);
     if (images) await library.replaceAll(images);
     const vs = project.variants?.length ? project.variants : [{ id: "a", name: "Template A", items: project.items }];
+    const pgs = project.pages?.length ? project.pages : [{ id: "p1", name: "Page 1", sheet: project.sheet }];
     doc.reset({
       items: Object.fromEntries(vs.map((v) => [v.id, v.items])), variants: vs.map(({ id, name }) => ({ id, name })), rules: project.rules ?? [],
-      template: project.template, sheet: project.sheet, records: withIds(project.records), fileName: project.fileName, overrides: project.overrides ?? {},
+      template: project.template, sheets: Object.fromEntries(pgs.map((p) => [p.id, p.sheet])), pages: pgs.map(({ id, name }) => ({ id, name })), plan: project.plan ?? defaultPlan(pgs[0].id), records: withIds(project.records), fileName: project.fileName, overrides: project.overrides ?? {},
     });
     setActiveVariant(vs[0].id); setInstanceSel(null); setEditingText(null); setDocName(project.name);
     fontLibrary.restore(project.fonts);
-    setSelectedIds([]); setRecordIndex(0);
+    setSelectedIds([]); setRecordIndex(0); setSheetIndex(0);
     setGuides({ template: [], layout: [] });
     setViews({ template: freshView(), layout: freshView() });
   };
@@ -931,7 +1022,8 @@ function App() {
   const stepRecord = (delta: number) => {
     if (pagedNav) {
       const page = clamp((stack ? visiblePage : currentPage) + delta, 0, pageCount - 1);
-      setRecordIndex(Math.min(Math.max(0, activeRecords.length - 1), page * perSheet));
+      setSheetIndex(page);
+      setRecordIndex(Math.min(Math.max(0, activeRecords.length - 1), seq[page]?.base ?? 0));
       if (stack) patchView({ pan: panForPage(page, view.zoom) });
     }
     else setRecordIndex((index) => clamp(index + delta, 0, Math.max(0, activeRecords.length - 1)));
@@ -998,12 +1090,12 @@ function App() {
       else if (workspace === "layout" && !showData) {
         if (key === "escape") { setInstanceSel(null); setEditingText(null); setCardSel(null); }
         else if (arranging && selectedCard) {
-          if (key === "delete" || key === "backspace") { event.preventDefault(); deleteCard(selectedCard.id); }
-          else if (key === "r" && !mod) { event.preventDefault(); rotateCard(selectedCard.id, "next"); }
+          if (key === "delete" || key === "backspace") { event.preventDefault(); deleteCard(cardPage, selectedCard.id); }
+          else if (key === "r" && !mod) { event.preventDefault(); rotateCard(cardPage, selectedCard.id, "next"); }
           else if (key.startsWith("arrow")) {
             event.preventDefault();
             const step = event.shiftKey ? 0.1 : 0.01;
-            moveCard(selectedCard.id, Number((selectedCard.x + (key === "arrowleft" ? -step : key === "arrowright" ? step : 0)).toFixed(3)), Number((selectedCard.y + (key === "arrowup" ? -step : key === "arrowdown" ? step : 0)).toFixed(3)));
+            moveCard(cardPage, selectedCard.id, Number((selectedCard.x + (key === "arrowleft" ? -step : key === "arrowright" ? step : 0)).toFixed(3)), Number((selectedCard.y + (key === "arrowup" ? -step : key === "arrowdown" ? step : 0)).toFixed(3)));
           }
         }
       }
@@ -1050,7 +1142,23 @@ function App() {
   };
   const caption = workspace === "template"
     ? { title: variants.length > 1 ? `INDIVIDUAL TEMPLATE · ${variants.find((v) => v.id === variantId)?.name.toUpperCase()}` : "INDIVIDUAL TEMPLATE", detail: `${template.width.toFixed(2)} × ${template.height.toFixed(2)} in` }
-    : { title: "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet${printer.x || printer.y ? ` · printer offset ${printer.x >= 0 ? "+" : ""}${printer.x.toFixed(3)}, ${printer.y >= 0 ? "+" : ""}${printer.y.toFixed(3)} in` : ""}` };
+    : { title: D.pages.length > 1 ? `PAGE LAYOUT · ${(D.pages.find((p) => p.id === activeId)?.name ?? "").toUpperCase()}` : "PAGE LAYOUT", detail: `${sheet.pageWidth} × ${sheet.pageHeight} in · ${slots} per sheet${printer.x || printer.y ? ` · printer offset ${printer.x >= 0 ? "+" : ""}${printer.x.toFixed(3)}, ${printer.y >= 0 ? "+" : ""}${printer.y.toFixed(3)} in` : ""}` };
+
+  /** One sheet of the print run: its own page design, showing the records its place in the plan gives it. */
+  const renderSheet = (K: number) => {
+    const ref = seq[K] ?? { pageId: mainId, base: 0, limit: 0, group: 0 };
+    return (
+      <LayoutStage bleed={bleedIn} pageId={ref.pageId} base={ref.base} limit={ref.limit} arrange={arranging} selectedCard={cardSel?.page === ref.pageId ? cardSel.id : null} onSelectCard={(id) => selectCard(ref.pageId, id, K)} onMoveCard={(id, x, y) => moveCard(ref.pageId, id, x, y)} onNumberCard={(id, n) => numberCard(ref.pageId, id, n)} onRotateCard={(id) => rotateCard(ref.pageId, id, "next")} onCardDragEnd={doc.breakGroup} showOrder={showOrder}
+                    sheet={D.sheets[ref.pageId] ?? sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
+                    pageNumber={K + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
+                    offset={printer} edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
+                    onSelect={(sel) => { setInstanceSel(sel); setEditingText(null); if (sel) setInspectorOpen(true); }}
+                    onStartEdit={(sel) => { const item = instanceFor(activeRecords[indexOfRecord(sel.recordId)], indexOfRecord(sel.recordId), 0).items.find((i) => i.id === sel.itemId); if (item?.type === "text") { setInstanceSel(sel); setEditingText(sel); } else if (item?.type === "image") { setInstanceSel(sel); setLibraryDialog({ kind: "pick", itemId: sel.itemId, target: "asset" }); } }}
+                    onCommitText={commitInstanceText} onCancelEdit={() => setEditingText(null)}
+                    onDropFiles={dropPictureOnSlot} onToggleOff={toggleInstanceOff} onResetInstance={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
+                  />
+    );
+  };
 
   return (
     <ImageContext.Provider value={{ resolver: library.resolver, urlFor: library.urlFor }}>
@@ -1123,35 +1231,25 @@ function App() {
                         return (
                           <div key={K} className="stack-sheet" style={{ left: pos.x * PX_PER_IN, top: pos.y * PX_PER_IN }}>
                             {near ? (
-                              <LayoutStage bleed={bleedIn} arrange={arranging} selectedCard={cardSel} onSelectCard={setCardSel} onMoveCard={moveCard} onNumberCard={numberCard} onRotateCard={(id) => rotateCard(id, "next")} onCardDragEnd={doc.breakGroup} showOrder={showOrder}
-                      sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
-                      pageNumber={K + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
-                      offset={printer} edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
-                      onSelect={(sel) => { setInstanceSel(sel); setEditingText(null); if (sel) setInspectorOpen(true); }}
-                      onStartEdit={(sel) => { const item = instanceFor(activeRecords[indexOfRecord(sel.recordId)], indexOfRecord(sel.recordId), 0).items.find((i) => i.id === sel.itemId); if (item?.type === "text") { setInstanceSel(sel); setEditingText(sel); } else if (item?.type === "image") { setInstanceSel(sel); setLibraryDialog({ kind: "pick", itemId: sel.itemId, target: "asset" }); } }}
-                      onCommitText={commitInstanceText} onCancelEdit={() => setEditingText(null)}
-                      onDropFiles={dropPictureOnSlot} onToggleOff={toggleInstanceOff} onResetInstance={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
-                    />
+                              renderSheet(K)
                             ) : <div className="layout-page placeholder" style={{ width: sheet.pageWidth * PX_PER_IN, height: sheet.pageHeight * PX_PER_IN }}>Sheet {K + 1}</div>}
-                            <span className="sheet-label">Sheet {K + 1}</span>
+                            <span className="sheet-label">Sheet {K + 1}{D.pages.length > 1 ? ` · ${D.pages.find((p) => p.id === seq[K]?.pageId)?.name ?? ""}` : ""}</span>
                           </div>
                         );
                       })}
                     </div>
                   ) : (
-                  <LayoutStage bleed={bleedIn} arrange={arranging} selectedCard={cardSel} onSelectCard={setCardSel} onMoveCard={moveCard} onNumberCard={numberCard} onRotateCard={(id) => rotateCard(id, "next")} onCardDragEnd={doc.breakGroup} showOrder={showOrder}
-                    sheet={sheet} templateWidth={template.width} templateHeight={template.height} records={activeRecords} instanceFor={instanceFor}
-                    pageNumber={currentPage + 1} pageCount={pageCount} showGrid={showGrid} preview={preview}
-                    offset={printer} edit={instanceMode} zoom={view.zoom} selected={instanceSel} editing={editingText}
-                    onSelect={(sel) => { setInstanceSel(sel); setEditingText(null); if (sel) setInspectorOpen(true); }}
-                    onStartEdit={(sel) => { const item = instanceFor(activeRecords[indexOfRecord(sel.recordId)], indexOfRecord(sel.recordId), 0).items.find((i) => i.id === sel.itemId); if (item?.type === "text") { setInstanceSel(sel); setEditingText(sel); } else if (item?.type === "image") { setInstanceSel(sel); setLibraryDialog({ kind: "pick", itemId: sel.itemId, target: "asset" }); } }}
-                    onCommitText={commitInstanceText} onCancelEdit={() => setEditingText(null)}
-                    onDropFiles={dropPictureOnSlot} onToggleOff={toggleInstanceOff} onResetInstance={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
-                  />
+                  renderSheet(currentPage)
                   )
                 )}
               </Viewport>
 
+              {workspace === "layout" && !preview && (
+                <div className="variant-bar" data-no-pan role="tablist" aria-label="Pages">
+                  {D.pages.map((p, i) => <button key={p.id} role="tab" aria-selected={p.id === activeId} className={p.id === activeId ? "variant-chip active" : "variant-chip"} onClick={() => goToPage(p.id)} title={`Show ${p.name}`}>{D.pages.length > 1 ? `${String.fromCharCode(65 + i)} · ${p.name}` : p.name}</button>)}
+                  <button className="variant-chip" onClick={() => addPage()} title="Add another page template: a letter, the back of a page, a second sheet style" aria-label="Add a page">+</button>
+                </div>
+              )}
               {workspace === "template" && !preview && (
                 <div className="variant-bar" data-no-pan role="tablist" aria-label="Templates">
                   {variants.map((v, i) => <button key={v.id} role="tab" aria-selected={v.id === variantId} className={v.id === variantId ? "variant-chip active" : "variant-chip"} onClick={() => { setActiveVariant(v.id); setSelectedIds([]); }} title={`Edit ${v.name}`}>{variants.length > 1 ? `${String.fromCharCode(65 + i)} · ${v.name}` : v.name}</button>)}
@@ -1166,9 +1264,9 @@ function App() {
 
             <RecordsDrawer
               open={recordsOpen} records={activeRecords} fields={fields} current={recordIndex} excluded={records.length - activeRecords.length}
-              onPick={(index) => { setRecordIndex(index); if (stack) patchView({ pan: panForPage(Math.floor(index / perSheet), view.zoom) }); if (!window.matchMedia(WIDE_QUERY).matches) setRecordsOpen(false); }} onClose={() => setRecordsOpen(false)}
+              onPick={(index) => { setRecordIndex(index); if (stack) patchView({ pan: panForPage(sheetOf(index), view.zoom) }); if (!window.matchMedia(WIDE_QUERY).matches) setRecordsOpen(false); }} onClose={() => setRecordsOpen(false)}
               onCellPointerDown={startFieldDrag} justDragged={() => justDragged.current} dragging={!!fieldDrag}
-              pageOf={workspace === "layout" ? (index) => Math.floor(index / perSheet) : undefined} currentPage={currentPage}
+              pageOf={workspace === "layout" ? (index) => sheetOf(index) : undefined} currentPage={currentPage}
               sort={dataSort} onSort={dataActions.onSort} onReorderColumn={dataActions.onReorderColumn}
             />
           </div>
@@ -1186,12 +1284,17 @@ function App() {
               fontLibrary={fontLibrary} onRotateBy={rotateSelectionBy} imageTools={imageTools}
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onReorder={reorderLayer}
               groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
-              templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} bleed={template.bleed} bleedInfo={{ max: bleedMax, effective: bleedIn, standard: !!standardStock, custom: !!sheet.placements, edgeLimited: bleedLimit.edge < bleedLimit.gap }} onBleed={changeBleed} cards={{
+              templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} bleed={template.bleed} bleedInfo={{ max: bleedMax, effective: bleedIn, standard: !!standardStock, custom: bleedHeld, edgeLimited: bleedLimit.edge < bleedLimit.gap }} onBleed={changeBleed} pages={{
+                list: D.pages, activeId, plan: D.plan, sheetCount: seq.length, perSheet: Object.fromEntries(Object.keys(D.sheets).map((id) => [id, perSheetFor(id)])),
+                onActivate: goToPage, onRename: renamePage, onDuplicate: (id) => { addPage({ name: nextPageName(D.pages.find((p) => p.id === id)?.name ?? "Page"), from: D.sheets[id] }); }, onBack: addBackSide, onDelete: deletePage,
+                onAdd: () => addPage(), onPlan: setPlan,
+              }} shared={mainSheet} onShared={(patch) => setMainSheet((s) => ({ ...s, ...patch }))}
+              cards={{
                 custom: !!sheet.placements, mode: numberingMode(placements), count: slots, perSheet, selected: arranging ? selectedCard : null, templates: variants.map((v) => ({ id: v.id, name: v.name })),
-                onNumberAll: numberAll, onReset: resetToGrid, onAdd: () => addCard(), onNumber: (n) => selectedCard && numberCard(selectedCard.id, n), onTemplate: (id) => selectedCard && cardVariant(selectedCard.id, id),
-                onPosition: (x, y) => selectedCard && moveCard(selectedCard.id, x, y), onDuplicate: () => selectedCard && duplicateCard(selectedCard.id), onRotate: (turn) => selectedCard && rotateCard(selectedCard.id, turn), onDelete: () => selectedCard && deleteCard(selectedCard.id),
+                onNumberAll: numberAll, onReset: () => resetToGrid(), onAdd: () => addCard(), onNumber: (n) => selectedCard && numberCard(cardPage, selectedCard.id, n), onTemplate: (id) => selectedCard && cardVariant(cardPage, selectedCard.id, id),
+                onPosition: (x, y) => selectedCard && moveCard(cardPage, selectedCard.id, x, y), onDuplicate: () => selectedCard && duplicateCard(cardPage, selectedCard.id), onRotate: (turn) => selectedCard && rotateCard(cardPage, selectedCard.id, turn), onDelete: () => selectedCard && deleteCard(cardPage, selectedCard.id),
               }} templateMargins={template.margins} onTemplateMargins={(margins) => setTemplate((t) => ({ ...t, margins }))} onPreset={applyPreset}
-              sheet={sheet} onSheet={(patch) => setSheet((s) => ({ ...s, ...patch }))} pageCount={pageCount} overflow={overflow}
+              sheet={sheet} onSheet={(patch) => ("pageWidth" in patch || "pageHeight" in patch ? setPaperSize(patch.pageWidth ?? sheet.pageWidth, patch.pageHeight ?? sheet.pageHeight) : setSheet((s) => ({ ...s, ...patch })))} pageCount={pageCount} overflow={overflow}
               printer={printer} onCalibrationSheet={printCalibration}
               fields={fields} editedList={editedList} onJumpInstance={jumpToInstance} onResetInstanceById={(id) => { resetInstance(id); if (instanceSel?.recordId === id) setInstanceSel(null); }}
               onAudit={(itemId) => setAuditDialog({ itemId })} auditCount={sheetIssueCount}
@@ -1297,7 +1400,7 @@ function App() {
         : <div className="drag-ghost" style={{ left: fieldDrag.x, top: fieldDrag.y }}>{fieldDisplayName(fieldDrag.field)}</div>)}
 
       {printing && (
-        <PrintSheets bleed={bleedIn} kind={printing} offset={printer} sheet={sheet} records={activeRecords} templateWidth={template.width} templateHeight={template.height} pageCount={pageCount} recordIndex={recordIndex} instanceFor={instanceFor} />
+        <PrintSheets bleed={bleedIn} kind={printing} offset={printer} sheets={D.sheets} sequence={seq} firstPageId={mainId} records={activeRecords} templateWidth={template.width} templateHeight={template.height} instanceFor={instanceFor} />
       )}
     </div>
     </ImageContext.Provider>

@@ -23,6 +23,11 @@ type Props = {
   /** The items one record actually renders: its template (chosen by the alternating rules) plus any hand edits. */
   instanceFor: (record: RecordRow, index: number, slot: number, variantId?: string) => InstanceInfo;
   pageNumber: number;
+  /** Which page design this sheet uses (cards on it are edited under this id). */
+  pageId?: string;
+  /** The record the first card shows, and the record this sheet stops before (its packet may end early). */
+  base: number;
+  limit: number;
   pageCount: number;
   showGrid: boolean;
   /** Preview / print: no flags, outlines or editing. */
@@ -62,7 +67,6 @@ export function LayoutStage(p: Props) {
   const ox = p.offset?.x ?? 0, oy = p.offset?.y ?? 0;
   const list = placementsOf(sheet, templateWidth, templateHeight);
   const marks = sheet.cropMarks && preview ? cropMarkLines(list, templateWidth, templateHeight, sheet.pageWidth, sheet.pageHeight) : [];
-  const page = p.pageNumber - 1;
   const scale = PX_PER_IN * (p.zoom ?? 1);
   /** Drag a card across the sheet. It snaps to the page edges and to the edges and centers of the other cards (hold Ctrl/⌘ to move freely). */
   const startCardDrag = (event: React.PointerEvent, card: Placement) => {
@@ -95,12 +99,12 @@ export function LayoutStage(p: Props) {
   useEffect(() => { if (preview) setMenuFor(null); }, [preview]);
 
   return (
-    <div className="layout-page" style={{ width: sheet.pageWidth * PX_PER_IN, height: sheet.pageHeight * PX_PER_IN }}>
+    <div className="layout-page" data-page-id={p.pageId} style={{ width: sheet.pageWidth * PX_PER_IN, height: sheet.pageHeight * PX_PER_IN }}>
       {list.map((card, slot) => {
-        const index = recordAt(list, card, page);
+        const index = recordAt(list, card, p.base);
         const fp = footprint(card, templateWidth, templateHeight);
         const turned = !!card.rotation;
-        const record = records[index];
+        const record = index < p.limit ? records[index] : undefined;
         const meta: RecordMeta | null = record ? { recordNumber: index + 1, pageNumber: p.pageNumber, recordCount: records.length, pageCount: p.pageCount } : null;
         const info = record ? p.instanceFor(record, index, slot, card.variantId) : null;
         const id = record?.[ID] as string | undefined;

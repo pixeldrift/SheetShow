@@ -29,11 +29,8 @@ export function numbering(list: Placement[]) {
   return { perSheet: Math.max(1, distinct.length), rankOf: (p: Placement) => rank.get(Math.max(1, Math.round(p.number))) ?? 1 };
 }
 
-/** The index of the record a card shows on a given sheet (0-based), which may be past the end of the data. */
-export const recordAt = (list: Placement[], p: Placement, page: number): number => {
-  const { perSheet, rankOf } = numbering(list);
-  return page * perSheet + rankOf(p) - 1;
-};
+/** The index of the record a card shows on a sheet whose first record is `base` (0-based); may be past the end of the data. */
+export const recordAt = (list: Placement[], p: Placement, base: number): number => base + numbering(list).rankOf(p) - 1;
 
 /** How the numbers are arranged: every card the same record, each card its own (in reading order), or something else. */
 export function numberingMode(list: Placement[]): "same" | "each" | "custom" {
