@@ -17,6 +17,9 @@ import { TextAuditDialog } from "./components/TextAuditDialog";
 import { usePrinterCalibration } from "./hooks/usePrinterCalibration";
 import { TemplateGalleryDialog } from "./components/TemplateGalleryDialog";
 import { HelpDialog } from "./components/HelpDialog";
+import { WelcomeDialog } from "./components/WelcomeDialog";
+import { TapTips } from "./components/TapTips";
+import { shouldWelcome } from "./lib/guide";
 import { useHistory } from "./hooks/useHistory";
 import { useFontLibrary } from "./hooks/useFontLibrary";
 import { aabb, alignItems, boundsOf, centerOf, distributeItems, rotateAbout, type AlignMode, type Transform } from "./lib/align";
@@ -168,6 +171,7 @@ function App() {
   const printer = usePrinterCalibration();
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(() => shouldWelcome(!!initial));
   const [recordsOpen, setRecordsOpen] = useState(false);
   const [showFieldNames, setShowFieldNames] = useState(false);
   const [instanceMode, setInstanceMode] = useState(false);
@@ -1342,7 +1346,9 @@ function App() {
         <MatchReviewDialog item={items.find((i) => i.id === reviewItemId)!} records={activeRecords} library={library} onOverrides={(changes) => setOverrides(reviewItemId, changes)} onClose={() => setReviewItemId(null)} />
       )}
 
-      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
+      {welcomeOpen && <WelcomeDialog onClose={() => setWelcomeOpen(false)} onGo={(place) => { if (place === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(place); } }} />}
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} onReplayWelcome={() => { setHelpOpen(false); setWelcomeOpen(true); }} />}
+      <TapTips />
       {galleryOpen && <TemplateGalleryDialog onUse={useTemplate} onClose={() => setGalleryOpen(false)} />}
       {auditDialog && <TextAuditDialog issues={issues} itemId={auditDialog.itemId} onFix={(issue) => fixOnPage(issue.recordId, issue.itemId)} onClose={() => setAuditDialog(null)} />}
 

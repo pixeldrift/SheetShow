@@ -3,9 +3,11 @@ import { X } from "lucide-react";
 import helpText from "../help/help.md?raw";
 import { headingsOf, renderMarkdown } from "../lib/markdown";
 import { Logo } from "./Logo";
+import { updateGuide, useGuide } from "../lib/guide";
 
 /** The user guide: how to use SheetShow, plus who made it. Written in src/help/help.md. */
-export function HelpDialog({ onClose }: { onClose: () => void }) {
+export function HelpDialog({ onClose, onReplayWelcome }: { onClose: () => void; onReplayWelcome: () => void }) {
+  const guide = useGuide();
   const body = useRef<HTMLDivElement>(null);
   const content = useMemo(() => renderMarkdown(helpText), []);
   const toc = useMemo(() => headingsOf(helpText).filter((h) => h.level === 2), []);
@@ -27,7 +29,15 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           <nav className="help-toc" aria-label="Help topics">
             {toc.map((h) => <button key={h.id} onClick={() => jump(h.id)}>{h.text}</button>)}
           </nav>
-          <div className="help-body" ref={body} data-scroll>{content}</div>
+          <div className="help-body" ref={body} data-scroll>
+            <section className="guide-settings" aria-label="Guides and tips">
+              <h3>Guides and tips</h3>
+              <button className="button" onClick={onReplayWelcome}>Replay the welcome guide</button>
+              <label className="check-row"><input type="checkbox" checked={guide.welcomeOnStart} onChange={(e) => updateGuide({ welcomeOnStart: e.target.checked })} /> Show the welcome guide whenever SheetShow opens</label>
+              <label className="check-row"><input type="checkbox" checked={guide.tapTips} onChange={(e) => updateGuide({ tapTips: e.target.checked })} /> On a touch screen, show a label when I tap a button</label>
+            </section>
+            {content}
+          </div>
         </div>
       </div>
     </div>

@@ -324,7 +324,7 @@ function TemplateSetup({ templateWidth, templateHeight, bleed, bleedInfo, onBlee
           <Pair label="Height"><NumberField value={templateHeight} min={0.1} step={0.05} unit="in" onChange={(n) => onTemplateSize(templateWidth, n)} /></Pair>
         </div>
       </Section>
-      <Section title="MARGINS">
+      <Section title="MARGINS" defaultOpen={false}>
         <div className="two-col">
           {(["top", "right", "bottom", "left"] as const).map((side) => {
             const m = templateMargins ?? { top: 0, right: 0, bottom: 0, left: 0 };
@@ -333,7 +333,7 @@ function TemplateSetup({ templateWidth, templateHeight, bleed, bleedInfo, onBlee
         </div>
         <p className="hint">A dashed violet guide on the template marks the safe area. It never prints.</p>
       </Section>
-      <Section title="BLEED">
+      <Section title="BLEED" defaultOpen={false}>
         {(() => {
           const b: Bleed = bleed ?? { amount: 0, auto: false, policy: "limit" };
           const set = (change: Partial<Bleed>) => onBleed({ ...b, ...change });
@@ -377,7 +377,7 @@ function PagesSection({ pages }: { pages: Props["pages"] }) {
   const groupMode = plan.group === 0 ? "all" : plan.group === 1 ? "one" : "set";
   return (
     <>
-      <Section title="PAGE TEMPLATES">
+      <Section key={list.length > 1 ? "many" : "one"} title="PAGE TEMPLATES" defaultOpen={list.length > 1}>
         <p className="hint first">A page template is a sheet layout: a letter, a badge sheet, the back of a page. All of them are the same paper size, so one print job can use them together. Name them here, then say below what prints and in what order.</p>
         <div className="variant-list">
           {list.map((p, i) => (
@@ -394,7 +394,7 @@ function PagesSection({ pages }: { pages: Props["pages"] }) {
           <button className="button" title="Adds the same cards mirrored side to side, printed right after this page, for double-sided sheets" onClick={() => pages.onBack(activeId)}><RotateCcw size={14} /> Add back side</button>
         </div>
       </Section>
-      <Section title="WHAT PRINTS">
+      <Section key={list.length > 1 ? "many" : "one"} title="WHAT PRINTS" defaultOpen={list.length > 1}>
         <Pair label="Records per packet">
           <select className="select" value={groupMode} onChange={(e) => pages.onPlan({ ...plan, group: e.target.value === "all" ? 0 : e.target.value === "one" ? 1 : Math.max(2, plan.group || 2) })}>
             <option value="all">All records together</option>
@@ -469,7 +469,7 @@ function PageSetup({ pages, shared, onShared, cards, templateWidth, templateHeig
         </Section>
       )}
       <PagesSection pages={pages} />
-      <Section title="PAGE SIZE">
+      <Section title="SHEET SIZE">
         <select className="select" value={size} onChange={(e) => {
           if (e.target.value === "letter") onSheet({ pageWidth: 8.5, pageHeight: 11 });
           else if (e.target.value === "a4") onSheet({ pageWidth: 8.27, pageHeight: 11.69 });
@@ -493,20 +493,20 @@ function PageSetup({ pages, shared, onShared, cards, templateWidth, templateHeig
         </Section>
       ) : (
       <>
-      <Section title="ITEMS PER PAGE">
+      <Section title="CARDS PER SHEET">
         <div className="two-col">
           <Pair label="Columns"><NumberField value={sheet.columns} min={1} max={20} step={1} places={0} onChange={(n) => onSheet({ columns: Math.round(n) })} /></Pair>
           <Pair label="Rows"><NumberField value={sheet.rows} min={1} max={30} step={1} places={0} onChange={(n) => onSheet({ rows: Math.round(n) })} /></Pair>
         </div>
         <p className="hint">A grid fills the page evenly. Drag any card, or add one, to arrange the page by hand instead.</p>
       </Section>
-      <Section title="PAGE MARGINS">
+      <Section title="SHEET MARGINS">
         <div className="two-col">
           <Pair label="Left"><NumberField value={sheet.marginX} min={0} unit="in" onChange={(n) => onSheet({ marginX: n })} /></Pair>
           <Pair label="Top"><NumberField value={sheet.marginY} min={0} unit="in" onChange={(n) => onSheet({ marginY: n })} /></Pair>
         </div>
       </Section>
-      <Section title="ITEM SPACING">
+      <Section title="CARD SPACING">
         <div className="two-col">
           <Pair label="Horizontal"><NumberField value={sheet.gapX} min={0} unit="in" onChange={(n) => onSheet({ gapX: n })} /></Pair>
           <Pair label="Vertical"><NumberField value={sheet.gapY} min={0} unit="in" onChange={(n) => onSheet({ gapY: n })} /></Pair>
@@ -514,7 +514,7 @@ function PageSetup({ pages, shared, onShared, cards, templateWidth, templateHeig
       </Section>
       </>
       )}
-      <Section title="RECORD ORDER">
+      <Section title="RECORD ORDER" defaultOpen={false}>
         <Pair label="Sort the sheets by">
           <select className="select" value={shared.sortField ?? ""} onChange={(e) => onShared({ sortField: e.target.value || undefined })}>
             <option value="">The order in the data table</option>
@@ -529,11 +529,11 @@ function PageSetup({ pages, shared, onShared, cards, templateWidth, templateHeig
         )}
         <p className="hint">Only changes the printed and previewed order. Numbers sort as numbers.</p>
       </Section>
-      <Section title="TEXT FIT">
+      <Section title="TEXT FIT" defaultOpen={false}>
         <button className="button wide first" onClick={() => onAudit(null)}><AlertTriangle size={14} /> Check text fit across all records</button>
         <p className="hint">{auditCount ? `${auditCount} text${auditCount === 1 ? "" : "s"} on this sheet ${auditCount === 1 ? "doesn’t" : "don’t"} fit — look for the orange badges.` : "Nothing on this sheet is too long for its box."}</p>
       </Section>
-      <Section title="OVERRIDDEN RECORDS" unit={editedList.length ? String(editedList.length) : undefined}>
+      <Section title="OVERRIDDEN RECORDS" defaultOpen={editedList.length > 0} unit={editedList.length ? String(editedList.length) : undefined}>
         {editedList.length === 0 ? <p className="hint first">Turn on <strong>Override</strong> in the toolbar, then click or double-click anything on a sheet to change just that record — a name, a photo, a color.</p> : (
           <div className="edited-list">
             {editedList.slice(0, 40).map((e) => (

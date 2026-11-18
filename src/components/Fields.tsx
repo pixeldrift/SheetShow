@@ -109,11 +109,13 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
 
 /** Which sections the user has collapsed; remembered by title so they stay shut when the selection changes. */
 const collapsed = new Set<string>();
+/** Sections that start folded, and that the person has opened. */
+const opened = new Set<string>();
 
 /** A properties section. Open by default; tap the heading to fold it away. */
-export function Section({ title, unit, children }: { title: string; unit?: string; children: ReactNode }) {
-  const [open, setOpen] = useState(!collapsed.has(title));
-  const toggle = () => { if (open) collapsed.add(title); else collapsed.delete(title); setOpen(!open); };
+export function Section({ title, unit, children, defaultOpen = true }: { title: string; unit?: string; children: ReactNode; /** Advanced sections start folded so the basics stay easy to see. */ defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen ? !collapsed.has(title) : opened.has(title));
+  const toggle = () => { if (open) { collapsed.add(title); opened.delete(title); } else { collapsed.delete(title); opened.add(title); } setOpen(!open); };
   return (
     <section className={"property-section" + (open ? "" : " folded")}>
       <h3><button type="button" className="section-toggle" aria-expanded={open} onClick={toggle}>

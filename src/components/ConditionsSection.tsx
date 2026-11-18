@@ -41,7 +41,7 @@ export function ConditionsSection({ item, patch, fields, records, record }: Prop
   const distinct = (field: string) => [...new Set(records.slice(0, 2000).map((r) => (r[field] ?? "").trim()).filter(Boolean))].slice(0, 40);
 
   return (
-    <Section title="CONDITIONS" unit={rules.length ? `${rules.length} RULE${rules.length === 1 ? "" : "S"}` : undefined}>
+    <Section title="CONDITIONS" defaultOpen={rules.length > 0} unit={rules.length ? `${rules.length} RULE${rules.length === 1 ? "" : "S"}` : undefined}>
       {!rules.length ? (
         <>
           <p className="hint first">Show, hide or restyle this object depending on the data — for example a ribbon only for VIPs, or a different color for each ticket type.</p>
