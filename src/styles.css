@@ -1203,3 +1203,13 @@ html,body{touch-action:manipulation}
 .col-resize{position:absolute;top:0;right:-7px;bottom:0;width:16px;cursor:col-resize;touch-action:none;z-index:5}
 .col-resize::after{content:"";position:absolute;top:8px;bottom:8px;left:7px;width:2px;border-radius:1px;background:#d9dcd3;opacity:.7}
 .col-resize:hover::after,body.scrubbing .col-resize::after{background:var(--accent);opacity:1}
+
+/* Button labels (touch): a small brown caption with just the button's name, which fades by itself */
+.tap-tip{max-width:none!important;white-space:nowrap;padding:5px 11px!important;border-radius:999px!important;font-size:12px!important;font-weight:600;pointer-events:none;transition:opacity .3s ease}
+.tap-tip.fading{opacity:0}
+.tap-tip span{display:none}
+/* Feature tips (the ✦ sparks): a light callout that matches the badge and stays until you dismiss it */
+.spark-tip{background:#fffaf6!important;color:#5d4a3e!important;border:1px solid #f2a45f;box-shadow:0 8px 24px #2a1d1433,0 0 0 3px #f2a45f26!important}
+.spark-tip strong{color:#b86e46!important}
+.spark-actions button{color:#9a8b80!important}
+.spark-actions .spark-ok{background:#d17c4b!important;color:#fff!important}
