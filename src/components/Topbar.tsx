@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
-import { ChevronDown, CircleHelp, Download, FilePlus, FileText, FolderOpen, LayoutTemplate, Printer, Table2 } from "lucide-react";
+import { ChevronDown, CircleHelp, Download, FilePlus, FileText, Files, FolderOpen, LayoutTemplate, Printer, Table2 } from "lucide-react";
 import type { Workspace } from "../types";
 import { Logo } from "./Logo";
 
-type Tab = Workspace | "data";
+type Tab = Workspace | "data" | "output";
 type Props = {
   workspace: Tab; onWorkspace: (tab: Tab) => void; onPrint: () => void; onHelp: () => void;
   name: string; onName: (name: string) => void; saveState: "saved" | "error";
@@ -37,6 +37,7 @@ export function Topbar({ workspace, onWorkspace, onPrint, onHelp, name, onName, 
                 <button role="menuitem" onClick={() => { setMenu(false); if (window.confirm("Start a new project? Unsaved changes in this browser will be replaced.")) onNew(); }}><FilePlus size={15} /> New project</button>
                 <button role="menuitem" onClick={() => { setMenu(false); openRef.current?.click(); }}><FolderOpen size={15} /> Open from file…</button>
                 <button role="menuitem" onClick={() => { setMenu(false); onSave(); }}><Download size={15} /> Save to file</button>
+                <button role="menuitem" onClick={() => { setMenu(false); onHelp(); }}><CircleHelp size={15} /> Help and guides</button>
               </div>
             </>
           )}
@@ -51,10 +52,11 @@ export function Topbar({ workspace, onWorkspace, onPrint, onHelp, name, onName, 
           {tab("layout", "Page layout", "Arrange copies on the sheet and print", (
             <svg className="page-tab-icon" viewBox="0 0 32 40" aria-hidden="true"><rect x="2" y="1.5" width="28" height="37" rx="1.5" /><rect x="6" y="6" width="9" height="6" /><rect x="17" y="6" width="9" height="6" /><rect x="6" y="15" width="9" height="6" /><rect x="17" y="15" width="9" height="6" /><rect x="6" y="24" width="9" height="6" /><rect x="17" y="24" width="9" height="6" /></svg>
           ))}
+          {tab("output", "Output", "Everything that will print, together: every sheet, ready to check", <Files size={19} />)}
         </div>
       </div>
       <div className="top-actions">
-        <button className="icon-button" title="Help: how to use SheetShow" aria-label="Help" onClick={onHelp}><CircleHelp size={17} /></button>
+        <button className="icon-button help-btn" title="Help: how to use SheetShow" aria-label="Help" onClick={onHelp}><CircleHelp size={17} /></button>
         <button className="button button-primary" onClick={onPrint} title="Print all sheets"><Printer size={16} /><span>Print</span></button>
       </div>
     </header>

@@ -21,6 +21,7 @@ import { WelcomeDialog } from "./components/WelcomeDialog";
 import { TapTips } from "./components/TapTips";
 import { Spark } from "./components/Spark";
 import { shouldWelcome, useGuide } from "./lib/guide";
+import { OutputView } from "./components/OutputView";
 import { TourOverlay } from "./components/TourOverlay";
 import type { TourId } from "./lib/tours";
 import { useHistory } from "./hooks/useHistory";
@@ -61,7 +62,7 @@ import { DataTable } from "./components/DataTable";
 import { ID, addColumn, blankRow, columnsOf, duplicateRows, isIncluded, keepOneRow, pasteGrid, removeColumn, renameColumn, reorderColumns, setCell, setIncluded, sortRows, toCsv, withIds } from "./lib/records";
 import { PrintSheets } from "./components/PrintSheets";
 import { matchedStock } from "./components/StockPicker";
-import { buildSequence, defaultPlan, perSheetOf, sheetIndexOf } from "./lib/packet";
+import { buildSequence, defaultPlan, describePlan, perSheetOf, sheetIndexOf } from "./lib/packet";
 import { footprint, freeSpot, gridPlacements, numbering, numberingMode, placementsOf, renumber } from "./lib/placements";
 import { bleedLimits, effectiveBleed, gapsFor, maxBleed } from "./lib/bleed";
 
@@ -134,6 +135,9 @@ function App() {
   // ── UI state ────────────────────────────────────────────────────────────
   const [workspace, setWorkspace] = useState<Workspace>("template");
   const [showData, setShowData] = useState(false);
+  /** The Output tab: every sheet that will print, together. */
+  const [showOutput, setShowOutput] = useState(false);
+  const away = showData || showOutput; // the editor is hidden while the Data or Output tab is showing
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [multiMode, setMultiMode] = useState(false);
   const [clipboard, setClipboard] = useState<DesignItem[]>([]);
@@ -247,7 +251,7 @@ function App() {
   const [cardSel, setCardSel] = useState<{ page: string; id: string } | null>(null);
   const [showOrder, setShowOrder] = useState(false);
   /** Hand-arranging the page: pick, drag, add and delete cards. (Override mode is the other thing you can do on a sheet.) */
-  const arranging = workspace === "layout" && !instanceMode && !preview && !showData;
+  const arranging = workspace === "layout" && !instanceMode && !preview && !away;
   const selectedCard = cardSel ? placementsOf(D.sheets[cardSel.page] ?? sheet, template.width, template.height).find((c) => c.id === cardSel.id) ?? null : null;
   const cardPage = cardSel?.page ?? activeId;
   /** Any change to the cards turns that page into a hand-arranged one (starting from what the grid gave). */
@@ -416,7 +420,7 @@ function App() {
   const instItems = instRecord ? instanceFor(instRecord, instIndex, instIndex % slots).items : [];
   const instItem = instanceSel ? instItems.find((i) => i.id === instanceSel.itemId) : undefined;
   const instOverride = instRecord ? instanceOverrides[instRecord[ID]] : undefined;
-  const inLayoutEdit = workspace === "layout" && !!instItem && !showData;
+  const inLayoutEdit = workspace === "layout" && !!instItem && !away;
 
   // ── Text-fit audit ──────────────────────────────────────────────────────
   const computeIssues = (indices: number[]): Issue[] => {
@@ -1096,7 +1100,7 @@ function App() {
       const target = doc; // one history for the whole document
       if (mod && key === "z") { event.preventDefault(); event.shiftKey ? target.redo() : target.undo(); }
       else if (mod && key === "y") { event.preventDefault(); target.redo(); }
-      else if (workspace === "layout" && !showData) {
+      else if (workspace === "layout" && !away) {
         if (key === "escape") { setInstanceSel(null); setEditingText(null); setCardSel(null); }
         else if (arranging && selectedCard) {
           if (key === "delete" || key === "backspace") { event.preventDefault(); deleteCard(cardPage, selectedCard.id); }
@@ -1108,7 +1112,7 @@ function App() {
           }
         }
       }
-      else if (workspace !== "template" || showData) return;
+      else if (workspace !== "template" || away) return;
       else if (mod && key === "a") { event.preventDefault(); setSelectedIds(items.filter((i) => i.visible !== false).map((i) => i.id)); }
       else if (mod && key === "c") { if (has) { event.preventDefault(); copySelected(); } }
       else if (mod && key === "x") { if (has) { event.preventDefault(); cutSelected(); } }
@@ -1155,12 +1159,19 @@ function App() {
 
   // The first time a tab opens, offer its tour (once; switch tours off, or replay them, in Help).
   const tourPlace: TourId = showData ? "data" : workspace;
+  const tourOk = !showOutput;
   const quiet = !welcomeOpen && !helpOpen && !tour && !newProjectOpen && !pasteOpen && !sheetsOpen && !galleryOpen && !libraryDialog && !auditDialog;
   useEffect(() => {
-    if (!guide.tours || guide.tourSeen[tourPlace] || !quiet) return;
+    if (!guide.tours || guide.tourSeen[tourPlace] || !quiet || !tourOk) return;
     const timer = window.setTimeout(() => setTour(tourPlace), 900);
     return () => window.clearTimeout(timer);
-  }, [tourPlace, guide.tours, guide.tourSeen, quiet]);
+  }, [tourPlace, guide.tours, guide.tourSeen, quiet, tourOk]);
+  /** Output tab: open one sheet in the page layout. */
+  const openSheet = (K: number) => {
+    setShowOutput(false); setShowData(false); switchWorkspace("layout");
+    setSheetIndex(K); setRecordIndex(Math.min(seq[K]?.base ?? 0, Math.max(0, activeRecords.length - 1)));
+  };
+  const outputIssues = useMemo(() => (showOutput ? computeIssues(activeRecords.map((_, i) => i)).length : 0), [showOutput, itemsDoc.value, instanceOverrides, activeRecords, rules, variants, D.sheets, template]); // eslint-disable-line react-hooks/exhaustive-deps
   /** One sheet of the print run: its own page design, showing the records its place in the plan gives it. */
   const renderSheet = (K: number) => {
     const ref = seq[K] ?? { pageId: mainId, base: 0, limit: 0, group: 0 };
@@ -1180,7 +1191,7 @@ function App() {
   return (
     <ImageContext.Provider value={{ resolver: library.resolver, urlFor: library.urlFor }}>
     <div className="app-shell">
-      <Topbar workspace={showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setSelectedIds([]); } else { setShowData(false); switchWorkspace(tab); } }} onPrint={printNow} onHelp={() => setHelpOpen(true)} name={docName} onName={setDocName} saveState={saveState} onNew={() => setNewProjectOpen(true)} onGallery={() => setGalleryOpen(true)} onOpen={openProject} onSave={saveToFile} />
+      <Topbar workspace={showOutput ? "output" : showData ? "data" : workspace} onWorkspace={(tab) => { if (tab === "data") { setShowData(true); setShowOutput(false); setSelectedIds([]); } else if (tab === "output") { setShowOutput(true); setShowData(false); setSelectedIds([]); } else { setShowData(false); setShowOutput(false); switchWorkspace(tab); } }} onPrint={printNow} onHelp={() => setHelpOpen(true)} name={docName} onName={setDocName} saveState={saveState} onNew={() => setNewProjectOpen(true)} onGallery={() => setGalleryOpen(true)} onOpen={openProject} onSave={saveToFile} />
 
       {showData && (
         <main className="workspace">
@@ -1192,7 +1203,13 @@ function App() {
         </main>
       )}
 
-      <main className="workspace" hidden={showData}>
+      {showOutput && (
+        <main className="workspace">
+          <OutputView seq={seq} sheets={D.sheets} pages={D.pages} plan={D.plan} records={activeRecords} templateWidth={template.width} templateHeight={template.height} bleed={bleedIn}
+            instanceFor={instanceFor} textIssues={outputIssues} onReviewText={() => setAuditDialog({ itemId: null })} onOpen={openSheet} onPrint={printNow} />
+        </main>
+      )}
+      <main className="workspace" hidden={away}>
         <Toolbar
           workspace={workspace} instanceMode={instanceMode} onInstanceMode={() => { setInstanceMode((v) => !v); setInstanceSel(null); setEditingText(null); }}
           showGrid={showGrid} onGrid={() => setShowGrid((v) => !v)}
@@ -1302,7 +1319,7 @@ function App() {
               onDuplicate={duplicateSelected} onDelete={deleteSelected} onReorder={reorderLayer}
               groups={{ wholeGroup, canGroup, onGroup: groupSelected, onUngroup: ungroupSelected, onRename: renameGroup, onUpdateMany: updateMany, onSelectGroupOf: selectGroupOf }}
               templateWidth={template.width} templateHeight={template.height} onTemplateSize={(width, height) => setTemplate((t) => ({ ...t, width, height }))} bleed={template.bleed} bleedInfo={{ max: bleedMax, effective: bleedIn, standard: !!standardStock, custom: bleedHeld, edgeLimited: bleedLimit.edge < bleedLimit.gap }} onBleed={changeBleed} pages={{
-                list: D.pages, activeId, plan: D.plan, sheetCount: seq.length, perSheet: Object.fromEntries(Object.keys(D.sheets).map((id) => [id, perSheetFor(id)])),
+                list: D.pages, activeId, plan: D.plan, summary: describePlan(D.plan, (id) => D.pages.find((x) => x.id === id)?.name ?? "Page", seq.length, activeRecords.length), sheetCount: seq.length, perSheet: Object.fromEntries(Object.keys(D.sheets).map((id) => [id, perSheetFor(id)])),
                 onActivate: goToPage, onRename: renamePage, onDuplicate: (id) => { addPage({ name: nextPageName(D.pages.find((p) => p.id === id)?.name ?? "Page"), from: D.sheets[id] }); }, onBack: addBackSide, onDelete: deletePage,
                 onAdd: () => addPage(), onPlan: setPlan,
               }} shared={mainSheet} onShared={(patch) => setMainSheet((s) => ({ ...s, ...patch }))}

@@ -61,7 +61,7 @@ type Props = {
   templateWidth: number;
   /** Page layout: the page designs and the print plan, and the settings every page shares (record order). */
   pages: {
-    list: PageMeta[]; activeId: string; plan: Plan; sheetCount: number; perSheet: Record<string, number>;
+    list: PageMeta[]; activeId: string; plan: Plan; summary: string; sheetCount: number; perSheet: Record<string, number>;
     onActivate: (id: string) => void; onRename: (id: string, name: string) => void; onDuplicate: (id: string) => void; onBack: (id: string) => void; onDelete: (id: string) => void; onAdd: () => void; onPlan: (plan: Plan) => void;
   };
   shared: Sheet; onShared: (patch: Partial<Sheet>) => void;
@@ -468,6 +468,7 @@ function PageSetup({ pages, shared, onShared, cards, templateWidth, templateHeig
           </div>
         </Section>
       )}
+      <p className="plan-summary"><strong>{pages.summary}</strong></p>
       <PagesSection pages={pages} />
       <Section title="SHEET SIZE">
         <select className="select" value={size} onChange={(e) => {

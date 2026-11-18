@@ -4,13 +4,14 @@ SheetShow turns a spreadsheet into printed labels, cards, badges and tags. You d
 
 > New here? Open the **Project menu** (the pill at the top left) and choose **New project** for a blank design (you pick a paper size, a label stock, or your own size) or **New from template…** to start from a ready-made business card, address label, conference badge, cage card or price tag.
 
-## The three views
+## The four views
 
-The tabs at the top switch between three views of the same project.
+The tabs at the top switch between four views of the same project.
 
 - **Data**: your records as an editable table. Type in any cell, paste a block from a spreadsheet, and tick which records should print. **Click a column heading to sort by it, click again to reverse it, and drag a heading to move the column**, which is handy when the column you use most (a last name, say) isn't first. The records list under the canvas has the same sortable, movable headings.
 - **Template**: the design of one card. This is where you add text, shapes and pictures and link them to your data.
 - **Page layout**: how cards (copies of the template) are arranged on sheets of paper. This is where you pick your label stock, preview every sheet and print.
+- **Output**: everything that will print, together. Every sheet appears as a thumbnail, grouped by packet and labeled with its page template and records, under a one-line summary of what prints. Search for a person's sheets, show just one page template, tap a sheet to open it in Page layout, and print from here.
 
 The **Project menu** (a pill with an arrow, left of the tabs) is different: it isn't a view. It holds New project, New from template, Open and Save.
 
