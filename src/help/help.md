@@ -98,6 +98,8 @@ Open **Add image** to drop in pictures, a folder or a .zip. They are kept in thi
 - **Add back side** copies the page template with its cards mirrored side to side (flip on the long edge), prints it right after the front, and groups the records by one sheet's worth, so duplex printing alternates front and back.
 Record order (sorting) and print options are shared by every page; each page has its own size, layout and numbering.
 
+**Column widths.** In the Data tab each column starts as wide as its longest value. Drag the right edge of a column heading to make it narrower or wider (double-tap the edge to fit it again). The two buttons in the toolbar fit every column to its contents, or squeeze them all onto the screen at once, cutting off long values with … (the full value shows when you edit the cell).
+
 **Properties sections** (Color, Effects and so on) fold away when you tap their headings, so you can hide the options you are not using.
 
 **Moving around:** drag two fingers anywhere on the canvas, even over an object, to pan, and pinch to zoom, without moving anything. **Overflow warnings:** on the template page a small warning icon appears on a text box whose text will run off the card or out of a visible box for some records; tap it to see which records.

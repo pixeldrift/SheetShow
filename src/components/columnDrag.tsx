@@ -8,7 +8,7 @@ export function useColumnHeaders(onClick: (column: string) => void, onReorder: (
   const [drag, setDrag] = useState<{ column: string; over: string | null; after: boolean } | null>(null);
 
   const press = (column: string) => (event: React.PointerEvent) => {
-    if (event.button !== 0 || (event.target as HTMLElement).closest("button, input")) return;
+    if (event.button !== 0 || (event.target as HTMLElement).closest("button, input, .col-resize")) return;
     const startX = event.clientX, startY = event.clientY;
     let moved = false;
     let last: { over: string | null; after: boolean } = { over: null, after: false };

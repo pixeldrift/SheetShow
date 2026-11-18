@@ -1194,3 +1194,12 @@ html,body{touch-action:manipulation}
 .spark::after{content:"";position:absolute;inset:-1px;border-radius:50%;border:2px solid #f2a45f;opacity:0;animation:spark-ring 1.8s ease-out infinite;pointer-events:none}
 @keyframes spark-ring{0%{transform:scale(1);opacity:.8}70%,100%{transform:scale(1.9);opacity:0}}
 .spark-tip.above{transform:translate(-50%,-100%)}
+
+/* Data table: columns are as wide as their contents, with a handle on each header's right edge to change that */
+.data-table{table-layout:fixed;min-width:0}
+.data-table th{min-width:0;overflow:visible;position:sticky}
+.data-table td{overflow:hidden}
+.cell{min-width:0;text-overflow:ellipsis}
+.col-resize{position:absolute;top:0;right:-7px;bottom:0;width:16px;cursor:col-resize;touch-action:none;z-index:5}
+.col-resize::after{content:"";position:absolute;top:8px;bottom:8px;left:7px;width:2px;border-radius:1px;background:#d9dcd3;opacity:.7}
+.col-resize:hover::after,body.scrubbing .col-resize::after{background:var(--accent);opacity:1}
