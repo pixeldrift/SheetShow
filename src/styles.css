@@ -1237,3 +1237,9 @@ html,body{touch-action:manipulation}
 .out-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px calc(10px + var(--bottom-pad));background:#fff;border-top:1px solid var(--line);font-size:13px;color:#59685e}
 .plan-summary{margin:12px 0 4px;padding:10px 12px;border-radius:10px;background:#fffaf6;border:1px solid #efd6c5;font-size:13px;line-height:1.4;color:#5d4a3e}
 @media(max-width:520px){.topbar .help-btn,.topbar-divider{display:none}}
+
+/* Several objects selected: a small amber dot where their values differ */
+.mixed-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#e8891f;margin-left:5px;vertical-align:middle;box-shadow:0 0 0 2px #fff,0 0 0 3px #e8891f55}
+.number-input input::placeholder{color:#b8a89a;font-style:italic}
+.style-buttons button{position:relative}
+.style-buttons .mixed-dot{position:absolute;top:3px;right:3px;margin:0;width:6px;height:6px}

@@ -101,6 +101,8 @@ Record order (sorting) and print options are shared by every page; each page has
 
 **Column widths.** In the Data tab each column starts as wide as its longest value. Drag the right edge of a column heading to make it narrower or wider (double-tap the edge to fit it again). The two buttons in the toolbar fit every column to its contents, or squeeze them all onto the screen at once, cutting off long values with … (the full value shows when you edit the cell).
 
+**Editing several objects at once.** Select more than one object (Shift-click, drag a box around them, or turn on multi-select in the toolbar) and Properties shows the settings they share. Change a font, color, size, border, opacity, and so on, and it applies to all of them as one undo step. A small amber dot next to a setting (and "Mixed" in a number box) means the selected objects have different values there; whatever you set replaces them all. Controls that only make sense for one object, like the text itself or an exact position, stay hidden until a single object is selected.
+
 **Properties sections** (Color, Effects and so on) fold away when you tap their headings, so you can hide the options you are not using.
 
 **Moving around:** drag two fingers anywhere on the canvas, even over an object, to pan, and pinch to zoom, without moving anything. **Overflow warnings:** on the template page a small warning icon appears on a text box whose text will run off the card or out of a visible box for some records; tap it to see which records.

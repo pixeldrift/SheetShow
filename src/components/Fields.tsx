@@ -4,6 +4,16 @@ import { Spark } from "./Spark";
 
 type ScrubStart = (event: React.PointerEvent) => void;
 /** Lets a field's label start a drag-to-scrub on the number field next to it. */
+/** When several objects are selected, the properties whose values differ between them. Fields for those show a dot and no value. */
+export const MixedContext = createContext<ReadonlySet<string>>(new Set());
+const PairMixedContext = createContext(false);
+/** Marks a field that is not inside a Pair as showing mixed values (it then shows "Mixed" instead of a number). */
+export const MixedField = PairMixedContext.Provider;
+export const useMixed = (prop: string | string[] | undefined) => { const set = useContext(MixedContext); return !!prop && [prop].flat().some((k) => set.has(k)); };
+/** The small amber dot that says "these objects have different values here; changing it sets them all". */
+export function MixedDot({ prop }: { prop: string | string[] }) {
+  return useMixed(prop) ? <i className="mixed-dot" role="img" aria-label="Different values in the selection" title="The selected objects differ here. Changing it sets them all." /> : null;
+}
 const ScrubContext = createContext<((start: ScrubStart | null, unit?: string) => void) | null>(null);
 /** Units are written out beside the label ("Width (inches)"): a bare "in" reads like a word. */
 const UNIT_WORDS: Record<string, string> = { in: "inches", pt: "points", px: "pixels", "°": "degrees", "%": "%" };
@@ -22,6 +32,7 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
   const [draft, setDraft] = useState<string | null>(null); // null = not editing
   const lastCommitted = useRef<number | null>(null);
   const register = useContext(ScrubContext);
+  const mixed = useContext(PairMixedContext);
   const latest = useRef({ value, min, max, step, places, onChange });
   latest.current = { value, min, max, step, places, onChange };
 
@@ -81,9 +92,9 @@ export function NumberField({ value, onChange, min, max, step = 0.01, unit, plac
 
   return (
     <div className={register || !unit ? "number-input fill" : "number-input"}>
-      <span className="autosize" data-value={draft ?? format(value)}>
+      <span className="autosize" data-value={draft ?? (mixed ? "Mixed" : format(value))}>
       <input
-        type="number" inputMode="decimal" step={step} min={min} max={max} value={draft ?? format(value)}
+        type="number" inputMode="decimal" step={step} min={min} max={max} value={draft ?? (mixed ? "" : format(value))} placeholder={mixed ? "Mixed" : undefined}
         onPointerDown={(e) => {
           // Not editing yet: drag scrubs the value, a plain tap focuses the box for typing.
           const input = e.currentTarget;
@@ -128,17 +139,20 @@ export function Section({ title, unit, children, defaultOpen = true, spark }: { 
 }
 
 /** A label above a field. If the field is a number, dragging the label scrubs its value. */
-export function Pair({ label, children }: { label: string; children: ReactNode }) {
+export function Pair({ label, children, prop }: { label: string; children: ReactNode; /** The property (or properties) this field edits, so a dot can show when a multi-selection differs. */ prop?: string | string[] }) {
+  const mixed = useMixed(prop);
   const start = useRef<ScrubStart | null>(null);
   const [scrubbable, setScrubbable] = useState(false);
   const [unit, setUnit] = useState<string | undefined>();
   const register = useCallback((fn: ScrubStart | null, u?: string) => { start.current = fn; setScrubbable(!!fn); setUnit(u); }, []);
   return (
     <ScrubContext.Provider value={register}>
+     <PairMixedContext.Provider value={mixed}>
       <div className="pair">
-        <span className={scrubbable ? "scrub-label" : undefined} onPointerDown={scrubbable ? (e) => start.current?.(e) : undefined} title={scrubbable ? "Drag to adjust" : undefined}>{label}{unit && ` (${UNIT_WORDS[unit] ?? unit})`}</span>
+        <span className={scrubbable ? "scrub-label" : undefined} onPointerDown={scrubbable ? (e) => start.current?.(e) : undefined} title={scrubbable ? "Drag to adjust" : undefined}>{label}{unit && ` (${UNIT_WORDS[unit] ?? unit})`}{mixed && <i className="mixed-dot" role="img" aria-label="Different values in the selection" title="The selected objects differ here. Changing it sets them all." />}</span>
         {children}
       </div>
+    </PairMixedContext.Provider>
     </ScrubContext.Provider>
   );
 }

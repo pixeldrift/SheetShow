@@ -598,7 +598,7 @@ function App() {
   const groupSelected = () => { if (selectedItems.length > 1) history.set((list) => groupItems(list, selectedIds, nextGroupName(list))); };
   const ungroupSelected = () => history.set((list) => ungroupItems(list, selectedIds));
   const renameGroup = (groupId: string, name: string) => history.set((list) => renameGroupIn(list, groupId, name), { coalesce: `rename-group:${groupId}` });
-  const updateMany = (ids: string[], patch: Partial<DesignItem>) => history.set((list) => list.map((item) => (ids.includes(item.id) ? { ...item, ...patch } : item)));
+  const updateMany = (ids: string[], patch: Partial<DesignItem>, coalesce?: string) => history.set((list) => list.map((item) => (ids.includes(item.id) ? { ...item, ...patch } : item)), coalesce ? { coalesce } : undefined);
   const selectGroupOf = (id: string) => { const item = items.find((i) => i.id === id); if (item) setSelectedIds(item.groupId ? items.filter((i) => i.groupId === item.groupId).map((i) => i.id) : [id]); };
   const scaleGroup = (updates: { id: string; x: number; y: number; w: number; h: number; fontSize?: number }[]) => history.set((list) => {
     const byId = new Map(updates.map((u) => [u.id, u]));
