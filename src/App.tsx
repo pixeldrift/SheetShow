@@ -1270,7 +1270,7 @@ function App() {
               {workspace === "template" && !preview && (
                 <div className="variant-bar" data-no-pan role="tablist" aria-label="Templates">
                   {variants.map((v, i) => <button key={v.id} role="tab" aria-selected={v.id === variantId} className={v.id === variantId ? "variant-chip active" : "variant-chip"} onClick={() => { setActiveVariant(v.id); setSelectedIds([]); }} title={`Edit ${v.name}`}>{variants.length > 1 ? `${String.fromCharCode(65 + i)} · ${v.name}` : v.name}</button>)}
-                  <button className="variant-chip" onClick={addVariant} title="Add another template, e.g. to alternate colors between records" aria-label="Add a template">+<Spark id="add-template" title="Alternate templates" text="Add a second design, then set rules so some records, like presenters, use it." /></button>
+                  <button className="variant-chip" onClick={addVariant} title="Add another template, e.g. to alternate colors between records" aria-label="Add a template">+<Spark id="add-template" title="Alternate templates" text="Add a second design, then set rules for when it applies, like every other record, or if a conference attendee is a presenter." /></button>
                 </div>
               )}
               <div className="canvas-caption"><span>{caption.title}</span><span>{caption.detail}</span></div>

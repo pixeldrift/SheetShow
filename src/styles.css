@@ -1213,3 +1213,4 @@ html,body{touch-action:manipulation}
 .spark-tip strong{color:#b86e46!important}
 .spark-actions button{color:#9a8b80!important}
 .spark-actions .spark-ok{background:#d17c4b!important;color:#fff!important}
+.spark-tip strong .spark-glyph{display:inline;color:#d17c4b;margin-right:2px}
