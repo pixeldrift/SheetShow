@@ -35,3 +35,14 @@ export function buildSequence(plan: Plan, sheets: Record<string, Sheet>, w: numb
 /** The first sheet that shows a record, or -1. */
 export const sheetIndexOf = (seq: SheetRef[], recordIndex: number, perSheet: (pageId: string) => number): number =>
   seq.findIndex((s) => recordIndex >= s.base && recordIndex < Math.min(s.limit, s.base + perSheet(s.pageId)));
+
+/** One plain sentence about what will print, for the Output tab and the top of the page layout settings. */
+export function describePlan(plan: Plan, pageName: (id: string) => string, sheetCount: number, recordCount: number): string {
+  const names = plan.steps.map((s) => pageName(s.pageId));
+  const sheets = `${sheetCount} ${sheetCount === 1 ? "sheet" : "sheets"}`;
+  const people = `${recordCount} ${recordCount === 1 ? "record" : "records"}`;
+  if (plan.steps.length === 1) return `Prints ${people} on ${sheets} · ${names[0]}`;
+  if (plan.group === 1) return `Each record gets ${plan.steps.length} pages (${names.join(", ")}) · ${sheets} in all`;
+  if (plan.group > 1) return `In sets of ${plan.group} records: ${names.join(", ")} · ${sheets} in all`;
+  return `${names.join(", then ")}, each for all ${people} · ${sheets} in all`;
+}

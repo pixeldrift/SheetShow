@@ -11,7 +11,7 @@ import type { Bleed, DesignItem, LabelPreset, PageMeta, Placement, Plan, Sheet }
 import { inchLabel } from "../lib/bleed";
 import { averyPresets, fieldDisplayName, prettyField, specialFields } from "../lib/data";
 import type { FontLibrary } from "../hooks/useFontLibrary";
-import { NumberField, Pair, Section } from "./Fields";
+import { MixedContext, MixedDot, NumberField, Pair, Section } from "./Fields";
 import { FontPicker } from "./FontPicker";
 import { EffectsSection, ImageColorSection, PictureSection, ShapeStyleSection, type ImageTools } from "./ItemStyleSections";
 import { VariantsSection } from "./VariantSections";
@@ -36,7 +36,7 @@ type Props = {
   /** Grouping: the selection is exactly one group / could be grouped, plus the actions. */
   groups: {
     wholeGroup: boolean; canGroup: boolean; onGroup: () => void; onUngroup: () => void;
-    onRename: (groupId: string, name: string) => void; onUpdateMany: (ids: string[], patch: Partial<DesignItem>) => void; onSelectGroupOf: (id: string) => void;
+    onRename: (groupId: string, name: string) => void; onUpdateMany: (ids: string[], patch: Partial<DesignItem>, coalesce?: string) => void; onSelectGroupOf: (id: string) => void;
   };
   /** Alternating templates editor. */
   variants: React.ComponentProps<typeof VariantsSection>;
@@ -61,7 +61,7 @@ type Props = {
   templateWidth: number;
   /** Page layout: the page designs and the print plan, and the settings every page shares (record order). */
   pages: {
-    list: PageMeta[]; activeId: string; plan: Plan; sheetCount: number; perSheet: Record<string, number>;
+    list: PageMeta[]; activeId: string; plan: Plan; summary: string; sheetCount: number; perSheet: Record<string, number>;
     onActivate: (id: string) => void; onRename: (id: string, name: string) => void; onDuplicate: (id: string) => void; onBack: (id: string) => void; onDelete: (id: string) => void; onAdd: () => void; onPlan: (plan: Plan) => void;
   };
   shared: Sheet; onShared: (patch: Partial<Sheet>) => void;
@@ -105,7 +105,10 @@ export function Inspector(props: Props) {
       </button>
       <div className="panel-body" data-scroll>
         {selectedItems.length > 1 ? (
+          <>
+          <MultiEdit items={selectedItems} props={props} />
           <MultiProperties group={props.groups.wholeGroup ? { id: selectedItems[0].groupId!, name: selectedItems[0].groupName ?? "" } : null} groups={props.groups} count={selectedItems.length} onRotateBy={props.onRotateBy} onDuplicate={props.onDuplicate} onDelete={props.onDelete} />
+          </>
         ) : selected ? (
           <>
             {selected.groupId && !props.instance && (
@@ -139,8 +142,37 @@ export function Inspector(props: Props) {
   );
 }
 
+const NO_MIXED: ReadonlySet<string> = new Set();
+type MultiInfo = { ids: string[]; allText: boolean; allImage: boolean; mixed: ReadonlySet<string> };
+
+/** Merges several objects into one to show in the properties: values they share stay, values that differ are blanked and listed as mixed. */
+function mergeItems(items: DesignItem[]): { item: DesignItem; mixed: Set<string> } {
+  const mixed = new Set<string>();
+  const out: Record<string, unknown> = { id: "__multi__" };
+  const first = items[0] as unknown as Record<string, unknown>;
+  const keys = new Set(items.flatMap((i) => Object.keys(i)));
+  for (const key of keys) {
+    if (key === "id" || key === "x" || key === "y") continue;
+    const same = items.every((i) => JSON.stringify((i as unknown as Record<string, unknown>)[key]) === JSON.stringify(first[key]));
+    if (same) out[key] = first[key]; else { mixed.add(key); out[key] = undefined; }
+  }
+  out.type = items[0].type; out.x = 0; out.y = 0;
+  return { item: out as unknown as DesignItem, mixed };
+}
+
 /** Normalises an angle to (-180, 180]. */
 const norm = (deg: number) => { const r = ((deg + 180) % 360 + 360) % 360 - 180; return r === -180 ? 180 : r; };
+
+/** The shared properties of several selected objects. Changing any of them changes all of them, as a single undo step. */
+function MultiEdit({ items, props }: { items: DesignItem[]; props: Props }) {
+  const { item, mixed } = mergeItems(items);
+  const ids = items.map((i) => i.id);
+  const multi: MultiInfo = { ids, mixed, allText: items.every((i) => i.type === "text"), allImage: items.every((i) => i.type === "image") };
+  return (
+    <ItemProperties multi={multi} item={item} fontLibrary={props.fontLibrary} imageTools={props.imageTools} onDuplicate={props.onDuplicate} onDelete={props.onDelete}
+      onUpdate={(_id, patch, coalesce) => props.groups.onUpdateMany(ids, patch, `multi:${ids.length}:${coalesce ?? Object.keys(patch).join()}`)} />
+  );
+}
 
 function MultiProperties({ count, onRotateBy, onDuplicate, onDelete, group, groups }: { group: { id: string; name: string } | null; groups: Props["groups"]; count: number; onRotateBy: (deg: number) => void; onDuplicate: () => void; onDelete: () => void }) {
   return (
@@ -170,15 +202,20 @@ function MultiProperties({ count, onRotateBy, onDuplicate, onDelete, group, grou
   );
 }
 
-function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, imageTools, fitNote, instanceMode, onFitReview }: { instanceMode?: boolean; onFitReview?: () => void; fitNote?: { text: string; bad: boolean } | null; imageTools: ImageTools; item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary }) {
+function ItemProperties({ multi, item, onUpdate, onDuplicate, onDelete, fontLibrary, imageTools, fitNote, instanceMode, onFitReview }: { multi?: MultiInfo; instanceMode?: boolean; onFitReview?: () => void; fitNote?: { text: string; bad: boolean } | null; imageTools: ImageTools; item: DesignItem; onUpdate: Props["onUpdate"]; onDuplicate: () => void; onDelete: () => void; fontLibrary: FontLibrary }) {
   const patch = (p: Partial<DesignItem>, key?: string) => onUpdate(item.id, p, key ?? `prop:${item.id}:${Object.keys(p).join()}`);
   const [tokenMode, toggleTokenMode] = useTokenMode();
   const [convertAt, setConvertAt] = useState<{ x: number; y: number; w: number } | null>(null);
   const convertRef = useRef<HTMLButtonElement>(null);
   const convert = (action: () => void) => { setConvertAt(null); action(); };
+  // With several objects selected, `item` is a merge of them: values that differ are left blank and listed in `multi.mixed`.
+  const isText = multi ? multi.allText : item.type === "text";
+  const isImage = multi ? multi.allImage : item.type === "image";
+  const mixed = (k: string) => !!multi?.mixed.has(k);
   return (
+    <MixedContext.Provider value={multi?.mixed ?? NO_MIXED}>
     <>
-      <div className="convert-row">
+      {!multi && <div className="convert-row">
         <button ref={convertRef} className="button wide with-chevron" aria-haspopup="menu" aria-expanded={!!convertAt} onClick={() => { const r = convertRef.current?.getBoundingClientRect(); setConvertAt(convertAt || !r ? null : { x: r.left, y: r.bottom + 4, w: r.width }); }}>
           <Shapes size={14} /> Convert to… <ChevronDown size={13} className="caret" />
         </button>
@@ -192,11 +229,11 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
             </div>
           </>
         )}
-      </div>
+      </div>}
 
-      {item.type === "text" && (
+      {isText && (
         <>
-          <Section title="CONTENT">
+          {!multi && <Section title="CONTENT">
             {/* The contents box is always here. Text linked to a field shows that field as a chip, and typing over it turns the link into ordinary text. */}
             <div className="token-box">
               <TokenEditor className="property-input textarea" value={item.field ? `{{${item.field.startsWith("__") ? fieldDisplayName(item.field) : item.field}}}` : item.text ?? ""}
@@ -221,54 +258,58 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
               </>
             )}
             <label className="check-row"><input type="checkbox" checked={item.wrap !== false} onChange={(e) => patch({ wrap: e.target.checked })} /> Wrap text to the box width</label>
-          </Section>
+          </Section>}
           <Section title="TYPOGRAPHY">
-            <FontPicker value={item.fontFamily} library={fontLibrary} onPick={(family) => patch({ fontFamily: family })} />
+            <Pair label="Font" prop="fontFamily"><FontPicker value={item.fontFamily} library={fontLibrary} onPick={(family) => patch({ fontFamily: family })} /></Pair>
             <div className="two-col spaced">
-              <Pair label="Font size"><NumberField value={item.fontSize ?? 12} min={4} max={200} step={1} unit="pt" onChange={(n) => patch({ fontSize: n })} /></Pair>
-              <Pair label="Text color"><span className="color-chip"><input type="color" aria-label="Text color" value={item.color ?? "#34443d"} onChange={(e) => patch({ color: e.target.value })} /></span></Pair>
+              <Pair label="Font size" prop="fontSize"><NumberField value={item.fontSize ?? 12} min={4} max={200} step={1} unit="pt" onChange={(n) => patch({ fontSize: n })} /></Pair>
+              <Pair label="Text color" prop="color"><span className="color-chip"><input type="color" aria-label="Text color" value={item.color ?? "#34443d"} onChange={(e) => patch({ color: e.target.value })} /></span></Pair>
             </div>
             <div className="format-row">
-              <Pair label="Weight">
-                <select className="select" aria-label="Weight (bold)" value={item.weight ?? 500} onChange={(e) => patch({ weight: Number(e.target.value) })}>
+              <Pair label="Weight" prop="weight">
+                <select className="select" aria-label="Weight (bold)" value={mixed("weight") ? "mixed" : item.weight ?? 500} onChange={(e) => patch({ weight: Number(e.target.value) })}>
+                  {mixed("weight") && <option value="mixed" disabled hidden>Mixed</option>}
                   <option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option><option value="800">Extra bold</option>
                 </select>
               </Pair>
               <div className="style-buttons" role="group" aria-label="Text style">
-                <button aria-label="Italic" title="Italic" aria-pressed={!!item.italic} onClick={() => patch({ italic: !item.italic })}><Italic size={15} /></button>
-                <button aria-label="Underline" title="Underline" aria-pressed={!!item.underline} onClick={() => patch({ underline: !item.underline })}><Underline size={15} /></button>
-                <button aria-label="All caps" title="All caps" aria-pressed={!!item.caps} onClick={() => patch({ caps: !item.caps })}><CaseUpper size={15} /></button>
+                <button aria-label="Italic" title="Italic" aria-pressed={!!item.italic} onClick={() => patch({ italic: !item.italic })}><Italic size={15} /><MixedDot prop="italic" /></button>
+                <button aria-label="Underline" title="Underline" aria-pressed={!!item.underline} onClick={() => patch({ underline: !item.underline })}><Underline size={15} /><MixedDot prop="underline" /></button>
+                <button aria-label="All caps" title="All caps" aria-pressed={!!item.caps} onClick={() => patch({ caps: !item.caps })}><CaseUpper size={15} /><MixedDot prop="caps" /></button>
               </div>
             </div>
             <div className="format-row">
-              <Pair label="Alignment">
+              <Pair label="Alignment" prop="align">
                 <div className="align-buttons" role="group" aria-label="Text alignment">
                   {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([value, Icon]) => (
-                    <button key={value} aria-label={`Align ${value}`} aria-pressed={(item.align ?? "left") === value} className={(item.align ?? "left") === value ? "active" : ""} onClick={() => patch({ align: value })}><Icon size={15} /></button>
+                    <button key={value} aria-label={`Align ${value}`} aria-pressed={!mixed("align") && (item.align ?? "left") === value} className={!mixed("align") && (item.align ?? "left") === value ? "active" : ""} onClick={() => patch({ align: value })}><Icon size={15} /></button>
                   ))}
                 </div>
               </Pair>
-              <Pair label="Line height"><NumberField value={item.lineHeight ?? 1.2} min={0.6} max={4} step={0.05} places={2} onChange={(n) => patch({ lineHeight: n })} /></Pair>
+              <Pair label="Line height" prop="lineHeight"><NumberField value={item.lineHeight ?? 1.2} min={0.6} max={4} step={0.05} places={2} onChange={(n) => patch({ lineHeight: n })} /></Pair>
             </div>
             <div className="two-col spaced">
-              <Pair label="Tracking"><NumberField value={item.letterSpacing ?? 0} min={-200} max={1000} step={5} places={0} unit="‰" onChange={(v) => patch({ letterSpacing: v || undefined })} /></Pair>
-              <Pair label="Pair kerning">
-                <select className="select" aria-label="Pair kerning" value={item.kerning === false ? "off" : "on"} onChange={(e) => patch({ kerning: e.target.value === "off" ? false : undefined })}>
+              <Pair label="Tracking" prop="letterSpacing"><NumberField value={item.letterSpacing ?? 0} min={-200} max={1000} step={5} places={0} unit="‰" onChange={(v) => patch({ letterSpacing: v || undefined })} /></Pair>
+              <Pair label="Pair kerning" prop="kerning">
+                <select className="select" aria-label="Pair kerning" value={mixed("kerning") ? "mixed" : item.kerning === false ? "off" : "on"} onChange={(e) => patch({ kerning: e.target.value === "off" ? false : undefined })}>
+                  {mixed("kerning") && <option value="mixed" disabled hidden>Mixed</option>}
                   <option value="on">Auto</option><option value="off">Off</option>
                 </select>
               </Pair>
             </div>
             <div className="two-col stack-narrow spaced">
-              <Pair label="Autoscale">
-                <select className="select" value={item.autoFit ?? "off"} onChange={(e) => patch({ autoFit: e.target.value as DesignItem["autoFit"] })}>
+              <Pair label="Autoscale" prop="autoFit">
+                <select className="select" value={mixed("autoFit") ? "mixed" : item.autoFit ?? "off"} onChange={(e) => patch({ autoFit: e.target.value as DesignItem["autoFit"] })}>
+                  {mixed("autoFit") && <option value="mixed" disabled hidden>Mixed</option>}
                   <option value="off">Fixed size</option>
                   <option value="shrink">Shrink to box</option>
                   <option value="width">One line</option>
                   <option value="fit">Fill the box</option>
                 </select>
               </Pair>
-              <Pair label="Overflow">
-                <select className="select" value={item.overflow ?? "spill"} onChange={(e) => patch({ overflow: e.target.value as DesignItem["overflow"] })}>
+              <Pair label="Overflow" prop="overflow">
+                <select className="select" value={mixed("overflow") ? "mixed" : item.overflow ?? "spill"} onChange={(e) => patch({ overflow: e.target.value as DesignItem["overflow"] })}>
+                  {mixed("overflow") && <option value="mixed" disabled hidden>Mixed</option>}
                   <option value="spill">Spill over</option>
                   <option value="clip">Clip</option>
                   <option value="cut">Truncate</option>
@@ -278,39 +319,40 @@ function ItemProperties({ item, onUpdate, onDuplicate, onDelete, fontLibrary, im
             </div>
             <p className="hint">{(item.autoFit ?? "off") === "off" ? "Text stays at the size above." : item.autoFit === "shrink" ? "Text shrinks below the size above until it fits the box." : item.autoFit === "width" ? "Stays on one line and shrinks until it fits the width. Good for names." : "Text is sized to fill the box. Resize the box to change it."} If it still doesn’t fit: {({ spill: "it spills past the box", clip: "it is clipped at the box edge", cut: "whole words are dropped", truncate: "it is cut off with “…”" } as const)[item.overflow ?? "spill"]}.</p>
             {item.autoFit && item.autoFit !== "off" && (
-              <div className="two-col spaced"><Pair label="Never smaller than"><NumberField value={item.minFontSize ?? 4} min={2} max={200} step={0.5} places={1} unit="pt" onChange={(n) => patch({ minFontSize: n })} /></Pair></div>
+              <div className="two-col spaced"><Pair label="Never smaller than" prop="minFontSize"><NumberField value={item.minFontSize ?? 4} min={2} max={200} step={0.5} places={1} unit="pt" onChange={(n) => patch({ minFontSize: n })} /></Pair></div>
             )}
             {fitNote && <p className={`hint ${fitNote.bad ? "warn" : ""}`}>{fitNote.text}{fitNote.bad && !instanceMode && <> <button className="link-button" onClick={onFitReview}>Review…</button></>}</p>}
           </Section>
         </>
       )}
 
-      {item.type === "image" && <PictureSection item={item} patch={patch} tools={imageTools} />}
-      {item.type === "image" && <ImageColorSection item={item} patch={patch} />}
+      {isImage && !multi && <PictureSection item={item} patch={patch} tools={imageTools} />}
+      {isImage && <ImageColorSection item={item} patch={patch} />}
       <ShapeStyleSection item={item} patch={patch} />
       <EffectsSection item={item} patch={patch} />
-      {!instanceMode && <ConditionsSection item={item} patch={patch} fields={imageTools.columns} records={imageTools.records} record={imageTools.record} />}
+      {!instanceMode && !multi && <ConditionsSection item={item} patch={patch} fields={imageTools.columns} records={imageTools.records} record={imageTools.record} />}
 
       <Section title="POSITION & SIZE">
         <div className="two-col">
-          <Pair label="X"><NumberField value={item.x} onChange={(n) => patch({ x: n })} /></Pair>
-          <Pair label="Y"><NumberField value={item.y} onChange={(n) => patch({ y: n })} /></Pair>
-          <Pair label="Width"><NumberField value={item.w} min={0.01} onChange={(n) => patch({ w: n })} /></Pair>
-          <Pair label="Height"><NumberField value={item.h} min={0.01} onChange={(n) => patch({ h: n })} /></Pair>
+          {!multi && <Pair label="X"><NumberField value={item.x} onChange={(n) => patch({ x: n })} /></Pair>}
+          {!multi && <Pair label="Y"><NumberField value={item.y} onChange={(n) => patch({ y: n })} /></Pair>}
+          <Pair label="Width" prop="w"><NumberField value={item.w} min={0.01} onChange={(n) => patch({ w: n })} /></Pair>
+          <Pair label="Height" prop="h"><NumberField value={item.h} min={0.01} onChange={(n) => patch({ h: n })} /></Pair>
         </div>
-        <div className="rotation-row">
+        {!multi && <div className="rotation-row">
           <Pair label="Rotation"><NumberField value={item.rotation ?? 0} min={-360} max={360} step={1} places={1} unit="°" onChange={(n) => patch({ rotation: n })} /></Pair>
           <button title="Rotate 90° counter-clockwise" aria-label="Rotate 90° counter-clockwise" onClick={() => patch({ rotation: norm((item.rotation ?? 0) - 90) }, `rot:${item.id}`)}><RotateCcw size={16} /></button>
           <button title="Rotate 90° clockwise" aria-label="Rotate 90° clockwise" onClick={() => patch({ rotation: norm((item.rotation ?? 0) + 90) }, `rot:${item.id}`)}><RotateCw size={16} /></button>
-        </div>
+        </div>}
       </Section>
 
-      {!instanceMode && <div className="property-actions">
+      {!instanceMode && !multi && <div className="property-actions">
         <button onClick={onDuplicate}><Copy size={14} /> Duplicate</button>
         <button onClick={() => onUpdate(item.id, { locked: !item.locked })}>{item.locked ? <Unlock size={14} /> : <Lock size={14} />} {item.locked ? "Unlock" : "Lock"}</button>
         <button className="danger" onClick={onDelete}><Trash2 size={14} /> Delete</button>
       </div>}
     </>
+    </MixedContext.Provider>
   );
 }
 
@@ -468,6 +510,7 @@ function PageSetup({ pages, shared, onShared, cards, templateWidth, templateHeig
           </div>
         </Section>
       )}
+      <p className="plan-summary"><strong>{pages.summary}</strong></p>
       <PagesSection pages={pages} />
       <Section title="SHEET SIZE">
         <select className="select" value={size} onChange={(e) => {

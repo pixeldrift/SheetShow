@@ -34,7 +34,7 @@ One name per idea, used everywhere in the interface, the help, and the code comm
 | **safe area** (margins) | The dashed guide inside a template's edge | padding |
 
 ## Interface words
-- Tabs: **Data**, **Template**, **Page layout**. Print is a button, not a tab.
+- Tabs: **Data**, **Template**, **Page layout**, **Output** (everything that will print, together). Print is a button, not a tab.
 - Drawers: left is **Fields** (Template tab) or **Templates** (Page layout tab), plus **Layers**; right is **Properties**.
 - Spell out units in labels: "Width (inches)", "Border size (points)".
 - American spelling everywhere (see CLAUDE.md).

@@ -4,13 +4,14 @@ SheetShow turns a spreadsheet into printed labels, cards, badges and tags. You d
 
 > New here? Open the **Project menu** (the pill at the top left) and choose **New project** for a blank design (you pick a paper size, a label stock, or your own size) or **New from template…** to start from a ready-made business card, address label, conference badge, cage card or price tag.
 
-## The three views
+## The four views
 
-The tabs at the top switch between three views of the same project.
+The tabs at the top switch between four views of the same project.
 
 - **Data**: your records as an editable table. Type in any cell, paste a block from a spreadsheet, and tick which records should print. **Click a column heading to sort by it, click again to reverse it, and drag a heading to move the column**, which is handy when the column you use most (a last name, say) isn't first. The records list under the canvas has the same sortable, movable headings.
 - **Template**: the design of one card. This is where you add text, shapes and pictures and link them to your data.
 - **Page layout**: how cards (copies of the template) are arranged on sheets of paper. This is where you pick your label stock, preview every sheet and print.
+- **Output**: everything that will print, together. Every sheet appears as a thumbnail, grouped by packet and labeled with its page template and records, under a one-line summary of what prints. Search for a person's sheets, show just one page template, tap a sheet to open it in Page layout, and print from here.
 
 The **Project menu** (a pill with an arrow, left of the tabs) is different: it isn't a view. It holds New project, New from template, Open and Save.
 
@@ -99,6 +100,8 @@ Open **Add image** to drop in pictures, a folder or a .zip. They are kept in thi
 Record order (sorting) and print options are shared by every page; each page has its own size, layout and numbering.
 
 **Column widths.** In the Data tab each column starts as wide as its longest value. Drag the right edge of a column heading to make it narrower or wider (double-tap the edge to fit it again). The two buttons in the toolbar fit every column to its contents, or squeeze them all onto the screen at once, cutting off long values with … (the full value shows when you edit the cell).
+
+**Editing several objects at once.** Select more than one object (Shift-click, drag a box around them, or turn on multi-select in the toolbar) and Properties shows the settings they share. Change a font, color, size, border, opacity, and so on, and it applies to all of them as one undo step. A small amber dot next to a setting (and "Mixed" in a number box) means the selected objects have different values there; whatever you set replaces them all. Controls that only make sense for one object, like the text itself or an exact position, stay hidden until a single object is selected.
 
 **Properties sections** (Color, Effects and so on) fold away when you tap their headings, so you can hide the options you are not using.
 

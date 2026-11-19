@@ -6,7 +6,7 @@ import type { ImageLibrary } from "../hooks/useImageLibrary";
 import { TRANSFORM_NAMES, defaultImageSource, needsReview, patternFields } from "../lib/images";
 import { prettyField } from "../lib/data";
 import { convertRadius, paddingsOf } from "../lib/shape";
-import { NumberField, Pair, Section } from "./Fields";
+import { MixedDot, MixedField, NumberField, Pair, Section, useMixed } from "./Fields";
 
 type Patch = (patch: Partial<DesignItem>, key?: string) => void;
 
@@ -160,14 +160,14 @@ export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Pa
       {/* Background, border color and border size share one line. */}
       <div className={`style-row${hasBackground ? "" : " two"}`}>
         {hasBackground && (
-          <Pair label="Background">
+          <Pair label="Background" prop="fill">
             <ColorChip value={item.fill} fallback={item.type === "text" ? "#ffffff" : "#e9eee9"} label="Background" onChange={(c) => patch({ fill: c })} onClear={item.type === "text" ? () => patch({ fill: undefined }) : undefined} />
           </Pair>
         )}
-        <Pair label="Border">
+        <Pair label="Border" prop="stroke">
           <ColorChip value={hasStroke ? item.stroke : undefined} fallback="#cbd5cc" label="Border" onChange={(c) => patch({ stroke: c, strokeWidth: item.strokeWidth ?? 1.5 })} onClear={() => patch({ stroke: "none" })} />
         </Pair>
-        <Pair label="Border size">
+        <Pair label="Border size" prop="strokeWidth">
           <NumberField value={borderSize} min={0} max={40} step={0.25} places={2} unit="pt" onChange={(n) => (n <= 0 ? patch({ stroke: "none" }) : patch({ strokeWidth: n, stroke: hasStroke ? item.stroke : "#cbd5cc" }))} />
         </Pair>
       </div>
@@ -177,7 +177,7 @@ export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Pa
       <div className={`pad-round-row${item.type === "text" ? "" : " one"}${pads || corners ? " stacked" : ""}`}>
         {item.type === "text" && (
           <div className="pad-round-cell">
-          <Pair label="Padding (in)">
+          <Pair label="Padding (in)" prop={["padding", "paddings"]}>
             <div className="field-with-twirl">
               <NumberField value={mixedPad ? 0 : paddings[0]} min={0} max={2} step={0.01} places={2} onChange={(n) => patch({ padding: n, paddings: undefined })} />
               <button type="button" className="twirl-button" aria-expanded={pads} aria-label="Padding for each side" title="Padding for each side" onClick={() => setPads((o) => !o)}><ChevronRight size={13} style={{ transform: pads ? "rotate(90deg)" : undefined }} /></button>
@@ -193,7 +193,7 @@ export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Pa
           </div>
         )}
         <div className="pad-round-cell">
-        <Pair label="Rounding">
+        <Pair label="Rounding" prop={["radius", "radii"]}>
           <div className="field-with-twirl">
             <NumberField value={mixed ? 0 : radii[0]} min={0} max={max} step={radiusStep} places={1} onChange={(n) => patch({ radius: n, radii: undefined })} />
             <span className="seg-mini" role="group" aria-label="Rounding unit">
@@ -223,12 +223,13 @@ export function ShapeStyleSection({ item, patch }: { item: DesignItem; patch: Pa
 }
 
 /** A label, a slider and its percent, all on one row. */
-function SliderRow({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
+function SliderRow({ label, value, onChange, prop }: { label: string; value: number; onChange: (n: number) => void; prop?: string }) {
+  const mixed = useMixed(prop);
   return (
     <div className="slider-row">
-      <span>{label}</span>
+      <span>{label}{prop && <MixedDot prop={prop} />}</span>
       <input type="range" min="0" max="100" step="1" value={value} aria-label={label} onChange={(ev) => onChange(Number(ev.target.value))} />
-      <NumberField value={value} min={0} max={100} step={1} places={0} unit="%" onChange={onChange} />
+      <MixedField value={mixed}><NumberField value={value} min={0} max={100} step={1} places={0} unit="%" onChange={onChange} /></MixedField>
     </div>
   );
 }
@@ -236,12 +237,12 @@ function SliderRow({ label, value, onChange }: { label: string; value: number; o
 const SHADOW: Shadow = { x: 0, y: 2, blur: 5, color: "#000000", opacity: 0.35 };
 
 /** One effect: a twirl-down with its details, and a switch to turn it on. */
-function Effect({ title, on, onToggle, children }: { title: string; on: boolean; onToggle: (on: boolean) => void; children: React.ReactNode }) {
+function Effect({ title, on, onToggle, children, prop }: { prop?: string; title: string; on: boolean; onToggle: (on: boolean) => void; children: React.ReactNode }) {
   const [open, setOpen] = useState(on);
   return (
     <div className="effect-block">
       <div className="switch-row">
-        <button type="button" className="twirl effect-twirl" aria-expanded={open} onClick={() => setOpen((o) => !o)}><ChevronRight size={12} style={{ transform: open ? "rotate(90deg)" : undefined }} /> {title}</button>
+        <button type="button" className="twirl effect-twirl" aria-expanded={open} onClick={() => setOpen((o) => !o)}><ChevronRight size={12} style={{ transform: open ? "rotate(90deg)" : undefined }} /> {title}{prop && <MixedDot prop={prop} />}</button>
         <Switch label={title} on={on} onChange={(next) => { onToggle(next); if (next) setOpen(true); }} />
       </div>
       {open && <div className={on ? undefined : "effect-off"}>{children}</div>}
@@ -259,16 +260,16 @@ export function EffectsSection({ item, patch }: { item: DesignItem; patch: Patch
   const setOutline = (change: Partial<{ color: string; width: number }>) => patch({ textStroke: { ...ol, ...change } });
   return (
     <Section title="EFFECTS">
-      <SliderRow label="Opacity" value={Math.round((item.opacity ?? 1) * 100)} onChange={(n) => patch({ opacity: n / 100 })} />
+      <SliderRow label="Opacity" prop="opacity" value={Math.round((item.opacity ?? 1) * 100)} onChange={(n) => patch({ opacity: n / 100 })} />
       {item.type === "text" && (
-        <Effect title="Outline" on={!!stroke} onToggle={(on) => patch({ textStroke: on ? ol : undefined })}>
+        <Effect prop="textStroke" title="Outline" on={!!stroke} onToggle={(on) => patch({ textStroke: on ? ol : undefined })}>
           <div className="two-col spaced">
             <Pair label="Color"><ColorChip value={ol.color} fallback="#ffffff" label="Outline color" onChange={(c) => setOutline({ color: c })} /></Pair>
             <Pair label="Thickness"><NumberField value={ol.width} min={0.25} max={20} step={0.25} places={2} unit="pt" onChange={(n) => setOutline({ width: n })} /></Pair>
           </div>
         </Effect>
       )}
-      <Effect title="Shadow" on={!!shadow} onToggle={(on) => patch({ shadow: on ? sh : undefined })}>
+      <Effect prop="shadow" title="Shadow" on={!!shadow} onToggle={(on) => patch({ shadow: on ? sh : undefined })}>
         <div className="two-col spaced">
           <Pair label="Offset X"><NumberField value={sh.x} min={-60} max={60} step={0.5} places={1} unit="pt" onChange={(n) => set({ x: n })} /></Pair>
           <Pair label="Offset Y"><NumberField value={sh.y} min={-60} max={60} step={0.5} places={1} unit="pt" onChange={(n) => set({ y: n })} /></Pair>
